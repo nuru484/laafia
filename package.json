@@ -1,0 +1,5 @@
+{
+  "name": "laafia",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"]
+}
