@@ -17,7 +17,14 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
     return
   }
   if (err instanceof HttpError) {
+    const retryAfter = (err as HttpError & { retryAfter?: number }).retryAfter
+    if (retryAfter) res.setHeader('Retry-After', String(retryAfter))
     res.status(err.status).json({ status: err.status, code: err.code, message: err.message })
+    return
+  }
+  if (err?.name === 'MulterError') {
+    const status = err.code === 'LIMIT_FILE_SIZE' ? 413 : 400
+    res.status(status).json({ status, code: status === 413 ? 'too_large' : 'invalid_upload', message: err.message })
     return
   }
   if (err?.type === 'entity.parse.failed' || err?.type === 'entity.too.large') {

@@ -9,6 +9,7 @@ import { errorHandler, HttpError } from './http.ts'
 import { bus, facilityByCode, handleInboundSms, listReferrals, setStatus, visibleTo, WEB_STATUSES, type ReferralView } from './referrals.ts'
 import { activation_codes, devices } from './schema.ts'
 import { pull, PullQuery, push, PushBody } from './sync.ts'
+import { transcribe, upload as audioUpload } from './voice.ts'
 
 const FacilityQuery = z.object({ facility: z.string().min(1).max(32) })
 
@@ -57,6 +58,9 @@ export function createApp() {
     const device = deviceOf(res)
     res.json({ ...(await pull(device, PullQuery.parse(req.query))), keys: await keysFor(device) })
   })
+
+  // --- Voice: Khaya speech-to-text proxy. Auth first so anonymous uploads are never parsed.
+  app.post('/voice/transcribe', auth(), audioUpload.single('audio'), transcribe)
 
   // --- Referrals (web inbox and facility devices)
   const facilityOrAdmin = auth({ roles: ['facility'], admin: true })
