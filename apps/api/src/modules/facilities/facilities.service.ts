@@ -6,7 +6,7 @@ import type { Deps } from '../../platform/deps.ts'
 import { HttpError } from '../../platform/http/errors.ts'
 import { toWire } from '../../platform/http/wire.ts'
 import type { Actor } from '../../platform/middleware/auth.ts'
-import { facilityScope, inScope } from '../../platform/scope.ts'
+import { districtOrThrow, facilityScope, inScope } from '../../platform/scope.ts'
 import type { CreateFacilityInput, UpdateFacilityInput } from './facilities.schemas.ts'
 
 /* Facilities are synced to phones (destinations, numbers to text), so every write bumps the row's seq. */
@@ -18,7 +18,7 @@ export async function listFacilities(deps: Deps, actor: Actor) {
 }
 
 export async function createFacility(deps: Deps, actor: Actor, body: CreateFacilityInput) {
-  let districtId = actor.kind === 'user' ? actor.user.districtId : null
+  let districtId = actor.kind === 'user' ? districtOrThrow(actor) : null
   if (actor.kind !== 'user') {
     const d = body.district_code ? await deps.prisma.district.findUnique({ where: { code: body.district_code } }) : null
     if (!d) throw new HttpError(400, 'invalid_request', 'district_code is required')

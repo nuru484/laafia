@@ -2,7 +2,7 @@ import request from 'supertest'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { buildDhis2Export, dhis2Uid, loadMapping, type ExportInput } from '../dhis2.export.ts'
 import { env } from '../../../config/env.ts'
-import { ADMIN, activate, app, event, pushAs, useDb } from '../../../platform/testing/helpers.ts'
+import { ADMIN, USERS, activate, app, event, pushAs, signIn, useDb } from '../../../platform/testing/helpers.ts'
 
 const DAY = 86_400_000
 const OCT = Date.UTC(2026, 9, 1)
@@ -109,6 +109,38 @@ describe('/export/dhis2', () => {
     expect(urls[0]).toContain('importStrategy=CREATE_AND_UPDATE')
     expect(urls[1]).toContain('/api/dataValueSets?')
     expect(urls[1]).toContain('dryRun=true')
+  })
+
+  it('keeps an export history and shows which periods are not exported yet', async () => {
+    env.DHIS2_BASE_URL = 'https://dhis2.example.org'
+    env.DHIS2_USERNAME = 'u'
+    env.DHIS2_PASSWORD = 'p'
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) =>
+      String(input).includes('/api/tracker')
+        ? new Response(JSON.stringify({ status: 'OK', stats: { created: 1 } }))
+        : new Response(JSON.stringify({ status: 'SUCCESS', importCount: { imported: 4 } })))
+    const d = new Date()
+    const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1))
+    const period = `${last.getUTCFullYear()}${String(last.getUTCMonth() + 1).padStart(2, '0')}`
+    const { agent, csrf } = await signIn(USERS.admin)
+    expect((await agent.post('/export/dhis2').set(csrf).send({ facility: 'SAV-CHPS-01', period })).body).toMatchObject({ dry_run: true, status: 'ok', run_id: expect.any(String) })
+    let pending = (await agent.get('/export/dhis2/pending?facility=SAV-CHPS-01')).body
+    expect(pending.periods[0]).toMatchObject({ period, exported: false, last_run: { dry_run: true, actor: 'Alhassan Yakubu' } })
+    await agent.post('/export/dhis2').set(csrf).send({ facility: 'SAV-CHPS-01', period, dry_run: false })
+    pending = (await agent.get('/export/dhis2/pending?facility=SAV-CHPS-01')).body
+    expect(pending.periods).toHaveLength(12)
+    expect(pending.periods[0]).toMatchObject({ period, exported: true })
+    expect(pending.periods[1].exported).toBe(false)
+    const history = (await agent.get('/export/dhis2/history?facility=SAV-CHPS-01')).body.runs
+    expect(history.map((r: { dry_run: boolean }) => r.dry_run)).toEqual([false, true])
+    const auditRows = (await agent.get('/admin/audit?target_type=export')).body.events
+    expect(auditRows).toHaveLength(2)
+    expect(auditRows[0]).toMatchObject({ action: 'export.push', actor_name: 'Alhassan Yakubu' })
+
+    // Outside the district, and other roles, are refused.
+    expect((await agent.get('/export/dhis2/history?facility=TTH-HOSP-01')).status).toBe(403)
+    const staff = await signIn(USERS.hospital)
+    expect((await staff.agent.get('/export/dhis2/history?facility=SAV-HOSP-01')).status).toBe(403)
   })
 
   it.skipIf(!process.env.DHIS2_PLAY)('dry-runs the export against the public DHIS2 play demo', async () => {

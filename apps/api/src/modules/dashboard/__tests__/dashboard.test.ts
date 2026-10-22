@@ -21,6 +21,19 @@ async function referral(id: string, shortId: string, dest: string, urgency: numb
   await write(prisma, (tx) => tx.referral.update({ where: { id }, data: { status: events.at(-1)![0] } }))
 }
 
+describe('scope from the role', () => {
+  it('refuses facility staff with no facility everywhere instead of widening to the district', async () => {
+    await prisma.user.update({ where: { email: USERS.hospital }, data: { facilityId: null, districtId: 'dist-sav' } })
+    const { agent, csrf } = await signIn(USERS.hospital)
+    for (const path of ['/dashboard/summary', '/dashboard/overview', '/referrals', '/admin/facilities']) {
+      const res = await agent.get(path)
+      expect([path, res.status, res.body.message]).toEqual([path, 403, 'No facility assigned'])
+    }
+    expect((await agent.post('/events/ticket').set(csrf).send({ facility: 'SAV-HOSP-01' })).status).toBe(403)
+    expect((await agent.get('/referrals/demo')).status).toBe(403)
+  })
+})
+
 describe('overview', () => {
   it('shows today by state, overdue acknowledgements, did-not-arrive, rates and stale devices', async () => {
     const now = Date.now()

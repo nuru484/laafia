@@ -2,6 +2,7 @@ import { referralAlert, type ReferralStatus } from '@laafia/core'
 import type { Deps } from '../../platform/deps.ts'
 import { HttpError } from '../../platform/http/errors.ts'
 import type { Actor } from '../../platform/middleware/auth.ts'
+import { districtOrThrow, staffFacility } from '../../platform/scope.ts'
 
 /*
  * Supervisor view (spec 2, 17): referral flow for one district over a window. A referral counts
@@ -35,12 +36,13 @@ export async function overview(deps: Deps, actor: Actor, districtCode?: string) 
   const now = deps.clock()
   let facilityIds: string[]
   let district: { id: string; code: string; name: string } | null = null
-  if (actor.kind === 'user' && actor.user.role === 'facility_staff') facilityIds = actor.user.facilityId ? [actor.user.facilityId] : []
+  const own = staffFacility(actor) // throws for facility staff with no facility
+  if (own) facilityIds = [own]
   else {
     district = await districtFor(deps, actor, districtCode)
     facilityIds = (await deps.prisma.facility.findMany({ where: { districtId: district.id }, select: { id: true } })).map((f) => f.id)
   }
-  const staffView = actor.kind === 'user' && actor.user.role === 'facility_staff'
+  const staffView = own !== null
   const referrals = await deps.prisma.referral.findMany({
     where: { deleted: false, ...(staffView ? { destinationFacilityId: { in: facilityIds } } : { OR: [{ facilityId: { in: facilityIds } }, { destinationFacilityId: { in: facilityIds } }] }) },
     include: { events: { select: { status: true, at: true }, orderBy: { at: 'asc' } } },
@@ -77,7 +79,7 @@ export async function overview(deps: Deps, actor: Actor, districtCode?: string) 
 }
 
 async function districtFor(deps: Deps, actor: Actor, code?: string) {
-  if (actor.kind === 'user' && actor.user.districtId) return deps.prisma.district.findUniqueOrThrow({ where: { id: actor.user.districtId } })
+  if (actor.kind === 'user') return deps.prisma.district.findUniqueOrThrow({ where: { id: districtOrThrow(actor) } })
   if (actor.kind === 'admin' && code) {
     const d = await deps.prisma.district.findUnique({ where: { code } })
     if (d) return d
@@ -87,9 +89,9 @@ async function districtFor(deps: Deps, actor: Actor, code?: string) {
 
 export async function summary(deps: Deps, actor: Actor, days: number, districtCode?: string) {
   // Facility staff get their own facility's history; district users the whole district.
-  const staffFacility = actor.kind === 'user' && actor.user.role === 'facility_staff' ? actor.user.facilityId : null
-  const district = staffFacility ? null : await districtFor(deps, actor, districtCode)
-  const facilities = await deps.prisma.facility.findMany({ where: staffFacility ? { id: staffFacility } : { districtId: district!.id }, select: { id: true, code: true, name: true, level: true }, orderBy: { code: 'asc' } })
+  const ownFacility = staffFacility(actor) // throws for facility staff with no facility
+  const district = ownFacility ? null : await districtFor(deps, actor, districtCode)
+  const facilities = await deps.prisma.facility.findMany({ where: ownFacility ? { id: ownFacility } : { districtId: district!.id }, select: { id: true, code: true, name: true, level: true }, orderBy: { code: 'asc' } })
   const ids = facilities.map((f) => f.id)
   const now = deps.clock()
   const since = now - days * DAY
@@ -132,7 +134,7 @@ export async function summary(deps: Deps, actor: Actor, days: number, districtCo
 
   return {
     district: district ? { id: district.id, code: district.code, name: district.name } : null,
-    facility: staffFacility ? facilities[0] ?? null : null,
+    facility: ownFacility ? facilities[0] ?? null : null,
     window_days: days,
     total: rows.length,
     by_status: byStatus,
