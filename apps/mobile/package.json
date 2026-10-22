@@ -1,0 +1,53 @@
+{
+  "name": "@laafia/mobile",
+  "version": "1.0.0",
+  "main": "expo-router/entry",
+  "dependencies": {
+    "@laafia/core": "*",
+    "@maplibre/maplibre-react-native": "^11.5.0",
+    "@react-native-community/netinfo": "12.0.1",
+    "expo": "~58.0.14",
+    "expo-application": "~58.1.2",
+    "expo-audio": "~58.0.9",
+    "expo-build-properties": "~58.0.11",
+    "expo-camera": "~58.0.10",
+    "expo-constants": "~58.0.12",
+    "expo-crypto": "~58.0.7",
+    "expo-dev-client": "~58.0.14",
+    "expo-device": "~58.0.5",
+    "expo-file-system": "~58.0.9",
+    "expo-font": "~58.0.8",
+    "expo-intent-launcher": "~58.0.3",
+    "expo-linking": "~58.0.13",
+    "expo-location": "~58.0.17",
+    "expo-notifications": "~58.1.5",
+    "expo-router": "~58.0.23",
+    "expo-secure-store": "~58.0.2",
+    "expo-speech": "~58.0.3",
+    "expo-splash-screen": "~58.0.10",
+    "expo-sqlite": "~58.0.13",
+    "expo-status-bar": "~58.0.3",
+    "expo-system-ui": "~58.0.6",
+    "react": "19.3.0",
+    "react-native": "0.88.0",
+    "react-native-gesture-handler": "~3.3.0",
+    "react-native-qrcode-svg": "^6.3.26",
+    "react-native-reanimated": "4.7.1",
+    "react-native-safe-area-context": "~5.10.1",
+    "react-native-screens": "~4.30.0",
+    "react-native-svg": "15.16.0",
+    "react-native-worklets": "0.13.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.3.0",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "start": "expo start --dev-client",
+    "android": "expo run:android",
+    "lint": "expo lint",
+    "typecheck": "tsc --noEmit",
+    "test": "jest"
+  },
+  "private": true
+}
