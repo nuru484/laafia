@@ -143,6 +143,26 @@ describe('QR hop', () => {
   })
 })
 
+describe('refer onward', () => {
+  it('the compound refers onward with its own signed referral, linked to the first, and the next facility accepts it', async () => {
+    const cho = await phone('D001')
+    const compound = await phone('F001')
+    const hospital = await phone('F003')
+    const evaluation = evaluate(PROTOCOLS.young_infant, { yi_feeding: false })
+    const { wire } = await createReferral(cho, { client_id: newborn.id, visit_id: null, protocol_id: 'young_infant', evaluation, destination_code: 'SAV-CHPS-01' })
+    await processIncoming(compound, { sender: cho.self.phone, body: wire, received_at: 1, via: 'sms' })
+    await radioSends(compound)
+    const first = await compound.db.get<{ id: string }>('SELECT id FROM referrals')
+    const { referOnward } = await import('./relay')
+    const onward = await referOnward(compound, first!.id, 'SAV-HOSP-01')
+    expect(onward.parent_referral_id).toBe(first!.id)
+    const sms = await radioSends(compound)
+    expect(sms.recipient).toBe('0200000003')
+    expect(parse(sms.body)?.message).toMatchObject({ kind: 'LFR', signer: 'F001', destination: 'SAV-HOSP-01', client_code: newborn.code, sign_codes: ['nf'] })
+    expect(await processIncoming(hospital, { sender: compound.self.phone, body: sms.body, received_at: 2, via: 'sms' })).toMatchObject({ kind: 'referral', isNew: true })
+  })
+})
+
 describe('escalation', () => {
   it('resends the same signed referral to a backup number, so the facility still dedupes it', async () => {
     const cho = await phone('D001')

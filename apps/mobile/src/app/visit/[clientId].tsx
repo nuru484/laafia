@@ -3,6 +3,8 @@ import { router, useLocalSearchParams } from 'expo-router'
 import { useEffect, useMemo, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { outcomeTone } from '../../features/format'
+import { TranscribeReply } from '../../features/TranscribeReply'
+import { armAckAlarm } from '../../lib/alarms'
 import { LANGS, speak, stop } from '../../lib/audio'
 import { createReferral } from '../../lib/relay'
 import { saveVisit, toClient } from '../../lib/register'
@@ -81,6 +83,7 @@ export default function Visit() {
       const visitId = await saveVisit(e, { client_id: data!.client.id, protocol_id: protocol.id as ProtocolId, answers, evaluation: result, muac_mm: typeof answers.ch_muac === 'number' ? answers.ch_muac : null })
       if (refer && destination) {
         const { referral } = await createReferral(e, { client_id: data!.client.id, visit_id: visitId, protocol_id: protocol.id as ProtocolId, evaluation: result, destination_code: destination.code })
+        await armAckAlarm(e.db, referral.id, referral.short_id, referral.urgency as 1 | 2 | 3)
         changed()
         void sendDue()
         router.replace(`/referral/${referral.id}`)
@@ -116,6 +119,7 @@ export default function Visit() {
           <Heading>{question.text_en}</Heading>
           <Button tone="plain" label="Play question aloud" onPress={() => play(question.prompt, question.text_en)} accessibilityHint="Plays the recorded question in the chosen language" />
           {heard ? <Body muted>{heard}</Body> : null}
+          <TranscribeReply lang={lang === 'en' ? 'eng' : lang} />
           {question.type === 'yesno' ? (
             <View style={{ flexDirection: 'row', gap: space.md }}>
               <Button style={{ flex: 1 }} label="Yes" onPress={() => answer(question, true)} />

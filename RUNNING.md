@@ -28,6 +28,14 @@ Check it from a phone's browser: `http://<machine LAN IP>:4000/health` returns `
 
 Re-running the seed resets the demo data and the activation codes.
 
+Upload the offline map for a district once (Savelugu shown; about 7 MB):
+
+```bash
+ADMIN_TOKEN=<from apps/api/.env> scripts/district-map.sh SAV -1.05,9.35,-0.55,9.85
+```
+
+Phones download it on their next sync with internet.
+
 ## 3. Mobile app
 
 The phone runs a development build (the app with the native SMS module) that loads JavaScript from the machine.

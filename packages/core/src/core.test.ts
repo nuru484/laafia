@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   ACK_TIMEOUT_MS,
+  FOLLOWUP_FLOOR,
   PROTOCOLS,
   RISK_MODEL,
   SMS_SEGMENT,
@@ -216,10 +217,15 @@ describe('scorer', () => {
     expect(out.map((r) => [r.client_id, r.pinned])).toEqual([['ref', 'open_referral'], ['nb', 'newborn_48h'], ['sick', null]])
   })
 
-  it('lifts a due follow-up to at least 0.6 and explains MUAC', () => {
-    const c = client({ dob: TODAY - 700 * DAY })
-    const [r] = rank(RISK_MODEL, [c], [visit({ muac_mm: 112, followup_due: TODAY - 3 * DAY })], new Set(), TODAY)
-    expect(r!.score).toBeGreaterThanOrEqual(0.6)
+  it('lifts a due follow-up above the routine list, keeps their own order, and explains MUAC', () => {
+    const red = client({ id: 'red', dob: TODAY - 700 * DAY })
+    const yellow = client({ id: 'yellow', dob: TODAY - 700 * DAY })
+    const well = client({ id: 'well', dob: TODAY - 700 * DAY, birth_weight_g: 2100 })
+    const visits = [visit({ client_id: 'red', muac_mm: 112, followup_due: TODAY - 3 * DAY }), visit({ id: 'v2', client_id: 'yellow', muac_mm: 120, followup_due: TODAY - 3 * DAY })]
+    const out = rank(RISK_MODEL, [well, yellow, red], visits, new Set(), TODAY)
+    expect(out.map((x) => x.client_id)).toEqual(['red', 'yellow', 'well'])
+    const r = out[0]
+    expect(r!.score).toBeGreaterThanOrEqual(FOLLOWUP_FLOOR)
     expect(r!.reasons.map((x) => x.text)).toContain('MUAC red')
     expect(r!.reasons.map((x) => x.text)).toContain('follow-up due 3 days ago')
   })

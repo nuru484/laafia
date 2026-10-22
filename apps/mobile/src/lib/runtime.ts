@@ -2,10 +2,11 @@ import NetInfo from '@react-native-community/netinfo'
 import * as Crypto from 'expo-crypto'
 import { AppState } from 'react-native'
 import { LaafiaSms } from 'laafia-sms'
+import { cancelAckAlarm } from './alarms'
 import { ApiError, deviceApi, publicCall } from './api'
 import type { Db } from './db/db'
 import { openDb, wipeDb } from './db/expo'
-import { applySendResult, dueMessages, markSending, processIncoming, type Env, type Role } from './relay'
+import { applySendResult, dueMessages, markSending, processIncoming, referralStatus, type Env, type Role } from './relay'
 import { clearSession, loadSession, saveSession, type Session } from './session'
 import { syncClips, syncTiles } from './content'
 import { pull, push } from './sync'
@@ -148,17 +149,16 @@ export async function drainInbox(): Promise<void> {
   if (!current) return
   const e = current
   let any = false
-  for (const m of LaafiaSms.drainReceived()) {
+  const handle = async (m: { from: string; body: string; receivedAt: number }) => {
     const r = await processIncoming(e, { sender: m.from, body: m.body, received_at: m.receivedAt, via: 'sms' })
+    if (r.kind === 'status' && r.referral_id) await cancelAckAlarm(e.db, r.referral_id)
     any ||= r.kind !== 'duplicate' && r.kind !== 'ignored'
   }
+  for (const m of LaafiaSms.drainReceived()) await handle(m)
   const since = Number((await e.db.get<{ value: string }>('SELECT value FROM meta WHERE key = ?', [INBOX_SCAN_KEY]))?.value ?? session?.activated_at ?? Date.now())
   try {
     const missed = await LaafiaSms.readInbox(since)
-    for (const m of missed) {
-      const r = await processIncoming(e, { sender: m.from, body: m.body, received_at: m.receivedAt, via: 'sms' })
-      any ||= r.kind !== 'duplicate' && r.kind !== 'ignored'
-    }
+    for (const m of missed) await handle(m)
     const newest = missed.length ? Math.max(since, ...missed.map((m) => m.receivedAt)) : since
     await e.db.run('INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', [INBOX_SCAN_KEY, String(newest)])
   } catch {
@@ -171,6 +171,16 @@ export async function drainInbox(): Promise<void> {
   }
 }
 
+/** An acknowledgement that arrived by internet instead of SMS also silences the alarm. */
+async function clearAnsweredAlarms(e: Env) {
+  const armed = await e.db.all<{ key: string }>("SELECT key FROM meta WHERE key LIKE 'ack_alarm_%'")
+  for (const { key } of armed) {
+    const referralId = key.slice('ack_alarm_'.length)
+    const status = await referralStatus(e, referralId)
+    if (!['created', 'carrying', 'sent'].includes(status)) await cancelAckAlarm(e.db, referralId)
+  }
+}
+
 export async function syncNow(): Promise<SyncState> {
   if (!current || syncing) return syncState
   syncing = true
@@ -179,6 +189,7 @@ export async function syncNow(): Promise<SyncState> {
   try {
     await push(current, api)
     await pull(current, api)
+    await clearAnsweredAlarms(current)
     await pushNativeState()
     await syncContent()
     syncState = { last_ok: Date.now(), last_error: null, running: false }
@@ -211,6 +222,15 @@ async function syncContent() {
   } catch (e) {
     contentState = { ...contentState, tiles_progress: null, error: e instanceof Error ? e.message : String(e) }
   }
+}
+
+/** Caregiver reply to text through the API's Khaya proxy. Translation only; it never feeds the rules. */
+export async function transcribe(uri: string, lang: string): Promise<string> {
+  const form = new FormData()
+  form.append('audio', { uri, name: 'reply.m4a', type: 'audio/mp4' } as unknown as Blob)
+  form.append('lang', lang)
+  const res = await api.upload(`/voice/transcribe?lang=${encodeURIComponent(lang)}`, form)
+  return String(res.text ?? '')
 }
 
 /** Remote deactivation or PIN wipe: drop the data and the identity; the phone returns to activation. */

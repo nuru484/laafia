@@ -1,7 +1,7 @@
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { router } from 'expo-router'
 import { useRef, useState } from 'react'
-import { View } from 'react-native'
+import { Alert, View } from 'react-native'
 import { Receiver } from '../lib/qrsync'
 import { changed, env } from '../lib/runtime'
 import { Banner, Body, Button, Screen } from '../ui/kit'
@@ -20,6 +20,13 @@ export default function Receive() {
     if (!rx.current.complete()) return
     applying.current = true
     try {
+      const { from, rows } = rx.current.peek()
+      const sender = await env().db.get<{ user_name: string }>('SELECT user_name FROM devices WHERE id = ?', [from])
+      const ok = await new Promise<boolean>((resolve) => Alert.alert('Save these records?', `${rows} records from ${sender?.user_name ?? 'an unknown phone'} (${from}).`, [
+        { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+        { text: 'Save', onPress: () => resolve(true) },
+      ]))
+      if (!ok) { rx.current = new Receiver(); setProgress({ have: 0, of: 0 }); applying.current = false; return }
       const r = await rx.current.apply(env())
       changed()
       setResult({ tone: 'info', text: `Received ${r.rows} records. They upload from this phone too when it has internet.` })

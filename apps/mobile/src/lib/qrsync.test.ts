@@ -72,10 +72,39 @@ describe('record share by QR', () => {
       ])
       const rx = new Receiver()
       for (const f of frames) rx.add(f)
-      await expect(rx.apply(cho)).rejects.toThrow(/not allowed/)
+      await expect(rx.apply(cho)).rejects.toThrow(/not allowed|sender/)
     }
     expect(await cho.db.get("SELECT id FROM households WHERE id = 'hh-evil'")).toBeUndefined()
     expect(await cho.db.get("SELECT phone_number FROM devices WHERE id = 'D001'")).toEqual({ phone_number: '0240000001' })
+  })
+
+  it('refuses facility statuses, driver records, and rows not written by the sender', async () => {
+    const cho = await phone('D001')
+    const hh = { id: 'hh-x', community: 'X', head_name: 'Y', landmark: '', lat: null, lng: null, consent_at: null, updated_at: TODAY + 1, deleted: false }
+    const cases = [
+      [{ table: 'referral_events', row: { id: 'e1', referral_id: 'r1', status: 'closed', at: 1, source_device_id: 'V001', via: 'local', updated_at: 1, device_id: 'V001', deleted: false } }],
+      [{ table: 'referral_events', row: { id: 'e2', referral_id: 'r1', status: 'carrying', at: 1, source_device_id: 'F003', via: 'qr', updated_at: 1, device_id: 'V001', deleted: false } }],
+      [{ table: 'transport_providers', row: { id: 'tp-0001', name: 'X', phone: '0249999999', vehicle: '', community: '', active: true, updated_at: TODAY + 1, device_id: 'V001', deleted: false } }],
+      [{ table: 'households', row: { ...hh, device_id: 'F003' } }],
+    ]
+    for (const records of cases) {
+      const volunteerEnv = { ...cho, self: { ...cho.self, device_id: 'V001' } }
+      const rx = new Receiver()
+      for (const f of encodeFrames(volunteerEnv, records)) rx.add(f)
+      await expect(rx.apply(cho)).rejects.toThrow(/not allowed|sender/)
+    }
+    expect(await cho.db.get("SELECT phone FROM transport_providers WHERE id = 'tp-0001'")).toEqual({ phone: '0240000101' })
+  })
+
+  it('tells the receiver who the records are from before saving', async () => {
+    const volunteer = await phone('V001')
+    await enrol(volunteer, {
+      household: { community: 'Diare', head_name: 'Z', landmark: '', lat: null, lng: null, consent: true },
+      client: { type: 'child', name: 'Abu', sex: 'm', dob: TODAY - 400 * 86_400_000, edd: null, delivery_date: null, parity: null, prior_complications: [], birth_weight_g: null, nhis_active: true, next_of_kin: null },
+    })
+    const rx = new Receiver()
+    for (const f of await buildFrames(volunteer)) rx.add(f)
+    expect(rx.peek()).toEqual({ from: 'V001', rows: 2 })
   })
 
   it('ignores frames from a different share and junk', () => {

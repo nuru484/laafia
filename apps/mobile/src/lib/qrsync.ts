@@ -35,17 +35,31 @@ function fromBase64(s: string): Uint8Array {
 type Rec = { table: string; row: Record<string, unknown> }
 
 /**
- * Only register tables travel phone to phone. Facilities and devices (phone
- * numbers, keys) are server-owned; a forged QR must never rewrite them. The
+ * Only register rows travel phone to phone, and only rows the sender wrote.
+ * Facilities, devices and drivers (phone numbers, keys) are server-owned. A
+ * share cannot be verified against a key (volunteers hold none), so it may
+ * only carry what the sender itself could have done: referral events up to
+ * "sent"; arrival, treatment and discharge come only from facilities. The
  * table name used in SQL always comes from this map, never from the payload.
  */
 const SHAREABLE: Record<string, string> = {
   households: 'households', clients: 'clients', visits: 'visits', referrals: 'referrals',
-  referral_events: 'referral_events', transport_providers: 'transport_providers', transport_requests: 'transport_requests',
+  referral_events: 'referral_events', transport_requests: 'transport_requests',
+}
+const SHAREABLE_STATUS = new Set(['created', 'carrying', 'sent'])
+
+function allowed(r: Rec, from: string): string | null {
+  if (!Object.hasOwn(SHAREABLE, r.table) || typeof r.row?.id !== 'string') return `Record type ${String(r.table).slice(0, 40)} is not allowed in a share`
+  if (r.row.device_id !== from) return 'A shared record was not written by the sender'
+  if (r.table === 'referral_events' && (r.row.source_device_id !== from || !SHAREABLE_STATUS.has(String(r.row.status)))) {
+    return 'Referral status from a facility is not allowed in a share'
+  }
+  return null
 }
 
 export async function buildFrames(env: Env): Promise<string[]> {
-  return encodeFrames(env, await collectUnsynced(env, 2000, true))
+  const records = (await collectUnsynced(env, 2000, true)).filter((r) => allowed(r, env.self.device_id) === null)
+  return encodeFrames(env, records)
 }
 
 export function encodeFrames(env: Env, records: Rec[]): string[] {
@@ -91,14 +105,26 @@ export class Receiver {
     return this.count > 0 && this.chunks.size === this.count
   }
 
-  async apply(env: Env): Promise<{ rows: number; from: string }> {
+  private decode(): { from: string; records: Rec[] } {
     if (!this.complete()) throw new Error('Not all frames scanned yet')
     const packed = fromBase64(Array.from({ length: this.count }, (_, i) => this.chunks.get(i)!).join(''))
     if (bytesToHex(sha256(packed)).slice(0, 8) !== this.check) throw new Error('The records failed their checksum; scan the frames again')
     const payload = JSON.parse(strFromU8(inflateSync(packed))) as { from: string; records: Rec[] }
-    if (!Array.isArray(payload.records)) throw new Error('Not a Laafia record share')
+    if (typeof payload.from !== 'string' || !Array.isArray(payload.records)) throw new Error('Not a Laafia record share')
+    return payload
+  }
+
+  /** Who sent the share and how many rows, for the receiver to confirm before saving. */
+  peek(): { from: string; rows: number } {
+    const p = this.decode()
+    return { from: p.from, rows: p.records.length }
+  }
+
+  async apply(env: Env): Promise<{ rows: number; from: string }> {
+    const payload = this.decode()
     for (const r of payload.records) {
-      if (!Object.hasOwn(SHAREABLE, r.table) || typeof r.row?.id !== 'string') throw new Error(`Record type ${String(r.table).slice(0, 40)} is not allowed in a share; nothing was saved`)
+      const problem = allowed(r, payload.from)
+      if (problem) throw new Error(`${problem}; nothing was saved`)
     }
     await env.db.tx(async () => {
       for (const { table: name, row } of payload.records) {

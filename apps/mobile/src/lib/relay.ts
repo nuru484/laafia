@@ -13,6 +13,7 @@ import {
   signCodes,
   transportRequestText,
   type ClientType,
+  type ClientWireType,
   type Evaluation,
   type ReferralStatus,
   type Seed,
@@ -48,7 +49,7 @@ export type OutboxRow = {
 export type ReferralRow = {
   id: string; origin_device_id: string; short_id: string; client_id: string | null; client_code: string
   client_type: string; context: string; urgency: number; sign_codes: string; destination_code: string
-  next_of_kin: string | null; visit_id: string | null; wire: string; created_at: number
+  next_of_kin: string | null; visit_id: string | null; wire: string; created_at: number; parent_referral_id?: string | null
 }
 
 const MIN = 60_000
@@ -146,11 +147,7 @@ export async function createReferral(env: Env, input: NewReferral): Promise<{ re
 
   const codes = signCodes(PROTOCOLS[input.protocol_id], input.evaluation.danger_signs)
   return db.tx(async () => {
-    // A short id collision on this device is astronomically rare but would violate the unique key; draw again.
-    let shortId = shortIdFromBytes(env.random(5))
-    while (await db.get('SELECT 1 FROM referrals WHERE origin_device_id = ? AND short_id = ?', [env.self.device_id, shortId])) {
-      shortId = shortIdFromBytes(env.random(5))
-    }
+    const shortId = await freshShortId(env)
     const nok = client.next_of_kin ? normalizePhone(client.next_of_kin) : null
     const wire = encode({
       kind: 'LFR', signer: env.self.device_id, short_id: shortId, client_code: client.code,
@@ -172,9 +169,43 @@ export async function createReferral(env: Env, input: NewReferral): Promise<{ re
 
 async function insertReferral(env: Env, r: ReferralRow) {
   await env.db.run(
-    'INSERT INTO referrals (id, origin_device_id, short_id, client_id, client_code, client_type, context, urgency, sign_codes, destination_code, next_of_kin, visit_id, wire, created_at, updated_at, device_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-    [r.id, r.origin_device_id, r.short_id, r.client_id, r.client_code, r.client_type, r.context, r.urgency, r.sign_codes, r.destination_code, r.next_of_kin, r.visit_id, r.wire, r.created_at, ...sync(env)],
+    'INSERT INTO referrals (id, origin_device_id, short_id, client_id, client_code, client_type, context, urgency, sign_codes, destination_code, next_of_kin, visit_id, wire, created_at, parent_referral_id, updated_at, device_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+    [r.id, r.origin_device_id, r.short_id, r.client_id, r.client_code, r.client_type, r.context, r.urgency, r.sign_codes, r.destination_code, r.next_of_kin, r.visit_id, r.wire, r.created_at, r.parent_referral_id ?? null, ...sync(env)],
   )
+}
+
+async function freshShortId(env: Env): Promise<string> {
+  let shortId = shortIdFromBytes(env.random(5))
+  while (await env.db.get('SELECT 1 FROM referrals WHERE origin_device_id = ? AND short_id = ?', [env.self.device_id, shortId])) {
+    shortId = shortIdFromBytes(env.random(5))
+  }
+  return shortId
+}
+
+/**
+ * A facility sends a received patient on to a higher level (spec 12.3). The
+ * new referral is signed by this facility, carries the same assessment, and
+ * links to the referral it came from.
+ */
+export async function referOnward(env: Env, parentId: string, destinationCode: string): Promise<ReferralRow> {
+  const { db } = env
+  const parent = await db.get<ReferralRow>('SELECT * FROM referrals WHERE id = ?', [parentId])
+  if (!parent) throw new Error(`unknown referral ${parentId}`)
+  const facility = await db.get<{ code: string; phone: string | null }>('SELECT code, phone FROM facilities WHERE code = ?', [destinationCode])
+  if (!facility) throw new Error(`unknown facility ${destinationCode}`)
+  return db.tx(async () => {
+    const shortId = await freshShortId(env)
+    const wire = encode({
+      kind: 'LFR', signer: env.self.device_id, short_id: shortId, client_code: parent.client_code, urgency: parent.urgency as 1 | 2 | 3,
+      client_type: parent.client_type as ClientWireType, context: parent.context, sign_codes: JSON.parse(parent.sign_codes), destination: facility.code,
+      next_of_kin: parent.next_of_kin && /^0\d{9}$/.test(parent.next_of_kin) ? parent.next_of_kin : null,
+    }, env.self.key_hex)
+    const referral: ReferralRow = { ...parent, id: env.uuid(), origin_device_id: env.self.device_id, short_id: shortId, destination_code: facility.code, wire, created_at: env.now(), parent_referral_id: parent.id, visit_id: null }
+    await insertReferral(env, referral)
+    await addEvent(env, referral.id, 'created', env.self.device_id, 'local')
+    if (facility.phone) await enqueueSms(env, facility.phone, wire, 'referrals', referral.id)
+    return referral
+  })
 }
 
 async function keyDirectory(db: Db): Promise<Map<string, string>> {
