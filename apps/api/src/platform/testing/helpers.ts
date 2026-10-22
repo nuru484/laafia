@@ -24,6 +24,7 @@ export function useDb() {
     await prisma.activationCode.deleteMany()
     await prisma.importBatch.deleteMany()
     await prisma.mappingTemplate.deleteMany()
+    await prisma.mapBuild.deleteMany()
     await prisma.contentPack.deleteMany()
     await prisma.contentClip.deleteMany()
     await prisma.job.deleteMany()

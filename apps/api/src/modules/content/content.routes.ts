@@ -3,7 +3,7 @@ import type { Deps } from '../../platform/deps.ts'
 import { validate } from '../../platform/http/validate.ts'
 import { PHONES, type Auth } from '../../platform/middleware/auth.ts'
 import { createContentController } from './content.controller.ts'
-import { ClipParams, ClipQuery, MatrixQuery, PackParams } from './content.schemas.ts'
+import { BuildBody, ClipParams, ClipQuery, DistrictParams, MatrixQuery, PackParams } from './content.schemas.ts'
 
 export function createContentRouter(deps: Deps, auth: Auth) {
   const c = createContentController(deps)
@@ -21,4 +21,6 @@ export function createContentRouter(deps: Deps, auth: Auth) {
     .delete('/admin/content/clips/:id', admin, validate({ params: ClipParams }), c.removeClip)
     .post('/admin/content/clips', admin, c.webClipUpload, c.createWebClip)
     .get('/admin/content/clips/matrix', admin, validate({ query: MatrixQuery }), c.matrix)
+    .get('/admin/maps/:district', admin, validate({ params: DistrictParams }), c.mapArea)
+    .post('/admin/maps/:district/builds', admin, validate({ params: DistrictParams, body: BuildBody }), c.startMapBuild)
 }

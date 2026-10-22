@@ -34,6 +34,7 @@ const Env = z.object({
   DHIS2_PASSWORD: optional,
   DHIS2_MAPPING_FILE: optional,
   CONTENT_DIR: z.string().default('./content'),
+  PMTILES_BIN: z.string().default('./bin/pmtiles'),
 })
 
 const parsed = Env.safeParse(process.env)

@@ -15,3 +15,4 @@ apps/api/content/
 *.tsbuildinfo
 /.claude/worktrees/
 next-env.d.ts
+/apps/api/bin/

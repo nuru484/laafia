@@ -9,8 +9,9 @@ import { HttpError } from '../../platform/http/errors.ts'
 import { input } from '../../platform/http/validate.ts'
 import { actorOf, deviceOf } from '../../platform/middleware/auth.ts'
 import { adminListClips, clipFile, clipMatrix, deleteClip, listClips, MAX_CLIP_BYTES, MAX_WEB_CLIP_BYTES, saveClip, saveClipFromWeb } from './clips.service.ts'
-import { ClipFields, ClipParams, ClipQuery, MatrixQuery, PackParams, UploadFields } from './content.schemas.ts'
+import { BuildBody, ClipFields, ClipParams, ClipQuery, DistrictParams, MatrixQuery, PackParams, UploadFields } from './content.schemas.ts'
 import { addPack, contentDir, listPacks, manifest, packFile } from './content.service.ts'
+import { mapArea as area, startBuild } from './maps.service.ts'
 
 /** res.sendFile answers Range requests (206), so interrupted downloads resume (the phone fetches tiles in 1 MB ranges). */
 async function sendStored(res: Response, f: { root: string; filename: string; contentType: string; sha256: string }) {
@@ -82,5 +83,11 @@ export function createContentController(deps: Deps) {
   const matrix: RequestHandler = async (_req, res) => {
     res.json(await clipMatrix(deps, input(res, 'query', MatrixQuery).langs))
   }
-  return { upload, create, list, getManifest, download, clipUpload, createClip, clips, clipDownload, adminClips, removeClip, webClipUpload, createWebClip, matrix }
+  const mapArea: RequestHandler = async (_req, res) => {
+    res.json(await area(deps, actorOf(res), input(res, 'params', DistrictParams).district))
+  }
+  const startMapBuild: RequestHandler = async (_req, res) => {
+    res.status(202).json({ build: await startBuild(deps, actorOf(res), input(res, 'params', DistrictParams).district, input(res, 'body', BuildBody).bbox) })
+  }
+  return { mapArea, startMapBuild, upload, create, list, getManifest, download, clipUpload, createClip, clips, clipDownload, adminClips, removeClip, webClipUpload, createWebClip, matrix }
 }

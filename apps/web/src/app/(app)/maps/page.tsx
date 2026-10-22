@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { MakeMap } from '@/features/maps/make-map'
 import { errorMessage } from '@/redux/api'
 import { useMeQuery, usePacksQuery, useUploadPackMutation } from '@/redux/endpoints'
 
@@ -38,8 +39,9 @@ export default function MapsPage() {
   return (
     <>
       <PageHeader title="Maps" description="The offline district map the phones draw the visit route on. Phones download the newest version once, and resume if the connection drops." />
+      {district ? <MakeMap district={district} onPublished={refetch} /> : null}
       <Card className="mb-6">
-        <CardHeader><CardTitle><h2>Upload a district map</h2></CardTitle><CardDescription>A PMTiles extract of OpenStreetMap for the district, made with scripts/district-map.sh. About 7 MB for Savelugu.</CardDescription></CardHeader>
+        <CardHeader><CardTitle><h2>Or upload a map file</h2></CardTitle><CardDescription>A PMTiles file of the district you already have, published as the next version.</CardDescription></CardHeader>
         <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="flex flex-1 flex-col gap-2">
             <Label htmlFor="pmtiles">PMTiles file</Label>

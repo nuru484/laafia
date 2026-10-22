@@ -13,7 +13,7 @@ const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> =
 export const api = createApi({
   reducerPath: 'api',
   baseQuery,
-  tagTypes: ['Me', 'Referral', 'Summary', 'User', 'Device', 'Facility', 'Provider', 'Import', 'Export', 'Clip', 'Pack', 'Audit', 'Sms'],
+  tagTypes: ['Me', 'Referral', 'Summary', 'User', 'Device', 'Facility', 'Provider', 'Import', 'Export', 'Clip', 'Pack', 'Map', 'Audit', 'Sms'],
   endpoints: () => ({}),
 })
 

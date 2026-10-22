@@ -241,7 +241,7 @@ Web users have accounts with a role and a scope:
 
 The web app should proxy `/api/*` to the API (Next.js rewrite), so the cookies are first-party and no CORS is needed. Cookies: `laafia_session` (opaque, httpOnly, 7 days absolute and 12 h idle) and `laafia_csrf` (readable), both `Path=/; SameSite=Lax`, `Secure` in production. Every POST, PATCH or DELETE made with the session cookie must send `X-CSRF-Token: <laafia_csrf>`; GETs need nothing. Sessions are stored hashed server-side, so logout, password reset and deactivation end them at once.
 
-`ADMIN_TOKEN` (header `x-admin-token`) is kept for scripts only, such as `scripts/district-map.sh`. It acts unscoped as the admin; dashboard users never use it.
+`ADMIN_TOKEN` (header `x-admin-token`) is kept for scripts only, such as seeding and smoke checks. It acts unscoped as the admin; dashboard users never use it.
 
 ### POST /web/login
 
@@ -444,6 +444,8 @@ All admin routes accept the `district_admin` session cookie (with `X-CSRF-Token`
 
 - `POST /admin/content/packs`, `multipart/form-data`: file field `file` (max 1 GB), fields `kind` (`tiles`), `district_code` (e.g. `SAV`), optional `version` (default: latest + 1). The server computes size and sha256. → `201 { "pack": Pack }` (shape as in the manifest). `409` if that version exists. Audio is not a pack; it travels as clips.
 - `GET /admin/content/packs` → `{ "packs": [Pack] }`, newest first.
+- `GET /admin/maps/:district` → `{ "district_code", "suggested": { "bbox", "facilities", "households" } | null, "last_bbox": Bbox | null, "build": MapBuild | null }`. `suggested` boxes every facility and household with GPS in the district plus about 2 km; `last_bbox` is the area of the last successful build. `Bbox` is `[west, south, east, north]` in degrees. `MapBuild` is `{ "id", "bbox", "status": "running" | "done" | "failed", "error", "pack_version", "started_at", "finished_at" }`.
+- `POST /admin/maps/:district/builds` `{ "bbox": Bbox }` → `202 { "build": MapBuild }`. The server cuts the area out of the latest Protomaps planet build (zoom 0 to 15) with the pmtiles CLI and publishes it as the district's next tiles pack; poll `GET /admin/maps/:district` until `status` leaves `running`. At most 1.5 degrees a side, west < east and south < north, else `400`. `409 map_build_running` while one is running for the district. A build a restart interrupted is marked `failed`.
 - `GET /admin/content/clips/matrix?langs=dag,en` → every prompt (core PROTOCOLS questions, actions and signs, then outcomes and numbers; the same list as `apps/mobile/src/lib/prompts.ts`) against each language (default: every district language plus `en`):
 
 ```json

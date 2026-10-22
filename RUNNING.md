@@ -26,13 +26,13 @@ Check it from a phone's browser: `http://<machine LAN IP>:4000/health` returns `
 
 Re-running the seed resets the demo data and the activation codes.
 
-Upload the offline map for a district once (Savelugu shown; about 7 MB):
+Install the map cutter once per machine (the API runs it from `apps/api/bin`):
 
 ```bash
-ADMIN_TOKEN=<from apps/api/.env> scripts/district-map.sh SAV -1.05,9.35,-0.55,9.85
+scripts/get-pmtiles.sh
 ```
 
-Phones download it on their next sync with internet.
+Then make each district's offline map from the dashboard: **Maps → Make the map**. Phones download it on their next sync with internet.
 
 ## 3. Web dashboard
 

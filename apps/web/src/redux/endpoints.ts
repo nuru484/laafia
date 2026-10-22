@@ -1,4 +1,4 @@
-import type { AuditEvent, Overview, SmsBalance, Clip, Device, SmsMessage, ExportPreview, ExportRecord, ExportResult, Facility, ImportBatch, ImportTemplate, Pack, Provider, Referral, Summary, User } from '@/types/api'
+import type { AuditEvent, Bbox, MapArea, MapBuild, Overview, SmsBalance, Clip, Device, SmsMessage, ExportPreview, ExportRecord, ExportResult, Facility, ImportBatch, ImportTemplate, Pack, Provider, Referral, Summary, User } from '@/types/api'
 import { api } from './api'
 
 export const endpoints = api.injectEndpoints({
@@ -71,6 +71,8 @@ export const endpoints = api.injectEndpoints({
 
     packs: b.query<{ packs: Pack[] }, void>({ query: () => '/admin/content/packs', providesTags: ['Pack'] }),
     uploadPack: b.mutation<{ pack: Pack }, FormData>({ query: (body) => ({ url: '/admin/content/packs', method: 'POST', body }), invalidatesTags: ['Pack'] }),
+    mapArea: b.query<MapArea, string>({ query: (district) => `/admin/maps/${district}`, providesTags: ['Map'] }),
+    startMapBuild: b.mutation<{ build: MapBuild }, { district: string; bbox: Bbox }>({ query: ({ district, bbox }) => ({ url: `/admin/maps/${district}/builds`, method: 'POST', body: { bbox } }), invalidatesTags: ['Map'] }),
     clips: b.query<{ clips: Clip[] }, string>({ query: (lang) => ({ url: '/admin/content/clips', params: { lang } }), providesTags: ['Clip'] }),
     uploadClip: b.mutation<{ clip: Clip }, FormData>({ query: (body) => ({ url: '/admin/content/clips', method: 'POST', body }), invalidatesTags: ['Clip'] }),
     deleteClip: b.mutation<unknown, string>({ query: (id) => ({ url: `/admin/content/clips/${id}`, method: 'DELETE' }), invalidatesTags: ['Clip'] }),
@@ -82,7 +84,7 @@ export const {
   useSetStatusMutation, useOnwardMutation, useFacilitiesQuery, useCreateFacilityMutation, useUpdateFacilityMutation,
   useUsersQuery, useCreateUserMutation, useSetUserPasswordMutation, useSetUserActiveMutation, useDevicesQuery, useCreateDeviceMutation,
   useReissueCodeMutation, useDeactivateDeviceMutation, useProvidersQuery, useCreateProviderMutation, useUpdateProviderMutation,
-  usePacksQuery, useUploadPackMutation, useClipsQuery, useDeleteClipMutation, useUploadClipMutation, useTemplatesQuery, useCreateTemplateMutation,
+  usePacksQuery, useUploadPackMutation, useMapAreaQuery, useStartMapBuildMutation, useClipsQuery, useDeleteClipMutation, useUploadClipMutation, useTemplatesQuery, useCreateTemplateMutation,
   usePreviewUploadMutation, usePreviewDhis2Mutation, useBatchesQuery, useCommitBatchMutation, useUndoBatchMutation,
   useExportPreviewQuery, useExportPushMutation, useExportHistoryQuery, useAuditQuery, useSmsBalanceQuery, useSmsLogQuery,
 } = endpoints

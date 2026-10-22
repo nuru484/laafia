@@ -29,6 +29,7 @@ model District {
   languages    Json          @default("[]")
   facilities   Facility[]
   contentPacks ContentPack[]
+  mapBuilds    MapBuild[]
   users        User[]
 
   @@map("districts")
@@ -365,9 +366,30 @@ model ContentPack {
   filename    String
   contentType String    @map("content_type")
   createdAt   BigInt    @map("created_at")
+  mapBuilds   MapBuild[]
 
   @@unique([kind, language, districtId, version], map: "content_packs_version")
   @@map("content_packs")
+}
+
+/// A district map cut on the server from the Protomaps planet build; at most one running per district.
+model MapBuild {
+  id         String       @id
+  districtId String       @map("district_id")
+  district   District     @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  /// [west, south, east, north] in degrees
+  bbox       Float[]
+  /// running | done | failed
+  status     String
+  error      String?
+  packId     String?      @map("pack_id")
+  pack       ContentPack? @relation(fields: [packId], references: [id], onDelete: SetNull)
+  startedAt  BigInt       @map("started_at")
+  finishedAt BigInt?      @map("finished_at")
+
+  @@index([districtId, startedAt])
+  @@index([packId])
+  @@map("map_builds")
 }
 
 /// One recorded prompt clip per (lang, promptId): a newer recording replaces the older row and file.

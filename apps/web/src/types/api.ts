@@ -38,6 +38,9 @@ export type Device = {
 export type Provider = { id: string; facility_id: string | null; facility_code: string | null; name: string; phone: string; vehicle: string; community: string; active: boolean }
 
 export type Pack = { id: string; kind: 'audio' | 'tiles'; language: string | null; district_code: string | null; version: number; size: number; sha256: string; content_type: string; url: string; created_at: number }
+export type Bbox = [west: number, south: number, east: number, north: number]
+export type MapBuild = { id: string; bbox: Bbox; status: 'running' | 'done' | 'failed'; error: string | null; pack_version: number | null; started_at: number; finished_at: number | null }
+export type MapArea = { district_code: string; suggested: { bbox: Bbox; facilities: number; households: number } | null; last_bbox: Bbox | null; build: MapBuild | null }
 export type Clip = { id: string; prompt_id: string; lang: string; sha256: string; size: number; recorded_at: number; url: string; device_id?: string | null; recorded_by?: string | null }
 
 export type SmsBalance = { configured: boolean; balance: number | null; currency: string | null; sms_units: number | null }

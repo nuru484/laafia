@@ -1,8 +1,10 @@
 import { createApp } from './app.ts'
+import { failInterruptedBuilds } from './modules/content/maps.service.ts'
 import { buildDeps } from './platform/deps.ts'
 import { startJobWorker } from './platform/jobs/worker.ts'
 
 const deps = buildDeps()
+await failInterruptedBuilds(deps)
 const server = createApp(deps).listen(deps.env.PORT, () => deps.logger.info('listening', { port: deps.env.PORT }))
 const stopJobs = startJobWorker(deps)
 

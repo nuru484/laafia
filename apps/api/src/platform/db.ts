@@ -32,6 +32,7 @@ const numbers = {
   mappingTemplate: num('createdAt'),
   importBatch: { ...num('createdAt'), ...numOrNull('committedAt', 'undoneAt') },
   contentPack: num('size', 'createdAt'),
+  mapBuild: { ...num('startedAt'), ...numOrNull('finishedAt') },
   contentClip: num('recordedAt'),
   user: { ...num('passwordChangedAt', 'createdAt'), ...numOrNull('lastLoginAt') },
   webSession: { ...num('expiresAt', 'lastSeenAt', 'createdAt'), ...numOrNull('revokedAt') },
