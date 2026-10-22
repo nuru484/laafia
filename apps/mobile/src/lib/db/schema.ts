@@ -4,6 +4,10 @@ import type { Db } from './db'
  * Local schema (spec section 5). Synced tables carry updated_at, device_id,
  * synced and deleted. JSON columns are TEXT. Each migration runs once, tracked
  * by PRAGMA user_version.
+ *
+ * Foreign keys are declared for documentation but not enforced (SQLite's
+ * default): sync pages arrive in server order, so a visit can land before its
+ * client, and a referral first seen by SMS is re-keyed to the server's id.
  */
 const SYNC = `updated_at INTEGER NOT NULL, device_id TEXT NOT NULL, synced INTEGER NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0`
 
@@ -89,6 +93,11 @@ export const MIGRATIONS: string[] = [
     prompt_id TEXT NOT NULL, lang TEXT NOT NULL, uri TEXT NOT NULL, recorded_at INTEGER NOT NULL,
     PRIMARY KEY (prompt_id, lang)
   );
+  `,
+  // Recorded clips travel to the server and back (lib/content.ts).
+  `
+  ALTER TABLE audio_clips ADD COLUMN uploaded_sha TEXT;
+  ALTER TABLE audio_clips ADD COLUMN source TEXT NOT NULL DEFAULT 'local';
   `,
 ]
 

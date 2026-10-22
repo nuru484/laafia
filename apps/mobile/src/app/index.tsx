@@ -1,9 +1,6 @@
-import { Text, View } from 'react-native'
+import { Redirect } from 'expo-router'
+import { currentSession } from '../lib/runtime'
 
-export default function Home() {
-  return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <Text>Laafia</Text>
-    </View>
-  )
+export default function Index() {
+  return <Redirect href={currentSession()?.role === 'facility' ? '/inbox' : '/today'} />
 }

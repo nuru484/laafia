@@ -51,8 +51,13 @@ describe('codec', () => {
     expect(decode(sms, () => KEY)).toEqual({ ok: true, message: referral })
   })
 
+  it('carries device-scoped client codes made on phones', () => {
+    const sms = encode({ ...referral, client_code: 'CL-D001003' }, KEY)
+    expect(decode(sms, () => KEY)).toMatchObject({ ok: true, message: { client_code: 'CL-D001003' } })
+  })
+
   it('fits the worst realistic referral in one segment', () => {
-    const worst = { ...referral, signer: 'DEV12345', client_code: 'CL-999999', context: 'AGE59M', sign_codes: ['nd', 'cv', 'vo', 'lt', 'ci', 'oe', 'mr', 'bs', 'pd', 'pf'], destination: 'TAMALE-HOSP-01' }
+    const worst = { ...referral, signer: 'DEV12345', client_code: 'CL-DEV12345999', context: 'AGE59M', sign_codes: ['nd', 'cv', 'vo', 'lt', 'ci', 'oe', 'mr', 'bs', 'pd', 'pf'], destination: 'TAMALE-HOSP-01' }
     expect(encode(worst, KEY).length).toBeLessThanOrEqual(SMS_SEGMENT)
   })
 

@@ -5,8 +5,8 @@ import { migrate } from '../src/lib/db/schema'
 
 /** In-memory SQLite with the app's real schema, for tests. */
 export async function testDb(): Promise<Db> {
-  const d = new DatabaseSync(':memory:')
-  d.exec('PRAGMA foreign_keys = ON')
+  // Same as the phone: foreign keys are declared but not enforced (see schema.ts).
+  const d = new DatabaseSync(':memory:', { enableForeignKeyConstraints: false })
   const db: Db = {
     async exec(sql) { d.exec(sql) },
     async run(sql, params: Param[] = []) { return { changes: Number(d.prepare(sql).run(...params).changes) } },

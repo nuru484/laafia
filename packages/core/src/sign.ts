@@ -25,9 +25,8 @@ export const SIG_LENGTH = 8
 
 /**
  * 8 base32 chars = 40 bits of HMAC-SHA256. Enough against guessing over SMS.
- * ponytail: shared-key HMAC means every facility phone holding a CHO key could
- * forge that CHO's messages; upgrade to Ed25519 over a 2-segment SMS if a pilot
- * needs non-repudiation.
+ * Shared-key HMAC: a device holding a CHO's key could forge that CHO's
+ * messages. Ed25519 over a two-segment SMS would remove that, at twice the SMS cost.
  */
 export function sign(deviceKeyHex: string, canonical: string): string {
   return base32(hmac(sha256, hexToBytes(deviceKeyHex), utf8ToBytes(canonical))).slice(0, SIG_LENGTH)

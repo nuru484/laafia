@@ -143,6 +143,50 @@ describe('QR hop', () => {
   })
 })
 
+describe('escalation', () => {
+  it('resends the same signed referral to a backup number, so the facility still dedupes it', async () => {
+    const cho = await phone('D001')
+    const { referral, wire } = await referNewborn(cho)
+    await radioSends(cho)
+    const { resendReferral } = await import('./relay')
+    await resendReferral(cho, referral.id, '024 555 0000')
+    const [again] = await dueMessages(cho)
+    expect(again).toMatchObject({ recipient: '0245550000', body: wire, ref_id: referral.id })
+  })
+})
+
+describe('closing the loop', () => {
+  it('when the facility closes the referral, the CHO gets a follow-up due in 3 days', async () => {
+    const cho = await phone('D001')
+    const hospital = await phone('F003')
+    const { referral } = await referNewborn(cho)
+    const sms = await radioSends(cho)
+    await processIncoming(hospital, { sender: cho.self.phone, body: sms.body, received_at: 1, via: 'sms' })
+    await radioSends(hospital)
+    const atHospital = await hospital.db.get<{ id: string }>('SELECT id FROM referrals')
+    const { facilityUpdate } = await import('./relay')
+    await facilityUpdate(hospital, atHospital!.id, 'closed')
+    const close = await radioSends(hospital)
+    await processIncoming(cho, { sender: hospital.self.phone, body: close.body, received_at: 2, via: 'sms' })
+    expect(await referralStatus(cho, referral.id)).toBe('closed')
+    const stub = await cho.db.get<{ client_id: string; followup_due: number; rule_id: string }>("SELECT client_id, followup_due, rule_id FROM visits WHERE rule_id = 'REFERRAL-CLOSED'")
+    expect(stub).toEqual({ client_id: newborn.id, followup_due: cho.now() + 3 * 86_400_000, rule_id: 'REFERRAL-CLOSED' })
+    await processIncoming(cho, { sender: hospital.self.phone, body: close.body, received_at: 3, via: 'sms' })
+    expect(await cho.db.all("SELECT id FROM visits WHERE rule_id = 'REFERRAL-CLOSED'")).toHaveLength(1)
+  })
+})
+
+describe('status authority', () => {
+  it('ignores a validly signed status update that does not come from a facility device', async () => {
+    const cho = await phone('D001')
+    const { referral } = await referNewborn(cho)
+    const { encode } = await import('@laafia/core')
+    const forged = encode({ kind: 'LFS', signer: 'V001', origin: 'D001', short_id: referral.short_id, status: 'T' }, dev('V001').key_hex)
+    expect(await processIncoming(cho, { sender: '0240000002', body: forged, received_at: 1, via: 'sms' })).toEqual({ kind: 'rejected', error: 'not_a_facility' })
+    expect(await referralStatus(cho, referral.id)).toBe('created')
+  })
+})
+
 describe('QR hop safety', () => {
   it('a carrier holding the signer key still refuses a tampered QR', async () => {
     const cho = await phone('D001')
@@ -191,6 +235,32 @@ describe('outbox', () => {
     expect(await dueMessages(cho)).toHaveLength(0)
     cho.tick(15 * 60_000)
     expect(await dueMessages(cho)).toHaveLength(1)
+  })
+})
+
+describe('scheduled pickup', () => {
+  it('holds a planned pickup SMS until 18 hours before the appointment', async () => {
+    const cho = await phone('D001')
+    const { referral } = await referNewborn(cho)
+    await radioSends(cho)
+    const appointment = cho.now() + 3 * 86_400_000
+    await requestTransport(cho, { referral_id: referral.id, provider_id: seed.transport_providers[0]!.id, scheduled_for: appointment })
+    expect(await dueMessages(cho)).toHaveLength(0)
+    cho.tick(appointment - 18 * 3_600_000 - cho.now())
+    const [sms] = await dueMessages(cho)
+    expect(sms!.body).toContain('Reply 1 = coming')
+  })
+})
+
+describe('pickup for a planned follow-up', () => {
+  it('needs no referral: the driver gets the house landmark and the CHO compound as destination', async () => {
+    const cho = await phone('D001')
+    const client = seed.clients.find((c) => c.type === 'pregnant')!
+    await requestTransport(cho, { client_id: client.id, provider_id: seed.transport_providers[0]!.id, scheduled_for: cho.now() + 86_400_000 })
+    cho.tick(6 * 3_600_000)
+    const [sms] = await dueMessages(cho)
+    expect(sms!.body).toContain('To Kanshegu CHPS')
+    expect(sms!.body).not.toContain('URGENT')
   })
 })
 
