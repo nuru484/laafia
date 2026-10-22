@@ -4,8 +4,8 @@ dist/
 .env.*
 !.env.example
 .expo/
-android/
-ios/
+/apps/mobile/android/
+/apps/mobile/ios/
 *.apk
 .next/
 __pycache__/
