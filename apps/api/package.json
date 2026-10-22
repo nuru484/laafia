@@ -1,0 +1,38 @@
+{
+  "name": "@laafia/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=.env src/server.ts",
+    "start": "tsx --env-file-if-exists=.env src/server.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx --env-file-if-exists=.env src/migrate.ts",
+    "seed": "tsx --env-file-if-exists=.env src/seed.ts"
+  },
+  "dependencies": {
+    "@laafia/core": "*",
+    "drizzle-orm": "^0.45.4",
+    "express": "^5.3.0",
+    "jose": "^6.2.12",
+    "multer": "^2.4.0",
+    "pg": "^8.23.1",
+    "read-excel-file": "^9.3.10",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.3.0",
+    "@types/node": "^24.19.2",
+    "@types/pg": "^8.23.1",
+    "@types/supertest": "^7.2.1",
+    "drizzle-kit": "^0.31.11",
+    "supertest": "^7.3.1",
+    "tsx": "^4.23.15",
+    "typescript": "~5.9.3",
+    "vitest": "^5.0.5",
+    "write-excel-file": "^4.1.1"
+  }
+}
