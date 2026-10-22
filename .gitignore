@@ -13,3 +13,5 @@ __pycache__/
 apps/api/content/
 /.playwright-mcp/
 *.tsbuildinfo
+/.claude/worktrees/
+next-env.d.ts
