@@ -1,3 +1,9 @@
+import ffmpegPath from 'ffmpeg-static'
+import { execFile } from 'node:child_process'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { promisify } from 'node:util'
 import type { Deps } from '../../platform/deps.ts'
 import { HttpError } from '../../platform/http/errors.ts'
 import { fixedWindow } from '../../platform/middleware/rate-limit.ts'
@@ -7,8 +13,8 @@ import { fixedWindow } from '../../platform/middleware/rate-limit.ts'
  * key stays on the server. Khaya ASR v3: POST {base}/asr/v3/transcribe?language=<iso639-3>
  * with the raw WAV bytes and an Ocp-Apim-Subscription-Key header; it answers
  * { text, warnings } (v1 answered a bare string, accepted too). Khaya wants WAV
- * PCM mono, 16 kHz recommended, so only WAV is accepted here, which also lets
- * the 10 s limit be checked exactly from the header.
+ * PCM mono, 16 kHz recommended. Phones record m4a/AAC, which is decoded to that
+ * here; the 10 s limit is checked on the decoded WAV header. WAV input is sent as-is.
  */
 
 export const MAX_AUDIO_BYTES = 500 * 1024
@@ -29,6 +35,34 @@ export function wavSeconds(buf: Buffer): number | null {
   return null
 }
 
+/** MP4 container (m4a/AAC from Android's recorder): an `ftyp` box at offset 4. */
+export const isMp4 = (buf: Buffer) => buf.length >= 12 && buf.toString('ascii', 4, 8) === 'ftyp'
+
+/**
+ * Decode m4a/AAC to 16 kHz mono 16-bit PCM WAV with the bundled ffmpeg. The input goes through a temp
+ * file because MP4 often keeps its index (moov) at the end, which ffmpeg cannot read from a pipe.
+ * Output is capped at MAX_AUDIO_SECONDS + 2 s so a long clip still decodes far enough to be measured.
+ */
+export async function toWav16k(audio: Buffer): Promise<Buffer> {
+  if (!ffmpegPath) throw new HttpError(500, 'internal', 'ffmpeg is not available')
+  const dir = await mkdtemp(join(tmpdir(), 'laafia-voice-'))
+  try {
+    const input = join(dir, 'in.m4a')
+    await writeFile(input, audio)
+    const { stdout } = await execFileAsync(
+      ffmpegPath,
+      ['-hide_banner', '-loglevel', 'error', '-i', input, '-t', String(MAX_AUDIO_SECONDS + 2), '-ac', '1', '-ar', '16000', '-acodec', 'pcm_s16le', '-f', 'wav', 'pipe:1'],
+      { encoding: 'buffer', maxBuffer: 1024 * 1024, timeout: 15_000 },
+    ).catch(() => {
+      throw new HttpError(415, 'unsupported_audio', 'Could not decode the audio')
+    })
+    return stdout
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+}
+
+const execFileAsync = promisify(execFile)
 const limiter = fixedWindow(RATE.perHour, 3_600_000, `At most ${RATE.perHour} transcriptions per hour`)
 export const resetRateLimits = () => limiter.reset()
 
@@ -39,8 +73,9 @@ export function assertConfigured(deps: Deps) {
 export async function transcribe(deps: Deps, deviceId: string, audio: Buffer | undefined, lang: string) {
   assertConfigured(deps)
   if (!audio) throw new HttpError(400, 'invalid_request', 'Expected a multipart file field "audio"')
+  if (isMp4(audio)) audio = await toWav16k(audio)
   const seconds = wavSeconds(audio)
-  if (seconds === null) throw new HttpError(415, 'unsupported_audio', 'Audio must be WAV (PCM, mono, 16 kHz recommended)')
+  if (seconds === null) throw new HttpError(415, 'unsupported_audio', 'Audio must be m4a (AAC) or WAV (PCM)')
   if (seconds > MAX_AUDIO_SECONDS + 0.5) throw new HttpError(400, 'audio_too_long', `At most ${MAX_AUDIO_SECONDS} s of audio`)
   limiter.hit(deviceId)
 

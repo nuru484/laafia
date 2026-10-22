@@ -1,3 +1,8 @@
+import ffmpegPath from 'ffmpeg-static'
+import { execFileSync } from 'node:child_process'
+import { mkdtempSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import request from 'supertest'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { env } from '../../../config/env.ts'
@@ -15,6 +20,13 @@ function wav(seconds: number) {
   b.writeUInt32LE(16_000, 24); b.writeUInt32LE(32_000, 28); b.writeUInt16LE(2, 32); b.writeUInt16LE(16, 34)
   b.write('data', 36, 'ascii'); b.writeUInt32LE(data, 40)
   return b
+}
+/** An AAC .m4a tone of `seconds`, as Android's recorder produces, made with the bundled ffmpeg. */
+function m4a(seconds: number) {
+  const dir = mkdtempSync(join(tmpdir(), 'laafia-m4a-'))
+  const out = join(dir, 'tone.m4a')
+  execFileSync(ffmpegPath!, ['-loglevel', 'error', '-f', 'lavfi', '-i', `sine=frequency=440:duration=${seconds}`, '-ac', '1', '-c:a', 'aac', '-b:a', '24k', out])
+  return readFileSync(out)
 }
 const post = (jwt: string, audio: Buffer, name = 'reply.wav', lang = 'dag') =>
   request(app).post(`/voice/transcribe?lang=${lang}`).set(bearer(jwt)).attach('audio', audio, name)
@@ -44,6 +56,25 @@ describe('voice transcribe (Khaya proxy)', () => {
     const [url, init] = fetchMock.mock.calls[0]!
     expect(String(url)).toBe('https://translation-api.ghananlp.org/asr/v3/transcribe?language=dag')
     expect((init!.headers as Record<string, string>)['Ocp-Apim-Subscription-Key']).toBe('server-side-secret')
+  })
+
+  it('converts an m4a (AAC) recording to 16 kHz mono WAV and checks its decoded length', async () => {
+    env.KHAYA_API_KEY = 'k'
+    const sent: Buffer[] = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+      sent.push(Buffer.from(init!.body as Uint8Array))
+      return new Response(JSON.stringify({ text: 'n daa' }))
+    })
+    const jwt = await activate('D001')
+    const res = await post(jwt, m4a(2), 'reply.m4a')
+    expect(res.status).toBe(200)
+    expect(res.body).toMatchObject({ text: 'n daa', language: 'dag' })
+    expect(res.body.seconds).toBeCloseTo(2, 0)
+    const out = sent[0]!
+    expect(out.toString('ascii', 0, 4)).toBe('RIFF')
+    expect(out.readUInt16LE(22)).toBe(1) // mono
+    expect(out.readUInt32LE(24)).toBe(16_000)
+    expect((await post(jwt, m4a(12), 'long.m4a')).body.code).toBe('audio_too_long')
   })
 
   it('rejects long, oversized, non-WAV and unauthenticated uploads, and rate-limits per device', async () => {
