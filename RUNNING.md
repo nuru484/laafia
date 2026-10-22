@@ -34,7 +34,23 @@ ADMIN_TOKEN=<from apps/api/.env> scripts/district-map.sh SAV -1.05,9.35,-0.55,9.
 
 Phones download it on their next sync with internet.
 
-## 3. Mobile app
+## 3. Web dashboard
+
+```bash
+cp apps/web/.env.example apps/web/.env   # API_URL, the API the dashboard proxies to under /api
+npm run web                              # http://<machine LAN IP>:3000
+```
+
+Demo accounts (password `Laafia-demo-2026` for all), created by the seed:
+
+| Login | Role | Sees |
+| --- | --- | --- |
+| admin@laafia.demo | District admin | Everything for Savelugu district |
+| supervisor@laafia.demo | Supervisor | Overview, referrals and checklists, read only |
+| hospital@laafia.demo | Facility staff | Savelugu Municipal Hospital's inbox and actions |
+| healthcentre@laafia.demo | Facility staff | Pong-Tamale Health Centre's inbox and actions |
+
+## 4. Mobile app
 
 The phone runs a development build (the app with the native SMS module) that loads JavaScript from the machine.
 
@@ -56,7 +72,7 @@ The phone runs a development build (the app with the native SMS module) that loa
    Open the APK link from the build page on the phone and allow installing unknown apps.
 4. Open Laafia on the phone, choose Enter URL manually, and enter `http://<machine LAN IP>:8081`.
 
-## 4. Activate the phones
+## 5. Activate the phones
 
 Each phone is activated once with internet. Use the codes the seed printed:
 
@@ -72,7 +88,7 @@ Enter the phone's real number at activation; acknowledgements and status SMS go 
 
 Then on every phone: More, Phone setup checks, and resolve every item. On Samsung also remove Laafia from Sleeping apps and Deep sleeping apps (Settings, Battery, Background usage limits).
 
-## 5. End-to-end check
+## 6. End-to-end check
 
 Two phones: CHO (D001) and hospital (F003).
 
@@ -84,15 +100,13 @@ Two phones: CHO (D001) and hospital (F003).
 
 Offline variants: put the CHO phone in airplane mode with mobile signal only (no data), or with no signal at all; the SMS queues and sends when signal returns. QR hop: on the referral, Show QR code; scan it from the volunteer phone (More, Scan a referral QR), which forwards it by SMS.
 
-## 6. Tests
+## 7. Tests
 
 ```bash
-npm test -w @laafia/core
-npm test -w @laafia/mobile
-npm test -w @laafia/api
+npm test    # core, api, mobile and web
 ```
 
-## 7. Standalone APK
+## 8. Standalone APK
 
 For phones that should run without the development machine, set the API URL for the profile in `apps/mobile/eas.json` (`env.EXPO_PUBLIC_API_URL`) and build:
 
