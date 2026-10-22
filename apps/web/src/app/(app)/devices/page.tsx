@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { LEVEL, byLevel } from '@/features/facilities/labels'
 import { ago } from '@/features/referrals/labels'
 import { errorMessage } from '@/redux/api'
 import { useCreateDeviceMutation, useDeactivateDeviceMutation, useDevicesQuery, useFacilitiesQuery, useReissueCodeMutation } from '@/redux/endpoints'
@@ -33,7 +34,10 @@ export default function DevicesPage() {
   const [retiring, setRetiring] = useState<Device | null>(null)
   const [reissue] = useReissueCodeMutation()
   const [deactivate] = useDeactivateDeviceMutation()
-  const devices = (data?.devices ?? []).filter((d) => d.role !== 'gateway')
+  const facilities = [...(facs?.facilities ?? [])].sort(byLevel)
+  const rank = (code: string | null) => { const i = facilities.findIndex((f) => f.code === code); return i < 0 ? facilities.length : i }
+  // Grouped by facility in level order, so each nurse is listed under her CHPS, health centre or hospital.
+  const devices = (data?.devices ?? []).filter((d) => d.role !== 'gateway').sort((a, b) => rank(a.facility_code) - rank(b.facility_code) || a.user_name.localeCompare(b.user_name))
 
   async function newCode(d: Device) {
     try {
@@ -65,7 +69,7 @@ export default function DevicesPage() {
 
   return (
     <>
-      <PageHeader title="Phones" description="Each CHO and facility phone. Create one to get its 8-digit activation code; the phone downloads its catchment when it is activated." actions={<Button className="h-11" onClick={() => setAdding(true)}>Add phone</Button>} />
+      <PageHeader title="Phones" description="Each nurse's phone and each facility phone, under the facility it belongs to. Create one to get its 8-digit activation code; the phone downloads its catchment when it is activated." actions={<Button className="h-11" onClick={() => setAdding(true)}>Add phone</Button>} />
       {isLoading ? <LoadingRows /> : error ? <ErrorState message={errorMessage(error)} onRetry={refetch} /> : !devices.length ? <EmptyState title="No phones yet" /> : (
         <>
           <ul className="flex flex-col gap-3 md:hidden">
@@ -108,7 +112,7 @@ export default function DevicesPage() {
         </>
       )}
 
-      <AddPhone open={adding} onOpenChange={setAdding} facilities={(facs?.facilities ?? []).map((f) => ({ value: f.code, label: f.name }))} onCreated={setCode} />
+      <AddPhone open={adding} onOpenChange={setAdding} facilities={facilities.map((f) => ({ value: f.code, label: `${f.name} (${LEVEL[f.level]})` }))} onCreated={setCode} />
 
       <Dialog open={!!code} onOpenChange={(o) => { if (!o) setCode(null) }}>
         <DialogContent>
@@ -160,7 +164,7 @@ function AddPhone({ open, onOpenChange, facilities, onCreated }: { open: boolean
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add a phone</DialogTitle>
-          <DialogDescription>The phone number is confirmed when the phone is activated.</DialogDescription>
+          <DialogDescription>Every phone belongs to a facility: a nurse to her CHPS compound, health centre or hospital. The phone number is confirmed when the phone is activated.</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">

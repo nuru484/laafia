@@ -8,14 +8,14 @@ Express + Prisma + PostgreSQL backend in `apps/api`. This is the contract the mo
 cp apps/api/.env.example apps/api/.env      # set DATABASE_URL (Prisma needs a user: postgresql://<user>@localhost/laafia?host=/var/run/postgresql)
 createdb laafia && createdb laafia_api_test
 npm run db:migrate -w @laafia/api           # prisma migrate deploy (db:migrate:dev runs prisma migrate dev)
-npm run seed -w @laafia/api                 # prints demo activation codes
+npm run seed -w @laafia/api                 # district, SMS gateway and first admin from SEED_* (seed:demo loads the demo district)
 npm run dev -w @laafia/api                  # http://localhost:4000
 npm test -w @laafia/api                     # migrates TEST_DATABASE_URL (laafia_api_test) and clears its rows per test
 ```
 
 Configuration is validated at boot (`src/config/env.ts`). The server refuses to start without `DATABASE_URL`, and in production without `JWT_SECRET` (32+ chars), `ADMIN_TOKEN` and `SMS_WEBHOOK_TOKEN` (24+ chars). Secrets live only in `apps/api/.env`. Logs never contain secrets, SMS bodies or full phone numbers.
 
-Demo activation codes (fixed, valid 7 days, single use; `npm run seed` resets them):
+Demo activation codes (fixed, valid 7 days, single use; `npm run seed:demo` resets them):
 
 | Code | Device | Role | Facility |
 | --- | --- | --- | --- |

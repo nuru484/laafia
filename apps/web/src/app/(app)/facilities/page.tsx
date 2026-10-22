@@ -8,11 +8,11 @@ import { EmptyState, ErrorState, LoadingRows, PageHeader } from '@/components/sh
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { LEVEL, byLevel } from '@/features/facilities/labels'
 import { errorMessage } from '@/redux/api'
-import { useCreateFacilityMutation, useFacilitiesQuery, useUpdateFacilityMutation } from '@/redux/endpoints'
+import { useCreateFacilityMutation, useDevicesQuery, useFacilitiesQuery, useUpdateFacilityMutation } from '@/redux/endpoints'
 import type { Facility } from '@/types/api'
 
-const LEVEL: Record<Facility['level'], string> = { chps: 'CHPS compound', health_centre: 'Health centre', hospital: 'Hospital' }
 const CAPS: { value: string; label: string }[] = [
   { value: 'bemonc', label: 'Basic emergency obstetric care' },
   { value: 'cemonc', label: 'Comprehensive emergency obstetric care' },
@@ -25,34 +25,39 @@ const empty: Draft = { code: '', name: '', level: 'chps', phone: '', lat: '', ln
 
 export default function FacilitiesPage() {
   const { data, error, isLoading, refetch } = useFacilitiesQuery()
+  const { data: phones } = useDevicesQuery()
   const [draft, setDraft] = useState<Draft | null>(null)
+  const facilities = [...(data?.facilities ?? [])].sort(byLevel)
+  const staff = (code: string) => (phones?.devices ?? []).filter((d) => d.facility_code === code && d.active && d.role !== 'gateway').length
 
   return (
     <>
-      <PageHeader title="Facilities" description="CHPS compounds, health centres and hospitals. The checklist picks a destination by level and capability, and the phone number is where referral SMS go." actions={<Button className="h-11" onClick={() => setDraft(empty)}>Add facility</Button>} />
+      <PageHeader title="Facilities" description="CHPS compounds, health centres and hospitals. Every nurse's phone belongs to one of them. The checklist picks a destination by level and capability, and the phone number is where referral SMS go." actions={<Button className="h-11" onClick={() => setDraft(empty)}>Add facility</Button>} />
       {isLoading ? <LoadingRows /> : error ? <ErrorState message={errorMessage(error)} onRetry={refetch} /> : !data?.facilities.length ? <EmptyState title="No facilities yet" /> : (
         <>
           <ul className="flex flex-col gap-3 md:hidden">
-            {data.facilities.map((f) => (
+            {facilities.map((f) => (
               <li key={f.id} className="flex flex-col gap-1 rounded-lg border p-4 text-sm">
                 <p className="font-medium [overflow-wrap:anywhere]">{f.name}</p>
                 <p className="text-muted-foreground">{LEVEL[f.level]} · {f.code}</p>
                 <p className="text-muted-foreground">{f.phone ? `Referrals to ${f.phone}` : 'No referral phone yet'}</p>
+                <p className="text-muted-foreground">{staff(f.code)} active {staff(f.code) === 1 ? 'phone' : 'phones'}</p>
                 <Button variant="outline" className="mt-2 h-11" onClick={() => setDraft(toDraft(f))}>Edit</Button>
               </li>
             ))}
           </ul>
           <div className="hidden overflow-hidden rounded-lg border md:block">
             <Table>
-              <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Code</TableHead><TableHead>Level</TableHead><TableHead>Referral phone</TableHead><TableHead>Capabilities</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Code</TableHead><TableHead>Level</TableHead><TableHead>Referral phone</TableHead><TableHead>Capabilities</TableHead><TableHead>Phones</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
               <TableBody>
-                {data.facilities.map((f) => (
+                {facilities.map((f) => (
                   <TableRow key={f.id}>
                     <TableCell className="font-medium">{f.name}</TableCell>
                     <TableCell className="text-muted-foreground">{f.code}</TableCell>
                     <TableCell>{LEVEL[f.level]}</TableCell>
                     <TableCell className="text-muted-foreground">{f.phone ?? 'Not set'}</TableCell>
                     <TableCell className="text-muted-foreground">{f.capabilities.join(', ') || '-'}</TableCell>
+                    <TableCell className="tabular-nums">{staff(f.code)}</TableCell>
                     <TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => setDraft(toDraft(f))}>Edit</Button></TableCell>
                   </TableRow>
                 ))}

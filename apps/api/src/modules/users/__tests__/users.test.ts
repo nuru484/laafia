@@ -1,6 +1,6 @@
 import request from 'supertest'
 import { describe, expect, it } from 'vitest'
-import { DEMO_PASSWORD } from '../../../seed.ts'
+import { DEMO_PASSWORD } from '../../../seed-demo.ts'
 import { ADMIN, SID, TODAY, USERS, activate, app, prisma, pushAs, signIn, useDb } from '../../../platform/testing/helpers.ts'
 
 useDb()

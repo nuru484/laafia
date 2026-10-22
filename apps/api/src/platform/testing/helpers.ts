@@ -4,7 +4,7 @@ import { afterAll, beforeEach, expect } from 'vitest'
 import { createApp } from '../../app.ts'
 import { resetActivationLimits } from '../../modules/auth/index.ts'
 import { resetLoginLimits } from '../../modules/users/index.ts'
-import { DEMO_CODES, DEMO_PASSWORD, seedDemo } from '../../seed.ts'
+import { DEMO_CODES, DEMO_PASSWORD, seedDemo } from '../../seed-demo.ts'
 import { buildDeps } from '../deps.ts'
 import type { Logger } from '../logger.ts'
 

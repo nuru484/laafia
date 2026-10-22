@@ -1,7 +1,7 @@
 import { encode } from '@laafia/core'
 import request from 'supertest'
 import { describe, expect, it } from 'vitest'
-import { DEMO_CODES } from '../../../seed.ts'
+import { DEMO_CODES } from '../../../seed-demo.ts'
 import { ADMIN, KEYS, activate, app, bearer, lfr, prisma, pullAs, sms, useDb } from '../../../platform/testing/helpers.ts'
 
 useDb()

@@ -12,7 +12,8 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
-    "seed": "tsx --env-file-if-exists=.env src/seed.ts"
+    "seed": "tsx --env-file-if-exists=.env src/seed.ts",
+    "seed:demo": "tsx --env-file-if-exists=.env src/seed-demo.ts"
   },
   "dependencies": {
     "@laafia/core": "*",
