@@ -1,0 +1,36 @@
+{
+  "_comment": "Laafia to DHIS2 Tracker mapping (spec 17). These UIDs are from the public DHIS2 play demo (Sierra Leone) so the export can be dry-run there; replace them with the district instance's UIDs during integration.",
+  "trackedEntityType": "nEenWmSyUEp",
+  "attributes": {
+    "first_name": "w75KJ2mc4zz",
+    "last_name": "zDhUuAYrxNC",
+    "sex": "cejWyOfXge6",
+    "code": "lZGmxYbs97q"
+  },
+  "sex_values": { "f": "Female", "m": "Male" },
+  "programs": {
+    "pregnant": { "program": "IpHINAT79UW", "visit_stage": "ZzYYXq4fJie", "referral_stage": "ZzYYXq4fJie" },
+    "postpartum": { "program": "IpHINAT79UW", "visit_stage": "ZzYYXq4fJie", "referral_stage": "ZzYYXq4fJie" },
+    "newborn": { "program": "IpHINAT79UW", "visit_stage": "ZzYYXq4fJie", "referral_stage": "ZzYYXq4fJie" },
+    "child": { "program": "IpHINAT79UW", "visit_stage": "ZzYYXq4fJie", "referral_stage": "ZzYYXq4fJie" }
+  },
+  "data_elements": {
+    "visit": { "summary": "OuJ6sgPyAbC" },
+    "referral": { "summary": "OuJ6sgPyAbC" }
+  },
+  "org_units": {
+    "SAV-CHPS-01": "DiszpKrYNg8",
+    "PTA-HC-01": "DiszpKrYNg8",
+    "SAV-HOSP-01": "DiszpKrYNg8",
+    "TTH-HOSP-01": "DiszpKrYNg8"
+  },
+  "aggregate": {
+    "data_set": "QX4ZTUbOt3a",
+    "data_elements": {
+      "anc_contacts": "FE82N2sA0YI",
+      "pnc_within_48h": "ncEnqRPHFvk",
+      "referrals_made": "R1WAv9bVXff",
+      "referrals_completed": "tn3p7vIxoKY"
+    }
+  }
+}

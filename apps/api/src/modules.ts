@@ -4,6 +4,7 @@ import { createAuth } from './platform/middleware/auth.ts'
 import { createAdminRouter } from './modules/admin/index.ts'
 import { createAuthRouter } from './modules/auth/index.ts'
 import { createContentRouter } from './modules/content/index.ts'
+import { createDhis2Router } from './modules/dhis2/index.ts'
 import { createEventsRouter } from './modules/events/index.ts'
 import { createImportsRouter } from './modules/imports/index.ts'
 import { createReferralsRouter } from './modules/referrals/index.ts'
@@ -24,5 +25,6 @@ export function mountModules(app: Express, deps: Deps) {
   app.use(createVoiceRouter(deps, auth))
   app.use(createTransportRouter(deps, auth))
   app.use(createImportsRouter(deps, auth))
+  app.use(createDhis2Router(deps, auth))
   app.use(createAdminRouter(deps, auth))
 }

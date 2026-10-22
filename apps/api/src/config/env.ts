@@ -32,6 +32,7 @@ const Env = z.object({
   DHIS2_BASE_URL: blank(z.url().optional()),
   DHIS2_USERNAME: optional,
   DHIS2_PASSWORD: optional,
+  DHIS2_MAPPING_FILE: optional,
   CONTENT_DIR: z.string().default('./content'),
 })
 
