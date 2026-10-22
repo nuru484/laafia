@@ -58,7 +58,7 @@ async function referralToWire(env: Env, r: Row, alwaysWire = false): Promise<Row
     id: r.id, origin_device_id: r.origin_device_id, short_id: r.short_id, client_id: r.client_id, visit_id: r.visit_id,
     client_code: r.client_code, client_type: FULL_TYPE[type], context: r.context, urgency: r.urgency,
     danger_signs: namesFromCodes(type, JSON.parse(r.sign_codes as string)), destination_facility_id: facility?.id ?? null,
-    next_of_kin: r.next_of_kin, updated_at: r.updated_at, device_id: r.device_id, deleted: r.deleted === 1,
+    next_of_kin: r.next_of_kin, parent_referral_id: r.parent_referral_id ?? null, updated_at: r.updated_at, device_id: r.device_id, deleted: r.deleted === 1,
   }
   // The server only accepts a referral from a non-origin device with the origin's signed text.
   if ((alwaysWire || r.origin_device_id !== env.self.device_id) && r.wire) out.lfr = r.wire
@@ -166,7 +166,7 @@ export async function applyPulled(env: Env, table: string, row: Row) {
       id, origin_device_id: row.origin_device_id, short_id: row.short_id, client_id: row.client_id ?? null, client_code: row.client_code ?? '',
       client_type: type, context: row.context ?? '-', urgency: row.urgency ?? 1,
       sign_codes: JSON.stringify(codesFromNames(type, (row.danger_signs as string[]) ?? [])), destination_code: facility?.code ?? '',
-      next_of_kin: row.next_of_kin ?? null, visit_id: row.visit_id ?? null, wire, created_at: (await db.get<{ created_at: number }>('SELECT created_at FROM referrals WHERE id = ?', [id]))?.created_at ?? updatedAt,
+      next_of_kin: row.next_of_kin ?? null, visit_id: row.visit_id ?? null, parent_referral_id: row.parent_referral_id ?? null, wire, created_at: (await db.get<{ created_at: number }>('SELECT created_at FROM referrals WHERE id = ?', [id]))?.created_at ?? updatedAt,
       ...meta,
     })
     return

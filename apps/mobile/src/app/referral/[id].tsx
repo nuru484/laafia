@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Alert, Linking, View } from 'react-native'
 import QRCode from 'react-native-qrcode-svg'
 import { STATUS_TEXT, ago, statusTone } from '../../features/format'
-import { facilityUpdate, requestTransport, resendReferral } from '../../lib/relay'
+import { facilityUpdate, referOnward, requestTransport, resendReferral } from '../../lib/relay'
 import { changed, currentSession, env, pushNativeState, sendDue } from '../../lib/runtime'
 import { TYPE_LABEL, signLabels } from '../../lib/signs'
 import { useQuery } from '../../lib/useQuery'
@@ -32,12 +32,15 @@ export default function ReferralScreen() {
     const providers = await db.all<{ id: string; name: string; phone: string; vehicle: string; community: string }>('SELECT * FROM transport_providers WHERE active = 1 AND deleted = 0 ORDER BY community, name')
     const requests = await db.all<{ id: string; provider_id: string; status: string; requested_at: number }>('SELECT id, provider_id, status, requested_at FROM transport_requests WHERE referral_id = ? ORDER BY requested_at DESC', [id])
     const outbox = await db.all<{ status: string; last_error: string | null; recipient: string }>("SELECT status, last_error, recipient FROM outbox WHERE ref_id = ? AND ref_table = 'referrals' ORDER BY created_at DESC LIMIT 1", [id])
-    return { r, events, providers, requests, lastSms: outbox[0] }
+    const facilities = await db.all<{ code: string; name: string; level: string }>('SELECT code, name, level FROM facilities ORDER BY level, name')
+    const onward = await db.all<{ id: string; destination_code: string; short_id: string }>('SELECT id, destination_code, short_id FROM referrals WHERE parent_referral_id = ?', [id])
+    const myCode = (await db.get<{ facility_code: string | null }>('SELECT facility_code FROM devices WHERE id = ?', [env().self.device_id]))?.facility_code ?? null
+    return { r, events, providers, requests, lastSms: outbox[0], facilities, onward, myCode }
   }, [id])
 
   if (data === undefined) return <Loading />
   if (data === null) return <Screen title="Referral not found"><Button label="Back" onPress={() => router.back()} /></Screen>
-  const { r, events, providers, requests, lastSms } = data
+  const { r, events, providers, requests, lastSms, facilities, onward, myCode } = data
   const status = deriveStatus(events)
   const alert = referralAlert(events, r.urgency, Date.now())
   const tone = statusTone(status)
@@ -100,6 +103,19 @@ export default function ReferralScreen() {
           <Button tone="plain" label="Discharged: close and schedule follow-up" disabled={reached('closed') || !reached('treated')} busy={busy === 'closed'} onPress={() => act('closed', () => facilityUpdate(env(), r.id, 'closed'))} />
           {r.origin_phone ? <Button tone="plain" label={`Call the CHO (${r.origin_phone})`} onPress={() => Linking.openURL(`tel:${r.origin_phone}`)} /> : null}
           <Body muted>Each button texts the CHO automatically.</Body>
+        </Card>
+      ) : null}
+      {isFacility ? (
+        <Card>
+          <Label>Refer onward</Label>
+          {onward.map((o) => (
+            <Button key={o.id} tone="plain" label={`Sent on to ${facilities.find((f) => f.code === o.destination_code)?.name ?? o.destination_code} (${o.short_id})`} onPress={() => router.push(`/referral/${o.id}`)} />
+          ))}
+          {facilities.filter((f) => f.code !== myCode && f.level !== 'chps').map((f) => (
+            <Button key={f.code} tone="refer" label={`Refer to ${f.name}`} busy={busy === f.code} disabled={reached('closed')}
+              onPress={() => act(f.code, async () => { const n = await referOnward(env(), r.id, f.code); router.push(`/referral/${n.id}`) })} />
+          ))}
+          <Body muted>Sends the same assessment, signed by this facility. The CHO keeps seeing the progress.</Body>
         </Card>
       ) : (
         <>

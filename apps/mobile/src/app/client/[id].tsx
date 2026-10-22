@@ -4,8 +4,9 @@ import { useState } from 'react'
 import { View } from 'react-native'
 import { TYPE_NAME, ageText, ago, outcomeTone } from '../../features/format'
 import { captureHouse } from '../../lib/gps'
+import { requestTransport } from '../../lib/relay'
 import { toClient } from '../../lib/register'
-import { changed, env } from '../../lib/runtime'
+import { changed, env, pushNativeState, sendDue } from '../../lib/runtime'
 import { useQuery } from '../../lib/useQuery'
 import { Banner, Body, Button, Card, Chip, Heading, Label, Loading, Screen } from '../../ui/kit'
 import { space } from '../../ui/theme'
@@ -20,7 +21,10 @@ export default function ClientScreen() {
     const h = await db.get<{ id: string; head_name: string; community: string; landmark: string; lat: number | null; lng: number | null }>('SELECT * FROM households WHERE id = ?', [c.household_id])
     const visits = await db.all<{ id: string; visited_at: number; outcome: string; rule_id: string; protocol_id: string }>('SELECT id, visited_at, outcome, rule_id, protocol_id FROM visits WHERE client_id = ? AND deleted = 0 ORDER BY visited_at DESC LIMIT 10', [id])
     const refs = await db.all<{ id: string; short_id: string; created_at: number }>('SELECT id, short_id, created_at FROM referrals WHERE client_id = ? ORDER BY created_at DESC', [id])
-    return { client: toClient(c), next_of_kin: c.next_of_kin as string | null, household: h, visits, refs }
+    const due = await db.get<{ followup_due: number }>('SELECT followup_due FROM visits WHERE client_id = ? AND deleted = 0 AND followup_due IS NOT NULL ORDER BY visited_at DESC LIMIT 1', [id])
+    const providers = await db.all<{ id: string; name: string; vehicle: string }>('SELECT id, name, vehicle FROM transport_providers WHERE active = 1 AND deleted = 0 ORDER BY name')
+    const booked = await db.get<{ status: string; scheduled_for: number }>("SELECT status, scheduled_for FROM transport_requests WHERE client_id = ? AND referral_id IS NULL AND status IN ('requested', 'coming') ORDER BY requested_at DESC LIMIT 1", [id])
+    return { client: toClient(c), next_of_kin: c.next_of_kin as string | null, household: h, visits, refs, due: due?.followup_due ?? null, providers, booked }
   }, [id])
 
   if (data === undefined) return <Loading />
@@ -58,6 +62,23 @@ export default function ClientScreen() {
           <Body muted>{household.lat !== null ? `GPS ${household.lat.toFixed(5)}, ${household.lng!.toFixed(5)}` : 'No GPS position yet'}</Body>
           <Button tone="plain" label={household.lat !== null ? 'Update house position' : 'Capture house position'} onPress={fixGps} />
           {gps ? <Banner text={gps} /> : null}
+        </Card>
+      ) : null}
+      {data.due && data.due > Date.now() - 86_400_000 ? (
+        <Card>
+          <Label>Follow-up {new Date(data.due).toLocaleDateString()}</Label>
+          {data.booked ? <Body>Driver {data.booked.status === 'coming' ? 'confirmed' : 'asked; waiting for a reply'} for {new Date(data.booked.scheduled_for).toLocaleDateString()}.</Body> : (
+            <>
+              <Body muted>If she must travel to the compound, book a driver. He is texted the day before.</Body>
+              {data.providers.map((p) => (
+                <Button key={p.id} tone="plain" label={`Book ${p.name} (${p.vehicle || 'driver'})`} onPress={async () => {
+                  const at = new Date(data.due!); at.setHours(9, 0, 0, 0)
+                  await requestTransport(env(), { client_id: client.id, provider_id: p.id, scheduled_for: at.getTime() })
+                  await pushNativeState(); changed(); void sendDue()
+                }} />
+              ))}
+            </>
+          )}
         </Card>
       ) : null}
       {refs.length ? (

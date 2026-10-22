@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { PROTOCOLS, evaluate, generateSeed } from '@laafia/core'
 import { testDb } from '../../test/node-db'
 import { createReferral, loadSeed, type Env } from './relay'
-import { enrol, facilityInbox, referralList, saveVisit, todayList } from './register'
+import { addProvider, enrol, facilityInbox, referralList, saveVisit, setProviderActive, todayList } from './register'
 
 const DAY = 86_400_000
 const TODAY = Date.UTC(2026, 9, 22, 8)
@@ -64,6 +64,17 @@ describe('enrolment', () => {
       household: { community: 'Moglaa', head_name: 'X', landmark: '', lat: null, lng: null, consent: false },
       client: { type: 'child', name: 'Y', sex: 'm', dob: TODAY - 400 * DAY, edd: null, delivery_date: null, parity: null, prior_complications: [], birth_weight_g: null, nhis_active: false, next_of_kin: null },
     })).rejects.toThrow(/consent/)
+  })
+})
+
+describe('transport providers', () => {
+  it('registers a driver with a normalised number, unsynced, and can retire one', async () => {
+    const cho = await phone('D001')
+    const id = await addProvider(cho, { name: ' Alhassan Iddi ', phone: '+233 24 777 8888', vehicle: 'motor king', community: 'Diare' })
+    expect(await cho.db.get('SELECT name, phone, active, synced FROM transport_providers WHERE id = ?', [id])).toEqual({ name: 'Alhassan Iddi', phone: '0247778888', active: 1, synced: 0 })
+    await setProviderActive(cho, id, false)
+    expect(await cho.db.get('SELECT active FROM transport_providers WHERE id = ?', [id])).toEqual({ active: 0 })
+    await expect(addProvider(cho, { name: 'X', phone: '12', vehicle: '', community: '' })).rejects.toThrow(/phone/)
   })
 })
 

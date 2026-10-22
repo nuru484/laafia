@@ -99,6 +99,8 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE audio_clips ADD COLUMN uploaded_sha TEXT;
   ALTER TABLE audio_clips ADD COLUMN source TEXT NOT NULL DEFAULT 'local';
   `,
+  // Refer onward: the facility's own referral points back at the one it received.
+  `ALTER TABLE referrals ADD COLUMN parent_referral_id TEXT;`,
 ]
 
 export async function migrate(db: Db): Promise<void> {
