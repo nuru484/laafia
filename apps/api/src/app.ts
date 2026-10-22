@@ -2,7 +2,7 @@ import { eq, sql } from 'drizzle-orm'
 import express from 'express'
 import { randomBytes, randomInt } from 'node:crypto'
 import { z } from 'zod'
-import { activate, ActivateBody, actorOf, auth, deviceOf, keysFor, refresh, safeEqual } from './auth.ts'
+import { activate, ActivateBody, actorOf, auth, deviceOf, keysFor, limitActivation, refresh, safeEqual } from './auth.ts'
 import { listPacks, manifest, packUpload, servePack, uploadPack } from './content.ts'
 import { db, write } from './db.ts'
 import { commit, createTemplate, dhis2Records, Dhis2Body, fileUpload, getBatch, listBatches, listTemplates, preview, tabularRecords, TemplateBody, undo } from './imports.ts'
@@ -26,6 +26,8 @@ async function facilityFor(res: express.Response, code: string) {
 export function createApp() {
   const app = express()
   app.disable('x-powered-by')
+  // req.ip honours X-Forwarded-For only from these proxies (default: loopback, i.e. a reverse proxy on the same host).
+  app.set('trust proxy', env.TRUST_PROXY)
   app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', env.WEB_ORIGIN ?? '*')
     res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, x-admin-token')
@@ -42,9 +44,10 @@ export function createApp() {
   })
 
   // --- Auth
-  // ponytail: no rate limit on activation (8-digit codes, 48 h expiry); add express-rate-limit before a public deploy.
   app.post('/auth/activate', async (req, res) => {
-    res.json(await activate(ActivateBody.parse(req.body)))
+    const body = ActivateBody.parse(req.body)
+    limitActivation(req.ip ?? 'unknown', body.activation_code)
+    res.json(await activate(body))
   })
   app.post('/auth/refresh', async (req, res) => {
     const h = req.headers.authorization

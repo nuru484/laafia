@@ -21,6 +21,7 @@ const Env = z.object({
   ADMIN_TOKEN: requiredInProd(24),
   SMS_WEBHOOK_TOKEN: requiredInProd(24),
   WEB_ORIGIN: optional,
+  TRUST_PROXY: z.string().default('loopback'),
   ARKESEL_API_KEY: optional,
   ARKESEL_SENDER: z.string().max(11).default('Laafia'),
   KHAYA_API_KEY: optional,

@@ -1,12 +1,12 @@
 import { normalizePhone } from '@laafia/core'
-import { and, eq, isNotNull } from 'drizzle-orm'
+import { and, eq, inArray, isNotNull, or } from 'drizzle-orm'
 import type { RequestHandler, Response } from 'express'
 import { jwtVerify, SignJWT } from 'jose'
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { z } from 'zod'
 import { db, write } from './db.ts'
 import { env } from './env.ts'
-import { HttpError } from './http.ts'
+import { fixedWindow, HttpError } from './http.ts'
 import { activation_codes, devices, facilities } from './schema.ts'
 
 const secret = new TextEncoder().encode(env.JWT_SECRET ?? 'dev-only-secret-not-for-production')
@@ -75,11 +75,34 @@ export const deviceOf = (res: Response) => {
 }
 
 /** Keys a device needs to verify SMS: facility phones get every active device's key (demo: no district scoping), others none. */
+/**
+ * Key directory (lead's policy): facility phones verify LFR from field devices,
+ * so they get every active device's key (demo: no district scoping). CHO phones
+ * verify LFS, so they get their district's facility device keys plus the SMS
+ * gateway's. Volunteers get none: they carry scanned referrals unverified and
+ * the receiving facility verifies them.
+ */
 export async function keysFor(d: Device): Promise<Record<string, string> | undefined> {
-  if (d.role !== 'facility') return undefined
-  const rows = await db.select({ id: devices.id, key: devices.key_hex }).from(devices).where(and(eq(devices.active, true), isNotNull(devices.key_hex)))
+  const live = and(eq(devices.active, true), isNotNull(devices.key_hex))
+  let rows: { id: string; key: string | null }[]
+  if (d.role === 'facility') rows = await db.select({ id: devices.id, key: devices.key_hex }).from(devices).where(live)
+  else if (d.role === 'cho') {
+    const [home] = d.facility_id ? await db.select({ district: facilities.district_id }).from(facilities).where(eq(facilities.id, d.facility_id)) : []
+    const districtFacilities = db.select({ id: facilities.id }).from(facilities).where(home?.district ? eq(facilities.district_id, home.district) : eq(facilities.id, d.facility_id ?? ''))
+    rows = await db.select({ id: devices.id, key: devices.key_hex }).from(devices)
+      .where(and(live, or(and(eq(devices.role, 'facility'), inArray(devices.facility_id, districtFacilities)), eq(devices.role, 'gateway'))))
+  } else return undefined
   return Object.fromEntries(rows.map((r) => [r.id, r.key!]))
 }
+
+// Activation codes are 8 digits: 5 attempts per IP and per code in 15 minutes.
+const byIp = fixedWindow(5, 15 * 60_000, 'Too many activation attempts; wait and try again')
+const byCode = fixedWindow(5, 15 * 60_000, 'Too many attempts for this code; wait and try again')
+export function limitActivation(ip: string, code: string) {
+  byIp.hit(ip)
+  byCode.hit(code)
+}
+export const resetActivationLimits = () => (byIp.reset(), byCode.reset())
 
 async function profile(d: Device) {
   const [facility] = d.facility_id ? await db.select().from(facilities).where(eq(facilities.id, d.facility_id)) : []

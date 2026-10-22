@@ -3,7 +3,7 @@ import multer from 'multer'
 import { z } from 'zod'
 import { deviceOf } from './auth.ts'
 import { env } from './env.ts'
-import { HttpError, log } from './http.ts'
+import { fixedWindow, HttpError, log } from './http.ts'
 
 /*
  * Khaya (GhanaNLP) speech-to-text proxy (spec 8, "transcribe reply"). The API
@@ -37,20 +37,8 @@ export function wavSeconds(buf: Buffer): number | null {
   return null
 }
 
-// ponytail: in-memory fixed window per device, so per process; move to the database when running several processes.
-const windows = new Map<string, { start: number; count: number }>()
-function rateLimit(deviceId: string) {
-  const now = Date.now()
-  const w = windows.get(deviceId)
-  if (!w || now - w.start >= 3_600_000) return void windows.set(deviceId, { start: now, count: 1 })
-  if (w.count >= RATE.perHour) {
-    const err = new HttpError(429, 'rate_limited', `At most ${RATE.perHour} transcriptions per hour`)
-    ;(err as HttpError & { retryAfter?: number }).retryAfter = Math.ceil((w.start + 3_600_000 - now) / 1000)
-    throw err
-  }
-  w.count += 1
-}
-export const resetRateLimits = () => windows.clear()
+const limiter = fixedWindow(RATE.perHour, 3_600_000, `At most ${RATE.perHour} transcriptions per hour`)
+export const resetRateLimits = () => limiter.reset()
 
 export const transcribe: RequestHandler = async (req, res) => {
   const device = deviceOf(res)
@@ -61,7 +49,7 @@ export const transcribe: RequestHandler = async (req, res) => {
   const seconds = wavSeconds(audio)
   if (seconds === null) throw new HttpError(415, 'unsupported_audio', 'Audio must be WAV (PCM, mono, 16 kHz recommended)')
   if (seconds > MAX_AUDIO_SECONDS + 0.5) throw new HttpError(400, 'audio_too_long', `At most ${MAX_AUDIO_SECONDS} s of audio`)
-  rateLimit(device.id)
+  limiter.hit(device.id)
 
   const r = await fetch(`${env.KHAYA_BASE_URL}/asr/v3/transcribe?language=${lang}`, {
     method: 'POST',

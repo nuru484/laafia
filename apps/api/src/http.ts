@@ -11,6 +11,31 @@ export class HttpError extends Error {
 export const log = (level: 'info' | 'warn' | 'error', msg: string, extra: Record<string, unknown> = {}) =>
   console[level](JSON.stringify({ level, msg, time: new Date().toISOString(), ...extra }))
 
+/**
+ * Fixed-window counter. `hit` throws 429 rate_limited (with Retry-After) once a key passes `max` in the window.
+ * ponytail: in memory, so per process; move to the database when running several API processes.
+ */
+export function fixedWindow(max: number, windowMs: number, message: string) {
+  const windows = new Map<string, { start: number; count: number }>()
+  return {
+    hit(key: string) {
+      const now = Date.now()
+      const w = windows.get(key)
+      if (!w || now - w.start >= windowMs) {
+        if (windows.size > 10_000) for (const [k, v] of windows) if (now - v.start >= windowMs) windows.delete(k)
+        return void windows.set(key, { start: now, count: 1 })
+      }
+      if (w.count >= max) {
+        const err = new HttpError(429, 'rate_limited', message) as HttpError & { retryAfter?: number }
+        err.retryAfter = Math.max(1, Math.ceil((w.start + windowMs - now) / 1000))
+        throw err
+      }
+      w.count += 1
+    },
+    reset: () => windows.clear(),
+  }
+}
+
 export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   if (err instanceof ZodError) {
     res.status(400).json({ status: 400, code: 'invalid_request', message: 'Request failed validation', details: err.issues.map((i) => ({ path: i.path.join('.'), message: i.message })) })

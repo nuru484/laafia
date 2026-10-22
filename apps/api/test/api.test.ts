@@ -116,7 +116,6 @@ describe('sync pull', () => {
     const next = await pullAs(jwt, cursor)
     expect(next.body.records.map((r: Rec) => `${r.table}/${r.row.id}`).sort()).toEqual(['clients/old-child', 'households/hh-new-1'])
     expect(next.body.records[0].row).not.toHaveProperty('seq')
-    expect(next.body.keys).toBeUndefined() // CHO devices never receive other keys
   })
 
   it('scopes rows to the catchment and gives keys only to facility devices', async () => {

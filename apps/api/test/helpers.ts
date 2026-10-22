@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, expect } from 'vitest'
 import { createApp } from '../src/app.ts'
 import { db, pool, runMigrations } from '../src/db.ts'
 import { DEMO_CODES, seedDemo } from '../src/seed.ts'
+import { resetActivationLimits } from '../src/auth.ts'
 
 export const app = createApp()
 export const TODAY = Date.UTC(2026, 9, 22)
@@ -18,6 +19,7 @@ export function useDb() {
     await db.execute(sql`truncate facilities, districts, devices, activation_codes, households, clients, visits, referrals, referral_events,
       transport_providers, transport_requests, jobs, mapping_templates, import_batches, content_packs cascade`)
     await seedDemo(TODAY)
+    resetActivationLimits()
   })
   afterAll(() => pool.end())
 }
