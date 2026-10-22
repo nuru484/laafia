@@ -15,7 +15,6 @@ export default () => ({
   userInterfaceStyle: 'light',
   android: {
     package: 'org.laafia.app',
-    versionCode: 1,
     adaptiveIcon: {
       backgroundColor: '#0F766E',
       foregroundImage: './assets/images/android-icon-foreground.png',
