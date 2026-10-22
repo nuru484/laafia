@@ -177,7 +177,7 @@ export type InboundResult =
   | { ok: true; kind: 'referral'; referral_id: string; duplicate: boolean }
   | { ok: true; kind: 'status'; referral_id: string; status: ReferralStatus }
   | { ok: true; kind: 'driver_reply'; transport_request_id: string; status: 'coming' | 'declined' }
-  | { ok: false; error: 'not_laafia' | 'unknown_signer' | 'bad_signature' | 'conflict' }
+  | { ok: false; error: 'not_laafia' | 'unknown_signer' | 'bad_signature' | 'conflict' | 'forbidden' }
 
 function sameReferral(r: Referral, m: ReferralMessage, destinationId: string | null) {
   return r.client_code === m.client_code && r.urgency === m.urgency && r.client_type === WIRE_TO_TYPE[m.client_type] && r.destination_facility_id === destinationId
@@ -217,16 +217,27 @@ async function onReferral(m: ReferralMessage, from: string): Promise<InboundResu
   })
 }
 
+/**
+ * An LFS carries the signer's authority only: the signer must be an active
+ * device allowed to act on the referral (origin, destination or earlier hop).
+ * No stubs: an LFS for a referral the server has not seen is refused.
+ */
 async function onStatus(m: StatusMessage): Promise<InboundResult> {
   const status = STATUS_FROM_CODE[m.status]
   return writeAndPublish(async (tx, touched) => {
+    const [signer] = await tx.select().from(devices).where(and(eq(devices.id, m.signer), eq(devices.active, true)))
     const existing = await byKey(tx, m.origin, m.short_id)
-    const referral_id = existing?.id ?? randomUUID()
-    await pushEvent(tx, null, {
-      id: `sms-${m.signer}-${m.origin}-${m.short_id}-${m.status}`, referral_id, origin_device_id: m.origin, short_id: m.short_id,
-      status, at: Date.now(), updated_at: Date.now(), source_device_id: m.signer, via: 'sms', device_id: GATEWAY_DEVICE,
-    }, touched)
-    return { ok: true, kind: 'status', referral_id, status } as const
+    const reason = !signer || !existing || !(await mayAct(tx, signer, existing))
+      ? 'forbidden'
+      : await pushEvent(tx, signer, {
+        id: `sms-${m.signer}-${m.origin}-${m.short_id}-${m.status}`, referral_id: existing.id, origin_device_id: m.origin, short_id: m.short_id,
+        status, at: Date.now(), updated_at: Date.now(), source_device_id: m.signer, via: 'sms', device_id: GATEWAY_DEVICE,
+      }, touched)
+    if (reason) {
+      log('warn', 'sms_status_forbidden', { signer: m.signer })
+      return { ok: false, error: 'forbidden' } as const
+    }
+    return { ok: true, kind: 'status', referral_id: existing!.id, status } as const
   })
 }
 

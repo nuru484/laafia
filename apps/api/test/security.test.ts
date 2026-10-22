@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { db } from '../src/db.ts'
 import { env } from '../src/env.ts'
 import { referrals } from '../src/schema.ts'
-import { KEYS, SID, TODAY, activate, app, bearer, event, lfr, pushAs, sms, useDb } from './helpers.ts'
+import { ADMIN, KEYS, SID, TODAY, activate, app, bearer, event, lfr, pushAs, sms, useDb } from './helpers.ts'
 
 useDb()
 
@@ -48,6 +48,29 @@ describe('referral origin and event authority', () => {
     expect(reasons(await pushAs(dest, [{ table: 'referrals', row: referralRow({ updated_at: TODAY + 1, destination_facility_id: 'fac-0002' }) }]))).toEqual([])
     expect(reasons(await pushAs(dest, [ev('F003', 'treated')]))).toEqual([])
     expect(reasons(await pushAs(unrelated, [ev('F002', 'treated')]))).toEqual([])
+  })
+})
+
+describe('inbound LFS authority', () => {
+  it('refuses an LFS signed by a device that may not act on the referral, accepts the destination facility', async () => {
+    const cho = await activate('D001')
+    await pushAs(cho, [{ table: 'referrals', row: referralRow() }])
+    const created = await request(app).post('/admin/devices').set(ADMIN).send({ id: 'D002', role: 'cho', user_name: 'Other CHO', facility_code: 'SAV-CHPS-01' })
+    const other = await request(app).post('/auth/activate').send({ activation_code: created.body.activation_code, phone_number: '0240000009' })
+    const otherKey = other.body.device_key as string
+
+    const forged = await sms(encode({ kind: 'LFS', signer: 'D002', origin: 'D001', short_id: SID, status: 'A' }, otherKey))
+    expect(forged.body).toEqual({ ok: false, error: 'forbidden' })
+    const unknown = await sms(encode({ kind: 'LFS', signer: 'D002', origin: 'D001', short_id: 'ZZZZZZZZ', status: 'A' }, otherKey))
+    expect(unknown.body).toEqual({ ok: false, error: 'forbidden' }) // no stub for someone else's referral
+    let [r] = await db.select().from(referrals)
+    expect(r!.status).toBe('created')
+    expect(await db.select().from(referrals)).toHaveLength(1)
+
+    const dest = await sms(encode({ kind: 'LFS', signer: 'F003', origin: 'D001', short_id: SID, status: 'A' }, KEYS.F003!))
+    expect(dest.body).toMatchObject({ ok: true, kind: 'status', status: 'arrived' })
+    ;[r] = await db.select().from(referrals)
+    expect(r!.status).toBe('arrived')
   })
 })
 
