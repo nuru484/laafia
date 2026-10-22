@@ -58,9 +58,12 @@ export default function MapScreen() {
         <View style={{ flex: 1, borderRadius: 12, overflow: 'hidden', marginBottom: 72 }}>
           <Map style={{ flex: 1 }} mapStyle={mapStyle} logo={false} attribution={!!tiles} compass>
             <Camera initialViewState={{ bounds }} />
-            <GeoJSONSource id="route" data={line}>
-              <Layer id="route-line" type="line" paint={{ 'line-color': color.primary, 'line-width': 3, 'line-dasharray': [2, 1.5] }} />
-            </GeoJSONSource>
+            {/* A line needs two points: with no placed house there is no route to draw. */}
+            {stops.length ? (
+              <GeoJSONSource id="route" data={line}>
+                <Layer id="route-line" type="line" paint={{ 'line-color': color.primary, 'line-width': 3, 'line-dasharray': [2, 1.5] }} />
+              </GeoJSONSource>
+            ) : null}
             <Marker id="origin" lngLat={[origin.lng, origin.lat]}>
               <View style={{ paddingHorizontal: 6, paddingVertical: 4, borderRadius: 6, backgroundColor: color.text }}>
                 <Text style={{ color: '#fff', fontWeight: '800', fontSize: 12 }}>CHPS</Text>
