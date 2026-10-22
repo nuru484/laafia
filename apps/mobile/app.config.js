@@ -1,13 +1,9 @@
-/**
- * Deployment identity (EAS project, API URL) comes from the environment, so a
- * clone without access to the team's Expo account sets a few lines in .env.
- * See .env.example. EAS profiles in eas.json set EXPO_PUBLIC_API_URL per build.
- */
+/** The API URL comes from the environment: .env locally (see .env.example), eas.json per build profile. */
 
 export default () => ({
   name: 'Laafia',
   slug: 'laafia',
-  owner: process.env.EXPO_OWNER?.trim() || undefined,
+  owner: 'manuru',
   version: '1.0.0',
   orientation: 'portrait',
   icon: './assets/images/icon.png',
@@ -63,6 +59,5 @@ export default () => ({
     ],
   ],
   experiments: { typedRoutes: true, reactCompiler: true },
-  // eas-cli refuses to build without it and says so; left unset only for `eas init`.
-  extra: { eas: { projectId: process.env.EAS_PROJECT_ID?.trim() || undefined } },
+  extra: { eas: { projectId: '26f46790-c99e-425f-b8ab-cb6fbf098a52' } },
 })

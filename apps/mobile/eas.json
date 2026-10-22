@@ -5,31 +5,33 @@
   },
   "build": {
     "base": {
-      "node": "22.12.0",
-      "env": {
-        "EAS_PROJECT_ID": "26f46790-c99e-425f-b8ab-cb6fbf098a52",
-        "EXPO_OWNER": "manuru"
-      }
+      "node": "22.12.0"
     },
     "development": {
       "extends": "base",
       "developmentClient": true,
       "distribution": "internal",
       "channel": "development",
-      "android": { "buildType": "apk" }
+      "android": {
+        "buildType": "apk"
+      }
     },
     "preview": {
       "extends": "base",
       "distribution": "internal",
       "channel": "preview",
-      "android": { "buildType": "apk" }
+      "android": {
+        "buildType": "apk"
+      }
     },
     "production": {
       "extends": "base",
       "distribution": "internal",
       "channel": "production",
       "autoIncrement": true,
-      "android": { "buildType": "apk" }
+      "android": {
+        "buildType": "apk"
+      }
     }
   }
 }
