@@ -9,6 +9,7 @@ import { createImportsRouter } from './modules/imports/index.ts'
 import { createReferralsRouter } from './modules/referrals/index.ts'
 import { createSmsRouter } from './modules/sms/index.ts'
 import { createSyncRouter } from './modules/sync/index.ts'
+import { createTransportRouter } from './modules/transport/index.ts'
 import { createVoiceRouter } from './modules/voice/index.ts'
 
 /** Mounts every feature module's router. Each module owns its paths (docs/API.md). */
@@ -21,6 +22,7 @@ export function mountModules(app: Express, deps: Deps) {
   app.use(createSmsRouter(deps))
   app.use(createContentRouter(deps, auth))
   app.use(createVoiceRouter(deps, auth))
+  app.use(createTransportRouter(deps, auth))
   app.use(createImportsRouter(deps, auth))
   app.use(createAdminRouter(deps, auth))
 }

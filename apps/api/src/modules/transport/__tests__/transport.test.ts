@@ -1,6 +1,7 @@
+import { encode } from '@laafia/core'
 import request from 'supertest'
 import { describe, expect, it } from 'vitest'
-import { SID, TODAY, activate, app, bearer, prisma, pullAs, pushAs, sms, useDb } from '../../../platform/testing/helpers.ts'
+import { KEYS, SID, TODAY, activate, app, bearer, lfr, prisma, pullAs, pushAs, sms, useDb } from '../../../platform/testing/helpers.ts'
 
 useDb()
 
@@ -69,5 +70,8 @@ describe('client codes', () => {
     const cho = await activate('D001')
     const res = await pushAs(cho, [{ table: 'clients', row: { id: 'cl-x', updated_at: TODAY, household_id: 'hh-0001', code: 'CL-D001003', type: 'pregnant', name: 'Test', edd: TODAY } }])
     expect(res.body.accepted).toEqual(['cl-x'])
+    const viaSms = await sms(encode({ ...lfr, client_code: 'CL-D001003' }, KEYS.D001!))
+    expect(viaSms.body).toMatchObject({ ok: true, kind: 'referral' })
+    expect((await prisma.referral.findFirstOrThrow()).clientCode).toBe('CL-D001003')
   })
 })
