@@ -17,6 +17,12 @@ Out (non-goals): diagnosis, a caregiver chatbot, iOS, Play Store distribution (S
 - Mobile uses raw SQL over `expo-sqlite` with SQLCipher (no Drizzle on the phone; a dozen tables do not need it).
 - Protocol tables await review by the team clinician before any field use.
 
+## Rule for the demo
+
+Every feature in the spec works live in front of the judges. Nothing is shown as a placeholder or described as coming later.
+
+Inputs only the team can supply: three Android phones with SIMs and airtime; a Dagbani speaker to record the clips (about 80, recorded in the app); a Khaya API key; a clinician's review of `packages/core/protocols`.
+
 ## Open risks
 
 - SQLCipher and the SMS receiver only run in a development build, so nothing is proven until the first EAS build reaches a phone.
@@ -52,4 +58,4 @@ Out (non-goals): diagnosis, a caregiver chatbot, iOS, Play Store distribution (S
 | M2 | Mobile slice: SMS native module, encrypted DB, seeded register, ranked list, checklist with audio, refer now by SMS, facility receive + acknowledge | lead | Two phones on an EAS build, airplane-mode script from spec 20 | next |
 | M3 | QR hop, driver SMS and replies, escalation timers | lead | Three-phone run | |
 | M4 | Mobile sync to the API; web facility inbox | lead | Push from phone appears live in the web inbox | |
-| M5 | Offline map, DHIS2 export, recorded Dagbani clips, trained `risk_model.json` | team | Demo walk-through | |
+| M5 | Offline map with route, DHIS2 export, in-app clip recorder + Dagbani clips, `model/train.py` writing `risk_model.json`, Khaya transcription, CSV register import | lead + team inputs | Every spec feature shown live in the demo script | |
