@@ -43,7 +43,7 @@ export type WireMessage = ReferralMessage | StatusMessage
 
 const DEVICE = /^[A-Z0-9]{2,8}$/
 const SHORT_ID = /^[A-Z2-7]{8}$/
-const CLIENT = /^[A-Z]{2}-\d{1,6}$/
+const CLIENT = /^[A-Z]{2}-[A-Z0-9]{1,12}$/
 const CONTEXT = /^([A-Z]{2,3}\d{1,3}M?|-)$/
 const SIGNS = /^([a-z]{2}(,[a-z]{2})*|-)$/
 const FACILITY = /^[A-Z0-9-]{3,16}$/

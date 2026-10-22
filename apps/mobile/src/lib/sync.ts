@@ -1,6 +1,7 @@
-import { PROTOCOLS, type ClientWireType } from '@laafia/core'
+import type { ClientWireType } from '@laafia/core'
 import type { Db, Param } from './db/db'
 import type { Env } from './relay'
+import { codesFromNames, namesFromCodes } from './signs'
 
 /*
  * HTTPS sync (docs/API.md: /sync/push and /sync/pull). The phone keeps wire
@@ -37,22 +38,6 @@ const PUSH_ORDER = ['households', 'clients', 'visits', 'referrals', 'referral_ev
 
 const FULL_TYPE: Record<ClientWireType, string> = { PW: 'pregnant', PP: 'postpartum', NB: 'newborn', CH: 'child' }
 const WIRE_OF: Record<string, ClientWireType> = { pregnant: 'PW', postpartum: 'PP', newborn: 'NB', child: 'CH' }
-const PRIMARY: Record<ClientWireType, keyof typeof PROTOCOLS> = { PW: 'maternal', PP: 'maternal', NB: 'young_infant', CH: 'child' }
-
-/** Codes are unique within a protocol; a child under two months uses the young infant table, so fall back across protocols. */
-function protocolsFor(type: ClientWireType) {
-  const first = PROTOCOLS[PRIMARY[type]]
-  return [first, ...Object.values(PROTOCOLS).filter((p) => p !== first)]
-}
-function namesFromCodes(type: ClientWireType, codes: string[]): string[] {
-  return codes.map((code) => {
-    for (const p of protocolsFor(type)) for (const [name, s] of Object.entries(p.signs)) if (s.code === code) return name
-    return code
-  })
-}
-function codesFromNames(type: ClientWireType, names: string[]): string[] {
-  return names.map((name) => protocolsFor(type).find((p) => p.signs[name])?.signs[name]?.code ?? name)
-}
 
 function toWire(table: string, local: Row): Row {
   const spec = PLAIN[table]!
