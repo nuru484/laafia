@@ -28,6 +28,7 @@ export default function More() {
           <Button label="Sync now" busy={sync.running} onPress={() => void syncNow()} />
         </Card>
         {role === 'facility' ? <Button tone="plain" label="Look up a client" onPress={() => router.push('/lookup')} /> : null}
+        <Button tone="plain" label="Monthly report" onPress={() => router.push('/report')} />
         <Button tone="plain" label="Phone setup checks" onPress={() => router.push('/checks')} />
         <Button tone="quiet" label="Lock now" onPress={() => setUnlocked(false)} />
       </Screen>
