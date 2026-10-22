@@ -2,7 +2,7 @@ import { encode } from '@laafia/core'
 import request from 'supertest'
 import { describe, expect, it } from 'vitest'
 import { DEMO_CODES } from '../../../seed.ts'
-import { ADMIN, KEYS, activate, app, bearer, lfr, pullAs, sms, useDb } from '../../../platform/testing/helpers.ts'
+import { ADMIN, KEYS, activate, app, bearer, lfr, prisma, pullAs, sms, useDb } from '../../../platform/testing/helpers.ts'
 
 useDb()
 
@@ -37,6 +37,24 @@ describe('activation and tokens', () => {
     const refreshed = await request(app).post('/auth/refresh').set(bearer(res.body.jwt))
     expect(refreshed.status).toBe(200)
     expect(typeof refreshed.body.jwt).toBe('string')
+  })
+})
+
+describe('facility phone number', () => {
+  it('sets the facility phone from the facility device that activated last, and phones pull it', async () => {
+    const cho = await activate('D001')
+    const { body: first } = await pullAs(cho)
+    await activate('F003', '+233 20 999 0003')
+    expect((await prisma.facility.findUniqueOrThrow({ where: { id: 'fac-0003' } })).phone).toBe('0209990003')
+    const next = await pullAs(cho, first.cursor)
+    expect(next.body.records).toEqual(expect.arrayContaining([expect.objectContaining({ table: 'facilities', row: expect.objectContaining({ id: 'fac-0003', phone: '0209990003' }) })]))
+
+    // A second facility device at the same facility takes over once it activates.
+    const created = await request(app).post('/admin/devices').set(ADMIN).send({ id: 'F009', role: 'facility', user_name: 'Hospital spare', facility_code: 'SAV-HOSP-01' })
+    await request(app).post('/auth/activate').send({ activation_code: created.body.activation_code, phone_number: '0209990009' })
+    expect((await prisma.facility.findUniqueOrThrow({ where: { id: 'fac-0003' } })).phone).toBe('0209990009')
+    // A CHO activating never touches the facility phone.
+    expect((await prisma.facility.findUniqueOrThrow({ where: { id: 'fac-0001' } })).phone).toBe('0200000001')
   })
 })
 
