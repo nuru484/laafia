@@ -32,6 +32,7 @@ export const endpoints = api.injectEndpoints({
     createUser: b.mutation<{ user: User }, { name: string; email?: string; phone?: string; password: string; role: string; facility_code?: string }>({
       query: (body) => ({ url: '/admin/users', method: 'POST', body }), invalidatesTags: ['User'],
     }),
+    updateUser: b.mutation<{ user: User }, { id: string; name?: string; email?: string | null; phone?: string | null }>({ query: ({ id, ...body }) => ({ url: `/admin/users/${id}`, method: 'PATCH', body }), invalidatesTags: ['User'] }),
     setUserPassword: b.mutation<unknown, { id: string; password: string }>({ query: ({ id, password }) => ({ url: `/admin/users/${id}/password`, method: 'POST', body: { password } }) }),
     setUserActive: b.mutation<unknown, { id: string; active: boolean }>({ query: ({ id, active }) => ({ url: `/admin/users/${id}/${active ? 'activate' : 'deactivate'}`, method: 'POST' }), invalidatesTags: ['User'] }),
 
@@ -39,6 +40,7 @@ export const endpoints = api.injectEndpoints({
     createDevice: b.mutation<{ device: Device; activation_code: string; expires_at: number }, { role: string; user_name: string; facility_code: string; phone_number?: string }>({
       query: (body) => ({ url: '/admin/devices', method: 'POST', body }), invalidatesTags: ['Device'],
     }),
+    updateDevice: b.mutation<{ device: Device }, { id: string; user_name?: string; phone_number?: string | null; facility_code?: string }>({ query: ({ id, ...body }) => ({ url: `/admin/devices/${id}`, method: 'PATCH', body }), invalidatesTags: ['Device'] }),
     reissueCode: b.mutation<{ device: Device; activation_code: string; expires_at: number }, string>({ query: (id) => ({ url: `/admin/devices/${id}/code`, method: 'POST' }), invalidatesTags: ['Device'] }),
     deactivateDevice: b.mutation<unknown, string>({ query: (id) => ({ url: `/admin/devices/${id}/deactivate`, method: 'POST' }), invalidatesTags: ['Device'] }),
 
@@ -54,6 +56,6 @@ export const endpoints = api.injectEndpoints({
 export const {
   useMeQuery, useLoginMutation, useLogoutMutation, useOverviewQuery, useSummaryQuery, useReferralsQuery, useReferralQuery, useReferralClientQuery,
   useSetStatusMutation, useOnwardMutation, useFacilitiesQuery, useCreateFacilityMutation, useUpdateFacilityMutation,
-  useUsersQuery, useCreateUserMutation, useSetUserPasswordMutation, useSetUserActiveMutation, useDevicesQuery, useCreateDeviceMutation,
-  useReissueCodeMutation, useDeactivateDeviceMutation, useAuditQuery, useSmsBalanceQuery, useSmsLogQuery,
+  useUsersQuery, useCreateUserMutation, useUpdateUserMutation, useSetUserPasswordMutation, useSetUserActiveMutation, useDevicesQuery, useCreateDeviceMutation,
+  useReissueCodeMutation, useDeactivateDeviceMutation, useUpdateDeviceMutation, useAuditQuery, useSmsBalanceQuery, useSmsLogQuery,
 } = endpoints

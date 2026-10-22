@@ -9,7 +9,7 @@ import { useAuditQuery } from '@/redux/endpoints'
 import type { AuditEvent } from '@/types/api'
 
 const TYPES = [
-  { value: '', label: 'Everything' }, { value: 'user', label: 'Users' }, { value: 'device', label: 'Phones' }, { value: 'facility', label: 'Facilities' },
+  { value: '', label: 'Everything' }, { value: 'user', label: 'Users' }, { value: 'device', label: 'Nurses and facility phones' }, { value: 'facility', label: 'Facilities' },
   { value: 'transport_provider', label: 'Drivers' }, { value: 'transport_request', label: 'Pickups' }, { value: 'referral', label: 'Referrals' },
   { value: 'import_batch', label: 'Imports' }, { value: 'export', label: 'DHIMS2 exports' }, { value: 'clip', label: 'Recordings' }, { value: 'content_pack', label: 'Maps' },
 ]

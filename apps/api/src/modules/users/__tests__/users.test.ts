@@ -63,6 +63,19 @@ describe('user administration', () => {
     expect((await agent.post('/admin/users/usr-0001/deactivate').set(csrf)).status).toBe(400) // not yourself
   })
 
+  it("edits an account's name, email and phone, refusing a clash or no way to sign in", async () => {
+    const { agent, csrf } = await signIn(USERS.admin)
+    const target = await prisma.user.findUniqueOrThrow({ where: { email: USERS.supervisor } })
+    const edited = await agent.patch(`/admin/users/${target.id}`).set(csrf).send({ name: 'Dr. Fuseini A.', email: 'Fuseini@GHS.example', phone: '+233 24 777 1234' })
+    expect(edited.status).toBe(200)
+    expect(edited.body.user).toMatchObject({ name: 'Dr. Fuseini A.', email: 'fuseini@ghs.example', phone: '0247771234' })
+    expect((await login('fuseini@ghs.example', DEMO_PASSWORD, '10.9.5.1')).status).toBe(200)
+    expect((await agent.patch(`/admin/users/${target.id}`).set(csrf).send({ email: USERS.hospital })).status).toBe(409)
+    expect((await agent.patch(`/admin/users/${target.id}`).set(csrf).send({ email: null, phone: null })).status).toBe(400)
+    const outside = await prisma.user.create({ data: { id: 'u-out', name: 'X', email: 'x@tml.example', passwordHash: 'x', role: 'supervisor', districtId: 'dist-tml', passwordChangedAt: 0, createdAt: 0 } })
+    expect((await agent.patch(`/admin/users/${outside.id}`).set(csrf).send({ name: 'Y' })).status).toBe(404)
+  })
+
   it('refuses accounts outside the district and other roles managing users', async () => {
     const { agent, csrf } = await signIn(USERS.admin)
     const out = await agent.post('/admin/users').set(csrf).send({ name: 'T', email: 't@laafia.demo', password: 'long-enough-1', role: 'facility_staff', facility_code: 'TTH-HOSP-01' })

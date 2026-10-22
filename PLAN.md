@@ -44,7 +44,7 @@ Inputs only the team can supply: Android phones with SIMs and airtime; a clinici
 ## Web dashboard
 
 Roles: district admin (everything for the district), supervisor (reports and referral board, read-only), facility staff (live inbox for their own facility only; health centres and hospitals with a computer, CHPS compounds use the phone).
-Screens: overview, live referral board (which CHPS referred whom to which facility, and its status), users, nurses' phones with activation codes, facilities, checklist review, SMS gateway balance and log, audit log.
+Screens: overview, live referral board (which CHPS referred whom to which facility, and its status), users, nurses and facility phones with activation codes, facilities, checklist review, SMS gateway balance and log, audit log.
 
 ## Domain invariants
 

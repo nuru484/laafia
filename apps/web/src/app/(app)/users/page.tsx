@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ROLE_LABEL } from '@/lib/nav'
 import { errorMessage } from '@/redux/api'
-import { useCreateUserMutation, useFacilitiesQuery, useSetUserActiveMutation, useSetUserPasswordMutation, useUsersQuery } from '@/redux/endpoints'
+import { useCreateUserMutation, useFacilitiesQuery, useSetUserActiveMutation, useSetUserPasswordMutation, useUpdateUserMutation, useUsersQuery } from '@/redux/endpoints'
 import type { Role, User } from '@/types/api'
 
 const schema = z
@@ -36,6 +36,7 @@ export default function UsersPage() {
   const { data: facs } = useFacilitiesQuery()
   const [adding, setAdding] = useState(false)
   const [resetting, setResetting] = useState<User | null>(null)
+  const [editing, setEditing] = useState<User | null>(null)
   const [setActive] = useSetUserActiveMutation()
   const facilityName = new Map((facs?.facilities ?? []).map((f) => [f.id, f.name]))
 
@@ -52,7 +53,7 @@ export default function UsersPage() {
 
   return (
     <>
-      <PageHeader title="Users" description="People who sign in to this dashboard. Phones are activated separately, under Phones." actions={<Button className="h-11" onClick={() => setAdding(true)}>Add user</Button>} />
+      <PageHeader title="Users" description="People who sign in to this dashboard. Nurses' phones are set up under Nurses." actions={<Button className="h-11" onClick={() => setAdding(true)}>Add user</Button>} />
       {isLoading ? <LoadingRows /> : error ? <ErrorState message={errorMessage(error)} onRetry={refetch} /> : !data?.users.length ? <EmptyState title="No users yet" /> : (
         <>
           <ul className="flex flex-col gap-3 md:hidden">
@@ -64,7 +65,8 @@ export default function UsersPage() {
                 </div>
                 <p className="text-sm text-muted-foreground [overflow-wrap:anywhere]">{ROLE_LABEL[u.role]} · {scopeOf(u)}</p>
                 <p className="text-sm text-muted-foreground [overflow-wrap:anywhere]">{u.email ?? u.phone}</p>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" className="h-11 flex-1" onClick={() => setEditing(u)}>Edit</Button>
                   <Button variant="outline" className="h-11 flex-1" onClick={() => setResetting(u)}>Set password</Button>
                   <Button variant="outline" className="h-11 flex-1" onClick={() => toggle(u)}>{u.active ? 'Deactivate' : 'Reactivate'}</Button>
                 </div>
@@ -86,6 +88,7 @@ export default function UsersPage() {
                     <TableCell className="text-muted-foreground">{u.last_login_at ? new Date(u.last_login_at).toLocaleString() : 'Never'}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
+                        <Button variant="outline" size="sm" onClick={() => setEditing(u)}>Edit</Button>
                         <Button variant="outline" size="sm" onClick={() => setResetting(u)}>Set password</Button>
                         <Button variant="outline" size="sm" onClick={() => toggle(u)}>{u.active ? 'Deactivate' : 'Reactivate'}</Button>
                       </div>
@@ -99,6 +102,7 @@ export default function UsersPage() {
       )}
       <AddUser open={adding} onOpenChange={setAdding} facilities={(facs?.facilities ?? []).map((f) => ({ value: f.code, label: f.name }))} />
       <ResetPassword user={resetting} onClose={() => setResetting(null)} />
+      {editing ? <EditUser user={editing} onClose={() => setEditing(null)} /> : null}
     </>
   )
 }
@@ -189,6 +193,51 @@ function ResetPassword({ user, onClose }: { user: User | null; onClose: () => vo
         <DialogFooter>
           <Button variant="outline" className="h-11" onClick={onClose}>Cancel</Button>
           <Button className="h-11" disabled={value.length < 10 || isLoading} onClick={save}>Save password</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+const editSchema = z
+  .object({
+    name: z.string().trim().min(1, 'Enter a name'),
+    email: z.union([z.literal(''), z.email('Enter a valid email')]),
+    phone: z.string().trim().refine((v) => v === '' || v.replace(/\D/g, '').length >= 9, 'Enter a valid phone number'),
+  })
+  .refine((v) => v.email || v.phone, { message: 'Keep an email or a phone number to sign in with', path: ['email'] })
+type EditForm = z.infer<typeof editSchema>
+
+function EditUser({ user, onClose }: { user: User; onClose: () => void }) {
+  const [update, { isLoading }] = useUpdateUserMutation()
+  const form = useForm<EditForm>({ resolver: zodResolver(editSchema), defaultValues: { name: user.name, email: user.email ?? '', phone: user.phone ?? '' } })
+  const e = form.formState.errors
+
+  async function submit(v: EditForm) {
+    try {
+      await update({ id: user.id, name: v.name, email: v.email || null, phone: v.phone || null }).unwrap()
+      toast.success(`${v.name} is updated.`)
+      onClose()
+    } catch (err) {
+      toast.error(errorMessage(err))
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit {user.name}</DialogTitle>
+          <DialogDescription>They sign in with the email or the phone number.</DialogDescription>
+        </DialogHeader>
+        <form id="edit-user" onSubmit={form.handleSubmit(submit)} className="flex flex-col gap-4" noValidate>
+          <FormField label="Full name" {...form.register('name')} error={e.name?.message} autoComplete="off" />
+          <FormField label="Email" type="email" {...form.register('email')} error={e.email?.message} autoComplete="off" />
+          <FormField label="Phone" type="tel" {...form.register('phone')} error={e.phone?.message} autoComplete="off" />
+        </form>
+        <DialogFooter>
+          <Button variant="outline" className="h-11" onClick={onClose}>Cancel</Button>
+          <Button type="submit" form="edit-user" className="h-11" disabled={isLoading}>{isLoading ? 'Saving' : 'Save'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

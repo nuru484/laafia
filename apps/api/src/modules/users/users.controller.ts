@@ -3,8 +3,8 @@ import type { Deps } from '../../platform/deps.ts'
 import { input } from '../../platform/http/validate.ts'
 import { actorOf, userOf } from '../../platform/middleware/auth.ts'
 import { clearSessionCookies, readCookie, revokeSessions, resolveSession, SESSION_COOKIE, setSessionCookies } from '../../platform/sessions.ts'
-import { CreateUserBody, LoginBody, PasswordBody, UserParams } from './users.schemas.ts'
-import { createUser, listUsers, login, me, resetPassword, setActive } from './users.service.ts'
+import { CreateUserBody, LoginBody, PasswordBody, UpdateUserBody, UserParams } from './users.schemas.ts'
+import { createUser, listUsers, login, me, resetPassword, setActive, updateUser } from './users.service.ts'
 
 export function createUsersController(deps: Deps) {
   const signIn: RequestHandler = async (_req, res) => {
@@ -29,6 +29,9 @@ export function createUsersController(deps: Deps) {
   const create: RequestHandler = async (_req, res) => {
     res.status(201).json({ user: await createUser(deps, actorOf(res), input(res, 'body', CreateUserBody)) })
   }
+  const update: RequestHandler = async (_req, res) => {
+    res.json({ user: await updateUser(deps, actorOf(res), input(res, 'params', UserParams).id, input(res, 'body', UpdateUserBody)) })
+  }
   const password: RequestHandler = async (_req, res) => {
     res.json({ user: await resetPassword(deps, actorOf(res), input(res, 'params', UserParams).id, input(res, 'body', PasswordBody).password) })
   }
@@ -38,5 +41,5 @@ export function createUsersController(deps: Deps) {
   const activate: RequestHandler = async (_req, res) => {
     res.json({ user: await setActive(deps, actorOf(res), input(res, 'params', UserParams).id, true) })
   }
-  return { signIn, signOut, whoAmI, list, create, password, deactivate, activate }
+  return { signIn, signOut, whoAmI, list, create, update, password, deactivate, activate }
 }

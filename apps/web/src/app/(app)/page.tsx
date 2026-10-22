@@ -63,7 +63,7 @@ export default function Overview() {
           <Attention title="No acknowledgement" empty="Every referral was acknowledged in time." items={attention.overdue_acknowledgements} note="Call the facility; the CHO's phone is already prompting a resend." />
           <Attention title="Did not arrive" empty="Everyone acknowledged has arrived." items={attention.did_not_arrive} note="The CHO is asked to visit the house." />
           <Card>
-            <CardHeader><CardTitle><h2>Phones not synced in 3 days</h2></CardTitle></CardHeader>
+            <CardHeader><CardTitle><h2>Nurses' phones not synced in 3 days</h2></CardTitle></CardHeader>
             <CardContent className="flex flex-col gap-2 text-sm">
               {attention.devices_not_synced_3d.length === 0 ? <p className="text-muted-foreground">Every phone has synced recently.</p> : attention.devices_not_synced_3d.map((d) => (
                 <p key={d.id} className="[overflow-wrap:anywhere]"><span className="font-medium">{d.user_name}</span> <span className="text-muted-foreground">· {d.last_sync_at ? `last synced ${ago(d.last_sync_at)}` : 'never synced'}</span></p>

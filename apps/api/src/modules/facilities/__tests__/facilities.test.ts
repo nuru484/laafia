@@ -25,6 +25,18 @@ describe('facilities, providers and devices from the dashboard', () => {
     expect((await staff.agent.post('/admin/facilities').set(staff.csrf).send({ code: 'X-01', name: 'X', level: 'chps', lat: 9, lng: -1 })).status).toBe(403)
   })
 
+  it("edits a nurse's name, phone and facility, and her phone pulls the change", async () => {
+    const cho = await activate('D001')
+    const { agent, csrf } = await signIn(USERS.admin)
+    const res = await agent.patch('/admin/devices/D001').set(csrf).send({ user_name: 'Abiba S. Sulemana', phone_number: '+233 24 000 0099', facility_code: 'SAV-CHPS-02' })
+    expect(res.status).toBe(200)
+    expect(res.body.device).toMatchObject({ user_name: 'Abiba S. Sulemana', phone_number: '0240000099', facility_code: 'SAV-CHPS-02' })
+    const pulled = (await pullAs(cho)).body.records.find((r: { table: string; row: { id: string } }) => r.table === 'devices' && r.row.id === 'D001')
+    expect(pulled.row).toMatchObject({ user_name: 'Abiba S. Sulemana', phone_number: '0240000099' })
+    expect((await agent.patch('/admin/devices/D001').set(csrf).send({ facility_code: 'TTH-HOSP-01' })).status).toBe(403)
+    expect((await agent.patch('/admin/devices/GW01').set(csrf).send({ user_name: 'x' })).status).toBe(404)
+  })
+
   it('reissues an activation code for a replacement phone and reactivates the device', async () => {
     await activate('D001')
     const { agent, csrf } = await signIn(USERS.admin)

@@ -328,6 +328,7 @@ All admin routes accept the `district_admin` session cookie (with `X-CSRF-Token`
 
 - `GET /admin/users` → `{ "users": [User without facility/district objects] }`, by role then name.
 - `POST /admin/users` `{ "name", "email"?, "phone"?, "password" (10+ chars), "role", "facility_code"? (required for facility_staff), "district_code"? (script token only) }` → `201 { "user": User }`. `409` if the email or phone has an account.
+- `PATCH /admin/users/:id` with any of `name`, `email`, `phone` (`null` clears one) → `{ "user": User }`. The account keeps at least one of email and phone (`400`); `409` if another account has it.
 - `POST /admin/users/:id/password` `{ "password" }` → `{ "user": User }`. Ends all of that user's sessions.
 - `POST /admin/users/:id/deactivate` / `POST /admin/users/:id/activate` → `{ "user": User }`. Deactivation ends their sessions; an admin cannot deactivate themselves (`400`).
 
@@ -335,6 +336,7 @@ All admin routes accept the `district_admin` session cookie (with `X-CSRF-Token`
 
 - `GET /admin/devices` → `{ "devices": [Device] }`, by id. `Device = { "id", "role", "user_name", "phone_number", "facility_id", "facility_code", "facility_name", "active", "activated_at", "updated_at", "device_id", "deleted", "last_sync_at": number | null, "app_version": string | null, "activation_pending_until": number | null }`. Never includes keys or codes. `last_sync_at` and `app_version` (header `X-App-Version` on sync) come from the phone's last push or pull.
 - `POST /admin/devices` `{ "role": "cho"|"facility", "user_name": "...", "facility_code": "SAV-CHPS-01", "phone_number"?: "...", "id"?: "D002" }` → `201 { "device": Device, "activation_code": "12345678", "expires_at": 1792801125516 }` (48 h).
+- `PATCH /admin/devices/:id` with any of `user_name`, `phone_number` (`null` clears it), `facility_code` (in the admin's district, else `403`) → `{ "device": Device }`. Phones receive the change on their next pull.
 - `POST /admin/devices/:id/code` → `{ "device", "activation_code", "expires_at" }`: a fresh code for a new or replacement phone; older unused codes stop working; a deactivated device is reactivated.
 - `POST /admin/devices/:id/deactivate` → `{ "device": Device }`. Its next request gets `401 deactivated`; facility phones drop its key on their next pull; its SMS become `unknown_signer`.
 
@@ -355,7 +357,7 @@ All admin routes accept the `district_admin` session cookie (with `X-CSRF-Token`
 
 ### Audit log
 
-`GET /admin/audit?limit=50&before=<at>&target_type=<type>` → `{ "events": [{ "id", "at", "actor_kind": "user"|"device"|"script", "actor_id", "actor_name", "action", "target_type", "target_id", "details" }], "next_before": number | null }`, newest first. Page by passing `next_before` as `before`. Actions: `user.create|password_reset|deactivate|activate`, `device.create|code_reissue|deactivate`, `facility.create|update`, `referral.refer_onward`.
+`GET /admin/audit?limit=50&before=<at>&target_type=<type>` → `{ "events": [{ "id", "at", "actor_kind": "user"|"device"|"script", "actor_id", "actor_name", "action", "target_type", "target_id", "details" }], "next_before": number | null }`, newest first. Page by passing `next_before` as `before`. Actions: `user.create|update|password_reset|deactivate|activate`, `device.create|update|code_reissue|deactivate`, `facility.create|update`, `referral.refer_onward`.
 
 ## Sync row format
 

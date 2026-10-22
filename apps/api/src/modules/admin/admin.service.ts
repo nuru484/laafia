@@ -7,7 +7,8 @@ import { toWire } from '../../platform/http/wire.ts'
 import type { Actor } from '../../platform/middleware/auth.ts'
 import { assertFacility, facilityScope, inScope } from '../../platform/scope.ts'
 import { facilityByCode } from '../referrals/index.ts'
-import type { CreateDeviceInput } from './admin.schemas.ts'
+import { normalizePhone } from '@laafia/core'
+import type { CreateDeviceInput, UpdateDeviceInput } from './admin.schemas.ts'
 
 const ACTIVATION_TTL_MS = 48 * 3_600_000
 const publicDevice = (d: object) => toWire(d, ['seq', 'keyHex'])
@@ -69,6 +70,26 @@ export async function reissueCode(deps: Deps, actor: Actor, id: string) {
   if (!device) throw new HttpError(404, 'not_found', 'Unknown device')
   await audit(deps, actor, 'device.code_reissue', { type: 'device', id, districtId: await districtOfFacility(deps, device.facilityId) })
   return { device: publicDevice(device), activation_code: code, expires_at }
+}
+
+/** Name, number and facility of a nurse's or facility's phone. Phones receive the change on their next pull. */
+export async function updateDevice(deps: Deps, actor: Actor, id: string, body: UpdateDeviceInput) {
+  const scope = await facilityScope(deps, actor)
+  const d = await deps.prisma.device.findUnique({ where: { id } })
+  if (!d || d.role === 'gateway' || !inScope(scope, d.facilityId)) throw new HttpError(404, 'not_found', 'Unknown device')
+  const f = body.facility_code ? await facilityByCode(deps, body.facility_code) : null
+  if (f) await assertFacility(deps, actor, f.id)
+  const updated = await deps.prisma.device.update({
+    where: { id },
+    data: {
+      userName: body.user_name ?? d.userName, facilityId: f?.id ?? d.facilityId, updatedAt: deps.clock(),
+      phoneNumber: body.phone_number === undefined ? d.phoneNumber : body.phone_number ? normalizePhone(body.phone_number) : null,
+    },
+    include: { facility: { select: { code: true, name: true } } },
+  })
+  await audit(deps, actor, 'device.update', { type: 'device', id, districtId: f?.districtId ?? (await districtOfFacility(deps, d.facilityId)) }, { fields: Object.keys(body) })
+  const { facility, ...row } = updated
+  return { device: { ...publicDevice(row), facility_code: facility?.code ?? null, facility_name: facility?.name ?? null } }
 }
 
 /** Its next request gets 401 deactivated; facility phones drop its key on their next pull. */

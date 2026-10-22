@@ -7,7 +7,7 @@ import { hashPassword, verifyPassword } from '../../platform/passwords.ts'
 import { audit, districtOfFacility } from '../../platform/audit.ts'
 import { districtOrThrow } from '../../platform/scope.ts'
 import { createSession, revokeSessions } from '../../platform/sessions.ts'
-import type { CreateUserInput } from './users.schemas.ts'
+import type { CreateUserInput, UpdateUserInput } from './users.schemas.ts'
 
 type UserRow = { id: string; name: string; email: string | null; phone: string | null; role: string; facilityId: string | null; districtId: string | null; active: boolean; lastLoginAt: number | null; createdAt: number }
 
@@ -88,6 +88,19 @@ async function userInScope(deps: Deps, actor: Actor, id: string) {
   const u = await deps.prisma.user.findFirst({ where })
   if (!u) throw new HttpError(404, 'not_found', 'Unknown user')
   return u
+}
+
+/** Name and sign-in details. An account keeps at least one of email and phone. */
+export async function updateUser(deps: Deps, actor: Actor, id: string, body: UpdateUserInput) {
+  const u = await userInScope(deps, actor, id)
+  const email = body.email === undefined ? u.email : body.email?.toLowerCase() ?? null
+  const phone = body.phone === undefined ? u.phone : body.phone ? normalizePhone(body.phone) : null
+  if (!email && !phone) throw new HttpError(400, 'invalid_request', 'An account needs an email or a phone to sign in with')
+  const clash = await deps.prisma.user.findFirst({ where: { id: { not: u.id }, OR: [...(email ? [{ email }] : []), ...(phone ? [{ phone }] : [])] }, select: { id: true } })
+  if (clash) throw new HttpError(409, 'conflict', 'That email or phone already has an account')
+  const updated = await deps.prisma.user.update({ where: { id: u.id }, data: { name: body.name ?? u.name, email, phone } })
+  await audit(deps, actor, 'user.update', { type: 'user', id: u.id, districtId: u.districtId ?? (await districtOfFacility(deps, u.facilityId)) }, { fields: Object.keys(body) })
+  return userView(updated)
 }
 
 /** Admin password reset: every session of that user ends. */

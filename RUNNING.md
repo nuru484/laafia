@@ -27,7 +27,7 @@ Check it from a phone's browser: `<LAN URL>/health` returns `{"ok":true}`.
 `npm run seed` creates only what the dashboard cannot: the district (`SEED_DISTRICT_CODE`, `SEED_DISTRICT_NAME`) and its first admin (`SEED_ADMIN_*`). Re-running it never changes a password. Then sign in to the dashboard as that admin and set up the district:
 
 1. **Facilities**: the CHPS compounds, and the health centres and hospitals that receive referrals, each with the phone number referral SMS go to.
-2. **Phones**: a nurse's phone under her facility, and one phone per receiving facility. Each gets an 8-digit activation code.
+2. **Nurses**: each nurse under her facility, and under Facility phones one phone per receiving facility. Each gets an 8-digit activation code.
 3. On each phone, open Laafia and enter the code and the phone's own number.
 
 For a ready-made demo district instead (Savelugu, sample clients and fixed activation codes), run `npm run seed:demo -w @laafia/api`. It resets that demo data every time, so never run it against a real database.
@@ -71,7 +71,7 @@ The phone runs a development build (the app with the native SMS module) that loa
 
 ## 5. Activate the phones
 
-Each phone is activated once with internet, with the code from the dashboard's Phones page. With `seed:demo`, these fixed codes work:
+Each phone is activated once with internet, with the code from the dashboard's Nurses page. With `seed:demo`, these fixed codes work:
 
 | Code | Device | Mode |
 | --- | --- | --- |
@@ -139,4 +139,4 @@ cd apps/mobile
 npx eas-cli build --platform android --profile preview
 ```
 
-Install the APK from the build page on any Android phone (allow installing unknown apps) and activate it with a code from the dashboard's Phones page. Each new version is a new APK to install.
+Install the APK from the build page on any Android phone (allow installing unknown apps) and activate it with a code from the dashboard's Nurses page. Each new version is a new APK to install.

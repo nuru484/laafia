@@ -4,7 +4,7 @@ import { input, validate } from '../../platform/http/validate.ts'
 import type { Auth } from '../../platform/middleware/auth.ts'
 import { fixedWindow } from '../../platform/middleware/rate-limit.ts'
 import { createUsersController } from './users.controller.ts'
-import { CreateUserBody, LoginBody, PasswordBody, UserParams } from './users.schemas.ts'
+import { CreateUserBody, LoginBody, PasswordBody, UpdateUserBody, UserParams } from './users.schemas.ts'
 
 // 5 sign-in attempts per IP and per account identifier in 15 minutes.
 const byIp = fixedWindow(5, 15 * 60_000, 'Too many sign-in attempts; wait and try again')
@@ -26,6 +26,7 @@ export function createUsersRouter(deps: Deps, auth: Auth) {
     .get('/web/me', anyUser, c.whoAmI)
     .get('/admin/users', admin, c.list)
     .post('/admin/users', admin, validate({ body: CreateUserBody }), c.create)
+    .patch('/admin/users/:id', admin, validate({ params: UserParams, body: UpdateUserBody }), c.update)
     .post('/admin/users/:id/password', admin, validate({ params: UserParams, body: PasswordBody }), c.password)
     .post('/admin/users/:id/deactivate', admin, validate({ params: UserParams }), c.deactivate)
     .post('/admin/users/:id/activate', admin, validate({ params: UserParams }), c.activate)
