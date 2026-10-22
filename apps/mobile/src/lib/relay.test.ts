@@ -238,6 +238,32 @@ describe('outbox', () => {
   })
 })
 
+describe('scheduled pickup', () => {
+  it('holds a planned pickup SMS until 18 hours before the appointment', async () => {
+    const cho = await phone('D001')
+    const { referral } = await referNewborn(cho)
+    await radioSends(cho)
+    const appointment = cho.now() + 3 * 86_400_000
+    await requestTransport(cho, { referral_id: referral.id, provider_id: seed.transport_providers[0]!.id, scheduled_for: appointment })
+    expect(await dueMessages(cho)).toHaveLength(0)
+    cho.tick(appointment - 18 * 3_600_000 - cho.now())
+    const [sms] = await dueMessages(cho)
+    expect(sms!.body).toContain('Reply 1 = coming')
+  })
+})
+
+describe('pickup for a planned follow-up', () => {
+  it('needs no referral: the driver gets the house landmark and the CHO compound as destination', async () => {
+    const cho = await phone('D001')
+    const client = seed.clients.find((c) => c.type === 'pregnant')!
+    await requestTransport(cho, { client_id: client.id, provider_id: seed.transport_providers[0]!.id, scheduled_for: cho.now() + 86_400_000 })
+    cho.tick(6 * 3_600_000)
+    const [sms] = await dueMessages(cho)
+    expect(sms!.body).toContain('To Kanshegu CHPS')
+    expect(sms!.body).not.toContain('URGENT')
+  })
+})
+
 describe('transport', () => {
   it('sends the driver a readable SMS and reads a 1 reply as coming', async () => {
     const cho = await phone('D001')

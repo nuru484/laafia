@@ -15,7 +15,7 @@ export type Stop = { id: string; community: string; lat: number | null; lng: num
 /**
  * Walkable order (spec 6.6): nearest-neighbour from the compound, finishing a
  * community before moving to the next. Stops without a GPS fix go last.
- * ponytail: greedy, no 2-opt; fine for a dozen stops a day.
+ * Greedy nearest-neighbour without 2-opt; adequate for the dozen stops in a day.
  */
 export function planRoute(stops: Stop[], origin: Point): string[] {
   const left = stops.filter((s): s is Stop & Point => s.lat !== null && s.lng !== null)

@@ -79,7 +79,7 @@ export async function todayList(env: Env, origin: Point, limit = 12): Promise<To
 
 export const dayKey = (t: number) => new Date(t).toISOString().slice(0, 10)
 
-/** The CHO's own order for today; kept as overrides so the ranking can learn from them later. */
+/** The CHO's own order for today, stored as overrides that sync to the server as ranking feedback. */
 export async function setManualOrder(env: Env, clientIds: string[]): Promise<void> {
   const day = dayKey(env.now())
   await env.db.tx(async () => {

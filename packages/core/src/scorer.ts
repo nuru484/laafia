@@ -52,7 +52,7 @@ export function features(client: Client, visits: Visit[], today: number): { x: F
   if (client.type === 'pregnant' && client.edd !== null) {
     const gaDays = 280 - days(client.edd - today)
     const week = ANC_WEEKS[mine.length]
-    // ponytail: counts every visit while pregnant as an ANC contact; split by visit kind if CHOs log other visit types.
+    // Every visit while pregnant counts as an ANC contact; visits carry no separate kind yet.
     if (week !== undefined) x.anc_overdue_days = Math.min(ANC_OVERDUE_CAP, Math.max(0, gaDays - week * 7))
     x.first_pregnancy = client.parity === 0 ? 1 : 0
   }

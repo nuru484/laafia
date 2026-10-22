@@ -33,8 +33,8 @@ export async function openDb(): Promise<Db> {
   if (!cipher?.cipher_version) throw new Error('SQLCipher is not in this build; refusing to store patient data unencrypted')
   await raw.execAsync('PRAGMA journal_mode = WAL')
 
-  // ponytail: transactions are serialised against each other, but a statement from another flow can still land
-  // inside an open transaction on this single connection; move to withExclusiveTransactionAsync if that bites.
+  // Transactions are serialised against each other. A statement from another flow can still run inside an open
+  // transaction on this single connection; withExclusiveTransactionAsync would isolate it at the cost of a second connection.
   let queue: Promise<unknown> = Promise.resolve()
   const db: Db = {
     async exec(sql) { await raw.execAsync(sql) },

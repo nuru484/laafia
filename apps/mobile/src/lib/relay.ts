@@ -60,6 +60,7 @@ const RETRY_NO_SIGNAL_MS = MIN
 const STUCK_SENDING_MS = 15 * MIN
 const REACK_AFTER_MS = 2 * MIN
 const DAY = 86_400_000
+const PICKUP_NOTICE_MS = 18 * 60 * MIN
 
 const sync = (env: Env) => [env.now(), env.self.device_id] as const
 
@@ -108,11 +109,11 @@ export async function referralStatus(env: Env, referralId: string): Promise<Refe
   return deriveStatus(await env.db.all<{ status: ReferralStatus }>('SELECT status FROM referral_events WHERE referral_id = ?', [referralId]))
 }
 
-async function enqueueSms(env: Env, recipient: string, body: string, refTable: string | null, refId: string | null): Promise<string> {
+async function enqueueSms(env: Env, recipient: string, body: string, refTable: string | null, refId: string | null, notBefore?: number): Promise<string> {
   const id = env.uuid()
   await env.db.run(
     "INSERT INTO outbox (id, kind, recipient, body, ref_table, ref_id, status, next_attempt_at, created_at) VALUES (?, 'sms', ?, ?, ?, ?, 'pending', ?, ?)",
-    [id, normalizePhone(recipient), body, refTable, refId, env.now(), env.now()],
+    [id, normalizePhone(recipient), body, refTable, refId, Math.max(env.now(), notBefore ?? 0), env.now()],
   )
   return id
 }
@@ -339,25 +340,42 @@ export async function applySendResult(env: Env, r: SendResult): Promise<void> {
   })
 }
 
-export async function requestTransport(env: Env, input: { referral_id: string; provider_id: string; scheduled_for?: number | null }): Promise<string> {
+type Trip = { short_id: string; urgency: number; destination: string; landmark: string | null; lat: number | null; lng: number | null; client_id: string | null }
+
+/** Emergency pickup for a referral, or a planned trip for a follow-up visit to this CHO's compound. */
+export async function requestTransport(env: Env, input: { referral_id?: string | null; client_id?: string | null; provider_id: string; scheduled_for?: number | null }): Promise<string> {
   const { db } = env
-  const r = await db.get<{ short_id: string; urgency: number; destination: string; landmark: string | null; lat: number | null; lng: number | null; client_id: string | null }>(
-    `SELECT r.short_id, r.urgency, f.name AS destination, h.landmark, h.lat, h.lng, r.client_id
-       FROM referrals r JOIN facilities f ON f.code = r.destination_code
-       LEFT JOIN clients c ON c.id = r.client_id LEFT JOIN households h ON h.id = c.household_id
-      WHERE r.id = ?`, [input.referral_id])
-  if (!r) throw new Error(`unknown referral ${input.referral_id}`)
+  let r: Trip | undefined
+  if (input.referral_id) {
+    r = await db.get<Trip>(
+      `SELECT r.short_id, r.urgency, f.name AS destination, h.landmark, h.lat, h.lng, r.client_id
+         FROM referrals r JOIN facilities f ON f.code = r.destination_code
+         LEFT JOIN clients c ON c.id = r.client_id LEFT JOIN households h ON h.id = c.household_id
+        WHERE r.id = ?`, [input.referral_id])
+    if (!r) throw new Error(`unknown referral ${input.referral_id}`)
+  } else if (input.client_id) {
+    r = await db.get<Trip>(
+      `SELECT c.code AS short_id, 0 AS urgency, f.name AS destination, h.landmark, h.lat, h.lng, c.id AS client_id
+         FROM clients c JOIN households h ON h.id = c.household_id
+         JOIN devices d ON d.id = ? JOIN facilities f ON f.code = d.facility_code
+        WHERE c.id = ?`, [env.self.device_id, input.client_id])
+    if (!r) throw new Error(`unknown client ${input.client_id}`)
+  } else {
+    throw new Error('A pickup needs a referral or a client')
+  }
   const provider = await db.get<{ phone: string }>('SELECT phone FROM transport_providers WHERE id = ? AND active = 1', [input.provider_id])
   if (!provider) throw new Error(`unknown transport provider ${input.provider_id}`)
   const id = env.uuid()
   await db.tx(async () => {
     await db.run('INSERT INTO transport_requests (id, referral_id, client_id, provider_id, status, scheduled_for, requested_at, updated_at, device_id) VALUES (?,?,?,?,?,?,?,?,?)',
-      [id, input.referral_id, r.client_id, input.provider_id, 'requested', input.scheduled_for ?? null, env.now(), ...sync(env)])
+      [id, input.referral_id ?? null, r.client_id, input.provider_id, 'requested', input.scheduled_for ?? null, env.now(), ...sync(env)])
     const text = transportRequestText({
       urgent: r.urgency >= 2, pickup: r.landmark ?? 'Ask the CHO for the house', destination_name: r.destination,
       cho_phone: env.self.phone, short_id: r.short_id, lat: r.lat, lng: r.lng,
     })
-    await enqueueSms(env, provider.phone, text, 'transport_requests', id)
+    // A planned trip is texted the day before (spec 15), so the driver can plan; an emergency goes now.
+    const sendAt = input.scheduled_for ? input.scheduled_for - PICKUP_NOTICE_MS : undefined
+    await enqueueSms(env, provider.phone, text, 'transport_requests', id, sendAt)
   })
   return id
 }
