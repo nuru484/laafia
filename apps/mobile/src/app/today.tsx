@@ -3,6 +3,7 @@ import { View } from 'react-native'
 import { TabBar } from '../features/TabBar'
 import { TYPE_NAME } from '../features/format'
 import { useState } from 'react'
+import { bookingRequests } from '../lib/bookings'
 import { setManualOrder, todayList } from '../lib/register'
 import { changed, currentSession, env } from '../lib/runtime'
 import { useQuery } from '../lib/useQuery'
@@ -13,6 +14,7 @@ export default function Today() {
   const s = currentSession()
   const origin = { lat: s?.facility.lat ?? 0, lng: s?.facility.lng ?? 0 }
   const { data, error } = useQuery(() => todayList(env(), origin, 12))
+  const { data: requests } = useQuery(() => bookingRequests(env()))
   const [reorder, setReorder] = useState(false)
 
   async function move(index: number, delta: number) {
@@ -34,6 +36,12 @@ export default function Today() {
           <Button tone="plain" label="Enrol" onPress={() => router.push('/enrol')} />
         </View>}>
         {error ? <Banner tone="refer" text={error.message} /> : null}
+        {requests?.length ? (
+          <Card onPress={() => router.push('/bookings')} accent={color.followup} accessibilityLabel={`${requests.length} booking requests by text. Open to choose the days.`}>
+            <Body style={{ fontWeight: '700' }}>{requests.length} booking {requests.length === 1 ? 'request' : 'requests'} by text</Body>
+            <Body muted>Choose the days; each client is texted the date and a reminder.</Body>
+          </Card>
+        ) : null}
         {!data ? <Loading /> : data.length === 0 ? <Empty title="No one on the register yet" body="Enrol households as you visit, or sync to download the register." /> : null}
         {data?.map((r, i) => (
           <Card key={r.client_id} onPress={() => router.push(`/client/${r.client_id}`)} accent={r.pinned === 'scheduled' ? color.followup : r.pinned ? color.refer : r.score >= 0.6 ? color.followup : color.line}

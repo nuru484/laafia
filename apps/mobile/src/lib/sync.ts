@@ -26,7 +26,7 @@ const RETRYABLE = new Set(['unknown_referral', 'server_error'])
 const PLAIN: Record<string, { cols: string[]; json?: string[]; bool?: string[] }> = {
   households: { cols: ['id', 'community', 'head_name', 'landmark', 'lat', 'lng', 'consent_at'] },
   clients: {
-    cols: ['id', 'household_id', 'code', 'type', 'name', 'sex', 'dob', 'edd', 'delivery_date', 'parity', 'prior_complications', 'birth_weight_g', 'nhis_active'],
+    cols: ['id', 'household_id', 'code', 'type', 'name', 'sex', 'dob', 'edd', 'delivery_date', 'parity', 'prior_complications', 'birth_weight_g', 'nhis_active', 'phone'],
     json: ['prior_complications'],
     bool: ['nhis_active'],
   },

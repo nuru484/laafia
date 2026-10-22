@@ -3,9 +3,11 @@ import { router, useLocalSearchParams } from 'expo-router'
 import { useState } from 'react'
 import { Linking, View } from 'react-native'
 import { TYPE_NAME, ageText, ago, outcomeTone } from '../../features/format'
+import { DayPicker } from '../../features/DayPicker'
+import { dayLabel, nextBooking, scheduleVisit } from '../../lib/bookings'
 import { captureHouse } from '../../lib/gps'
 import { toClient } from '../../lib/register'
-import { changed, env } from '../../lib/runtime'
+import { changed, env, sendDue } from '../../lib/runtime'
 import { useQuery } from '../../lib/useQuery'
 import { Banner, Body, Button, Card, Chip, Heading, Label, Loading, Screen } from '../../ui/kit'
 import { space } from '../../ui/theme'
@@ -13,6 +15,8 @@ import { space } from '../../ui/theme'
 export default function ClientScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const [gps, setGps] = useState<string | null>(null)
+  const [day, setDay] = useState<number | null>(null)
+  const [booking, setBooking] = useState(false)
   const { data } = useQuery(async () => {
     const { db } = env()
     const c = await db.get<any>('SELECT * FROM clients WHERE id = ?', [id])
@@ -21,7 +25,7 @@ export default function ClientScreen() {
     const visits = await db.all<{ id: string; visited_at: number; outcome: string; rule_id: string; protocol_id: string }>('SELECT id, visited_at, outcome, rule_id, protocol_id FROM visits WHERE client_id = ? AND deleted = 0 ORDER BY visited_at DESC LIMIT 10', [id])
     const refs = await db.all<{ id: string; short_id: string; created_at: number }>('SELECT id, short_id, created_at FROM referrals WHERE client_id = ? ORDER BY created_at DESC', [id])
     const due = await db.get<{ followup_due: number }>('SELECT followup_due FROM visits WHERE client_id = ? AND deleted = 0 AND followup_due IS NOT NULL ORDER BY visited_at DESC LIMIT 1', [id])
-    return { client: toClient(c), next_of_kin: c.next_of_kin as string | null, household: h, visits, refs, due: due?.followup_due ?? null }
+    return { client: toClient(c), next_of_kin: c.next_of_kin as string | null, household: h, visits, refs, due: due?.followup_due ?? null, booked: await nextBooking(env(), id) }
   }, [id])
 
   if (data === undefined) return <Loading />
@@ -38,6 +42,19 @@ export default function ClientScreen() {
     await env().db.run('UPDATE households SET lat = ?, lng = ?, updated_at = ?, device_id = ?, synced = 0 WHERE id = ?', [fix.lat, fix.lng, Date.now(), env().self.device_id, household.id])
     setGps(`Saved, accurate to about ${fix.accuracy} m.`)
     changed()
+  }
+
+  async function book() {
+    if (day === null) return
+    setBooking(true)
+    try {
+      await scheduleVisit(env(), client.id, day)
+      setDay(null)
+      changed()
+      void sendDue()
+    } finally {
+      setBooking(false)
+    }
   }
 
   // A geo: link opens whichever map app the phone has; offline maps there work without signal.
@@ -61,6 +78,13 @@ export default function ClientScreen() {
         {client.dob ? <Body>{ageText(client.dob)}{client.birth_weight_g ? ` · born ${client.birth_weight_g} g` : ''}</Body> : null}
         {client.prior_complications.length ? <Body>Previous: {client.prior_complications.join(', ').replace(/_/g, ' ')}</Body> : null}
         <Body>NHIS {client.nhis_active ? 'active' : 'not active'}{data.next_of_kin ? ` · next of kin ${data.next_of_kin}` : ''}</Body>
+        <Body>{client.phone ? `Phone ${client.phone}` : 'No phone yet: she gets no visit texts'}</Body>
+      </Card>
+      <Card>
+        <Label>{data.booked ? `Visit booked for ${dayLabel(data.booked)}` : 'Book a visit'}</Label>
+        <Body muted>{data.booked ? 'Choose another day to move it.' : 'She is on the Today list from that day until the visit is recorded.'}{client.phone ? ' She is texted the date and a reminder the day before.' : ''}</Body>
+        <DayPicker value={day} onChange={setDay} />
+        <Button label={data.booked ? 'Move the visit' : 'Book this day'} disabled={day === null} busy={booking} onPress={book} />
       </Card>
       {household ? (
         <Card>

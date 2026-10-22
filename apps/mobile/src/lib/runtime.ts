@@ -105,12 +105,14 @@ export async function activate(code: string, phone: string, onProgress: (p: Acti
   changed()
 }
 
-/** Copies what the SMS receiver needs when JavaScript is not running: mode and keys. */
+/** Copies what the SMS receiver needs when JavaScript is not running: mode, keys, and client numbers whose texts are bookings. */
 export async function pushNativeState() {
   if (!current || !session) return
   const { db: d } = current
   const keys = await d.all<{ id: string; key_hex: string }>('SELECT id, key_hex FROM devices WHERE active = 1 AND key_hex IS NOT NULL')
   LaafiaSms.setKeys(Object.fromEntries(keys.map((k) => [k.id, k.key_hex])))
+  const clients = session.role === 'cho' ? await d.all<{ phone: string }>('SELECT DISTINCT phone FROM clients WHERE phone IS NOT NULL AND deleted = 0') : []
+  LaafiaSms.setWatchedNumbers(clients.map((c) => c.phone))
   LaafiaSms.setMode(session.role)
 }
 

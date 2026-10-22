@@ -9,7 +9,7 @@ describe('sync push', () => {
     const jwt = await activate('D001')
     const batch = [
       { table: 'households', row: household() },
-      { table: 'clients', row: { id: 'cl-new-1', updated_at: 1_000, household_id: 'hh-new-1', code: 'CL-9001', type: 'pregnant', name: 'Test Mother', edd: TODAY, synced: 0 } },
+      { table: 'clients', row: { id: 'cl-new-1', updated_at: 1_000, household_id: 'hh-new-1', code: 'CL-9001', type: 'pregnant', name: 'Test Mother', edd: TODAY, phone: '0245556666', synced: 0 } },
     ]
     const first = await pushAs(jwt, batch)
     expect(first.body).toEqual({ accepted: ['hh-new-1', 'cl-new-1'], rejected: [] })
@@ -20,7 +20,7 @@ describe('sync push', () => {
     expect(JSON.stringify(after)).toBe(JSON.stringify(before)) // same seq: a no-op does not re-publish the row to pulls
     expect(after!.facilityId).toBe('fac-0001')
     const client = await prisma.client.findUnique({ where: { id: 'cl-new-1' } })
-    expect(client).toMatchObject({ edd: TODAY, priorComplications: [], nhisActive: false })
+    expect(client).toMatchObject({ edd: TODAY, priorComplications: [], nhisActive: false, phone: '0245556666' })
   })
 
   it('applies last-writer-wins by updated_at and reports bad rows per row', async () => {

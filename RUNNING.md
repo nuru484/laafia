@@ -95,6 +95,12 @@ Two phones: CHO (D001) and hospital (F003).
 4. CHO phone shows Facility received it.
 5. Hospital: Arrived, Treated, Discharged. The CHO phone follows each step; after discharge the baby is back on the CHO's Today list with a follow-up.
 
+Booking: register a client's phone at enrolment (or on her client screen via a booking from an unknown number), text the CHO phone from that number, and open Booking requests on Today. Choose a day: the client gets a confirmation now and a reminder the day before, and she is on Today that day.
+
+Monthly report: More, Monthly report, Print or save as PDF.
+
+The instant booking alert with the app closed and printing are native changes: rebuild the development build (section 4) once. An older build still picks up booking texts every minute while the app runs.
+
 Offline variants: put the CHO phone in airplane mode with mobile signal only (no data), or with no signal at all; the SMS queues and sends when signal returns.
 
 ## 7. Tests

@@ -165,6 +165,8 @@ model Client {
   birthWeightG       Int?    @map("birth_weight_g")
   nhisActive         Boolean @default(false) @map("nhis_active")
   riskFlags          Json    @default("[]") @map("risk_flags")
+  /// Normalised local number for the client's booking texts and reminders.
+  phone              String?
 
   @@index([facilityId, seq], map: "clients_scope")
   @@index([householdId], map: "clients_household")

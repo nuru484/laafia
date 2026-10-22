@@ -84,13 +84,12 @@ object Alerts {
       .build())
   }
 
-  fun driverReply(ctx: Context, from: String, body: String) {
+  fun clientMessage(ctx: Context, from: String, body: String) {
     ensureChannels(ctx)
     val id = from.hashCode()
-    val reply = when (body.trim().firstOrNull()) { '1' -> "is coming"; '2' -> "cannot come"; else -> "replied" }
     post(ctx, id, NotificationCompat.Builder(ctx, UPDATES)
       .setSmallIcon(android.R.drawable.ic_dialog_info)
-      .setContentTitle("Driver $reply")
+      .setContentTitle("Visit request by text")
       .setContentText("$from: ${body.take(80)}")
       .setPriority(NotificationCompat.PRIORITY_HIGH)
       .setContentIntent(openApp(ctx, id))

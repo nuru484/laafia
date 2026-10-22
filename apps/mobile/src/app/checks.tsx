@@ -28,7 +28,7 @@ export default function Checks() {
   const maker = c.power.manufacturer
   return (
     <Screen title="Phone setup" subtitle={`${maker} ${c.power.model} · Android API ${c.power.sdk}`} right={<Button tone="quiet" label="Done" onPress={() => router.back()} />}>
-      <Row onChange={q.reload} ok={c.sms} title="Send and read SMS" why="Referrals and acknowledgements travel by SMS." action={{ label: 'Allow SMS', run: async () => { await requestSms(); await pushNativeState() } }} />
+      <Row onChange={q.reload} ok={c.sms} title="Send and read SMS" why="Referrals, acknowledgements and clients' booking texts travel by SMS." action={{ label: 'Allow SMS', run: async () => { await requestSms(); await pushNativeState() } }} />
       <Row onChange={q.reload} ok={c.notifications} title="Notifications" why={facility ? 'An incoming referral rings like an alarm, even when the app is closed.' : 'Shows when the facility acknowledges a referral.'} action={{ label: 'Allow notifications', run: requestNotifications }} />
       {facility ? <Row onChange={q.reload} ok={c.power.canUseFullScreenIntent} title="Alarm over the lock screen" why="Lets an emergency referral wake the screen." action={{ label: 'Open setting', run: () => LaafiaSms.openFullScreenIntentSettings() }} /> : null}
       <Row onChange={q.reload} ok={c.power.ignoringBatteryOptimizations} title="Battery: never restrict Laafia" why="Battery savers stop apps in the background, and a stopped app misses SMS." action={{ label: 'Allow', run: () => LaafiaSms.requestIgnoreBatteryOptimizations() }} />

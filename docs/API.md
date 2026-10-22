@@ -376,7 +376,7 @@ Pulled rows also carry `facility_id` (the catchment, server-set; ignored on push
 
 **households**: `community`, `head_name`, `landmark` (default `""`), `lat?`, `lng?`, `consent_at?`
 
-**clients**: `household_id`, `code` (e.g. `CL-D001001`), `type` (`pregnant`|`postpartum`|`newborn`|`child`), `name`, `sex?` (`f`|`m`), `dob?`, `edd?`, `delivery_date?`, `parity?`, `prior_complications: string[]`, `birth_weight_g?`, `nhis_active: boolean`, `risk_flags: string[]`.
+**clients**: `household_id`, `code` (e.g. `CL-D001001`), `type` (`pregnant`|`postpartum`|`newborn`|`child`), `name`, `sex?` (`f`|`m`), `dob?`, `edd?`, `delivery_date?`, `parity?`, `prior_complications: string[]`, `birth_weight_g?`, `nhis_active: boolean`, `risk_flags: string[]`, `phone?` (normalised local number, for booking texts and reminders).
 
 **visits**: `client_id`, `protocol_id`, `visited_at`, `answers: object`, `outcome` (`routine`|`followup`|`refer`), `rule_id`, `followup_due?`, `notes?`, `muac_mm?`
 

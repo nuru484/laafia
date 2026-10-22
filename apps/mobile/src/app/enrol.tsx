@@ -1,27 +1,19 @@
 import type { ClientType } from '@laafia/core'
 import { router } from 'expo-router'
 import { useState } from 'react'
-import { Pressable, Switch, Text, View } from 'react-native'
+import { Switch, View } from 'react-native'
+import { Choice } from '../features/Choice'
 import { TYPE_NAME } from '../features/format'
 import { captureHouse, type Fix } from '../lib/gps'
 import { enrol } from '../lib/register'
 import { changed, env } from '../lib/runtime'
 import { useQuery } from '../lib/useQuery'
 import { Banner, Body, Button, Card, Field, Label, Screen } from '../ui/kit'
-import { color, radius, space, touch } from '../ui/theme'
+import { space } from '../ui/theme'
 
 const DAY = 86_400_000
 const TYPES: ClientType[] = ['pregnant', 'postpartum', 'newborn', 'child']
 const COMPLICATIONS = [['pph', 'Heavy bleeding after birth'], ['pre_eclampsia', 'Pre-eclampsia'], ['stillbirth', 'Stillbirth'], ['caesarean', 'Caesarean section']] as const
-
-function Choice({ label, on, onPress }: { label: string; on: boolean; onPress: () => void }) {
-  return (
-    <Pressable onPress={onPress} accessibilityRole="checkbox" accessibilityState={{ checked: on }}
-      style={{ minHeight: touch, paddingHorizontal: space.md, borderRadius: radius, borderWidth: 2, borderColor: on ? color.primary : color.line, backgroundColor: on ? '#E6F4F1' : color.card, justifyContent: 'center' }}>
-      <Text style={{ fontSize: 16, color: color.text, fontWeight: on ? '700' : '400' }}>{label}</Text>
-    </Pressable>
-  )
-}
 
 export default function Enrol() {
   const { data: households } = useQuery(() => env().db.all<{ id: string; head_name: string; community: string; landmark: string }>('SELECT id, head_name, community, landmark FROM households WHERE deleted = 0 ORDER BY community, head_name'))
@@ -41,6 +33,7 @@ export default function Enrol() {
   const [weight, setWeight] = useState('')
   const [nhis, setNhis] = useState(true)
   const [kin, setKin] = useState('')
+  const [phone, setPhone] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -73,7 +66,7 @@ export default function Enrol() {
           parity: isWoman && parity !== '' ? Number(parity) : null,
           prior_complications: isWoman ? complications : [],
           birth_weight_g: !isWoman && weight !== '' ? Number(weight) : null,
-          nhis_active: nhis, next_of_kin: kin.trim() || null,
+          nhis_active: nhis, next_of_kin: kin.trim() || null, phone: phone.trim() || null,
         },
       })
       changed()
@@ -131,6 +124,7 @@ export default function Enrol() {
         ) : (
           <Field label="Birth weight (grams, if known)" value={weight} onChangeText={setWeight} keyboardType="number-pad" />
         )}
+        <Field label="Her phone, for visit texts and reminders" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
         <Field label="Next of kin phone" value={kin} onChangeText={setKin} keyboardType="phone-pad" />
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
           <Switch value={nhis} onValueChange={setNhis} accessibilityLabel="NHIS active" />

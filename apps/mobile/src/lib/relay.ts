@@ -7,6 +7,7 @@ import {
   deriveStatus,
   encode,
   normalizePhone,
+  parse,
   shortIdFromBytes,
   signCodes,
   type ClientType,
@@ -31,6 +32,7 @@ export type Incoming = { sender: string; body: string; received_at: number; via:
 export type IncomingResult =
   | { kind: 'referral'; referral_id: string; isNew: boolean }
   | { kind: 'status'; referral_id: string | null; status: ReferralStatus }
+  | { kind: 'booking'; appointment_id: string; isNew: boolean }
   | { kind: 'rejected'; error: string }
   | { kind: 'ignored' }
   | { kind: 'duplicate' }
@@ -101,7 +103,7 @@ export async function referralStatus(env: Env, referralId: string): Promise<Refe
   return deriveStatus(await env.db.all<{ status: ReferralStatus }>('SELECT status FROM referral_events WHERE referral_id = ?', [referralId]))
 }
 
-async function enqueueSms(env: Env, recipient: string, body: string, refTable: string | null, refId: string | null, notBefore?: number): Promise<string> {
+export async function enqueueSms(env: Env, recipient: string, body: string, refTable: string | null, refId: string | null, notBefore?: number): Promise<string> {
   const id = env.uuid()
   await env.db.run(
     "INSERT INTO outbox (id, kind, recipient, body, ref_table, ref_id, status, next_attempt_at, created_at) VALUES (?, 'sms', ?, ?, ?, ?, 'pending', ?, ?)",
@@ -214,14 +216,44 @@ async function acknowledge(env: Env, referral: ReferralRow, status: 'R' | 'A' | 
 
 export async function processIncoming(env: Env, raw: Incoming): Promise<IncomingResult> {
   const { db } = env
+  // The inbox scan sees every SMS on the phone; only Laafia messages and client bookings are kept.
+  const laafia = parse(raw.body) !== null
+  const booking = laafia ? undefined : await bookingSender(env, raw)
+  if (!laafia && booking === undefined) return { kind: 'ignored' }
   return db.tx(async () => {
     const inboxId = env.uuid()
     const stored = await db.run('INSERT OR IGNORE INTO inbox (id, sender, body, received_at, via) VALUES (?,?,?,?,?)', [inboxId, raw.sender, raw.body, raw.received_at, raw.via])
     if (stored.changes === 0) return { kind: 'duplicate' } as const
-    const result = await handle(env, raw)
+    const result = booking !== undefined ? await recordBooking(env, raw, booking.client_id) : await handle(env, raw)
     await db.run('UPDATE inbox SET result = ? WHERE id = ?', [JSON.stringify(result), inboxId])
     return result
   })
+}
+
+/**
+ * A CHO phone takes a booking from any text sent by a registered client's
+ * number, or from an unknown number when the text starts with BOOK. Anything
+ * else is someone's personal SMS: undefined, and never stored.
+ */
+async function bookingSender(env: Env, raw: Incoming): Promise<{ client_id: string | null } | undefined> {
+  if (env.self.role !== 'cho') return undefined
+  const client = await env.db.get<{ id: string }>('SELECT id FROM clients WHERE phone = ? AND deleted = 0', [normalizePhone(raw.sender)])
+  if (client) return { client_id: client.id }
+  return /^\s*book\b/i.test(raw.body) ? { client_id: null } : undefined
+}
+
+/** One open request per number: a second text updates the message instead of adding another. */
+async function recordBooking(env: Env, raw: Incoming, clientId: string | null): Promise<IncomingResult> {
+  const phone = normalizePhone(raw.sender)
+  const message = raw.body.trim().slice(0, 300)
+  const open = await env.db.get<{ id: string }>("SELECT id FROM appointments WHERE phone = ? AND status = 'requested'", [phone])
+  if (open) {
+    await env.db.run('UPDATE appointments SET message = ?, requested_at = ? WHERE id = ?', [message, env.now(), open.id])
+    return { kind: 'booking', appointment_id: open.id, isNew: false }
+  }
+  const id = env.uuid()
+  await env.db.run("INSERT INTO appointments (id, client_id, phone, message, requested_at, status, source) VALUES (?,?,?,?,?,'requested','sms')", [id, clientId, phone, message, env.now()])
+  return { kind: 'booking', appointment_id: id, isNew: true }
 }
 
 async function handle(env: Env, raw: Incoming): Promise<IncomingResult> {

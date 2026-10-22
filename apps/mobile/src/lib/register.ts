@@ -2,6 +2,7 @@ import {
   PROTOCOLS,
   RISK_MODEL,
   deriveStatus,
+  normalizePhone,
   planRoute,
   rank,
   referralAlert,
@@ -15,6 +16,7 @@ import {
   type ReferralStatus,
   type Visit,
 } from '@laafia/core'
+import { bookedDue } from './bookings'
 import type { Env } from './relay'
 import { TYPE_LABEL, signLabels } from './signs'
 
@@ -57,7 +59,7 @@ export async function todayList(env: Env, origin: Point, limit = 12): Promise<To
   const refs = await db.all<{ id: string; client_id: string | null }>('SELECT id, client_id FROM referrals WHERE deleted = 0')
   const open = new Set(refs.filter((r) => r.client_id && OPEN.includes(deriveStatus(events.get(r.id) ?? []))).map((r) => r.client_id!))
 
-  const all = rank(RISK_MODEL, clients, visits, open, env.now())
+  const all = rank(RISK_MODEL, clients, visits, open, env.now(), await bookedDue(env))
   const ranked = [...all.filter((r) => r.pinned), ...all.filter((r) => !r.pinned).slice(0, limit)]
   const households = new Map((await db.all<{ id: string; community: string; landmark: string; lat: number | null; lng: number | null }>('SELECT id, community, landmark, lat, lng FROM households')).map((h) => [h.id, h]))
   const byId = new Map(clients.map((c) => [c.id, c]))
@@ -136,8 +138,8 @@ export async function enrol(env: Env, input: EnrolInput): Promise<{ client_id: s
     const id = env.uuid()
     const c = input.client
     await db.run(
-      'INSERT INTO clients (id, household_id, code, type, name, sex, dob, edd, delivery_date, parity, prior_complications, birth_weight_g, nhis_active, next_of_kin, updated_at, device_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-      [id, householdId, code, c.type, c.name.trim(), c.sex, c.dob, c.edd, c.delivery_date, c.parity, JSON.stringify(c.prior_complications), c.birth_weight_g, c.nhis_active ? 1 : 0, c.next_of_kin, env.now(), env.self.device_id],
+      'INSERT INTO clients (id, household_id, code, type, name, sex, dob, edd, delivery_date, parity, prior_complications, birth_weight_g, nhis_active, next_of_kin, phone, updated_at, device_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      [id, householdId, code, c.type, c.name.trim(), c.sex, c.dob, c.edd, c.delivery_date, c.parity, JSON.stringify(c.prior_complications), c.birth_weight_g, c.nhis_active ? 1 : 0, c.next_of_kin, c.phone ? normalizePhone(c.phone) : null, env.now(), env.self.device_id],
     )
     return { client_id: id, household_id: householdId, code }
   })

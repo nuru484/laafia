@@ -69,5 +69,5 @@ Screens: overview, live referral board (which CHPS referred whom to which facili
 | --- | --- | --- |
 | M0 to M5 | Core, API, mobile, sync, web inbox and dashboard | done |
 | M6 | Trim to the two problems: remove spoken prompts, DHIS2 import and export, transport, volunteers and QR, in-app maps | done |
-| M7 | Scheduled clients always on Today; clients book by texting the nurse; printable monthly report | next |
+| M7 | Scheduled clients always on Today; clients book by texting the nurse; printable monthly report | done (booking alerts and printing need a new development build) |
 | M8 | UI overhaul, phone and dashboard | |

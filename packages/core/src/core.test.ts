@@ -230,7 +230,7 @@ describe('scorer', () => {
       visit({ client_id: 'later', followup_due: TODAY + 15 * 3_600_000 }),
       visit({ id: 'v2', client_id: 'tomorrow', followup_due: TODAY + DAY + 3_600_000 }),
     ]
-    const out = rank(RISK_MODEL, [mother, tomorrow, laterToday, booked, nb], visits, new Set(), now, new Set(['booked']))
+    const out = rank(RISK_MODEL, [mother, tomorrow, laterToday, booked, nb], visits, new Set(), now, new Map([['booked', TODAY]]))
     expect(out.map((r) => [r.client_id, r.pinned])).toEqual([['nb', 'newborn_48h'], ['later', 'scheduled'], ['booked', 'scheduled'], ['m', null], ['tomorrow', null]])
     expect(out[1]!.reasons[0]!.text).toBe('Follow-up due today')
     expect(out[2]!.reasons[0]!.text).toBe('Visit booked for today')

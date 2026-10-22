@@ -168,7 +168,7 @@ Scoring: `score = sigmoid(intercept + sum(w_i * x_i))`. Reasons: the three large
 
 ### 6.5 Hard rules on top of the score
 
-Regardless of score: a client with an open referral whose status is not `closed` appears pinned at the top with the status; a `followup_due <= today` client is lifted to at least 0.3 plus a tenth of its own score (`FOLLOWUP_FLOOR` in the scorer), above the routine list and in its own risk order. These are not model features; they are list rules applied after scoring.
+Regardless of score, pinned in this order: a client with an open referral; a newborn inside 48 h without a postnatal visit; anyone scheduled for today, meaning a follow-up due before tomorrow (a missed one stays until a visit is recorded) or a booked visit not yet held (14.1). Pinned clients are never cut by the daily cap; the cap (12) applies only to the ranked rest. A due follow-up is also lifted to at least 0.3 plus a tenth of its own score (`FOLLOWUP_FLOOR` in the scorer). These are not model features; they are list rules applied after scoring.
 
 ### 6.6 Route grouping
 
@@ -366,6 +366,17 @@ created -> sent -> received -> arrived -> treated -> closed
 - `closed`: discharge; the app creates a `visits` row stub with `followup_due = today + 3` (configurable per protocol) so the client returns to the ranked list.
 - Timers on the CHO phone: if `sent` and not `received` after 2 h, banner "no acknowledgement, call facility"; if `received` and not `arrived` after a window by urgency (3: 6 h, 2: 24 h, 1: 72 h), the client is pinned to the top of the list with "did not arrive, visit".
 - Every transition writes `referral_events` and is itself a message (`LFS` by SMS, row by HTTPS).
+
+### 14.1 Booked visits
+
+- A client books by texting the nurse's own number. On a CHO phone, any text from a registered client's number is a booking request; from an unknown number only a text starting with `BOOK` is. Other SMS are personal and never stored. One open request per number; a second text updates it.
+- The nurse picks the day (Booking requests on Today). A request from an unknown number is first matched to a client, whose phone is then saved. The client is texted a confirmation, and at 08:00 the day before, a reminder. The nurse can also book a visit from the client screen; a new day replaces the old one and drops its unsent texts.
+- A booked client is pinned on Today from that day until a visit is recorded (6.5). Appointments live only on the nurse's phone; the client's phone number syncs with the client.
+- Texts carry the nurse's name, facility and the date, never a diagnosis.
+
+### 14.2 Monthly report
+
+More, Monthly report: this or last month as one A4 page through the Android print dialog, which prints or saves a PDF. A CHO's page lists her visits (date, client code and name, checklist, outcome, rule) and referrals (destination, danger signs, status) with totals; a facility's lists the referrals it received.
 
 ---
 

@@ -7,7 +7,7 @@ import org.json.JSONObject
 
 /**
  * App-private native state that must outlive the JavaScript runtime: the mode,
- * the key directory for verification, numbers whose replies matter (drivers),
+ * the key directory for verification, numbers whose texts are bookings (registered clients),
  * and queues of received messages and send results waiting for JS to consume.
  */
 object Store {

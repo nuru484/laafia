@@ -51,6 +51,8 @@ export type Client = {
   prior_complications: string[]
   birth_weight_g: number | null
   nhis_active: boolean
+  /** Normalised local number for booking texts and reminders. */
+  phone?: string | null
 }
 
 export type Visit = {

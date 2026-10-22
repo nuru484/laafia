@@ -105,6 +105,16 @@ export const MIGRATIONS: string[] = [
   `DROP TABLE audio_clips;`,
   // Drivers and transport requests were removed from the app.
   `DROP TABLE transport_requests; DROP TABLE transport_providers;`,
+  // Clients book visits by SMS; appointments stay on this phone (lib/bookings.ts).
+  `
+  ALTER TABLE clients ADD COLUMN phone TEXT;
+  CREATE INDEX clients_phone ON clients(phone);
+  CREATE TABLE appointments (
+    id TEXT PRIMARY KEY, client_id TEXT, phone TEXT NOT NULL, message TEXT, requested_at INTEGER NOT NULL,
+    scheduled_for INTEGER, status TEXT NOT NULL, source TEXT NOT NULL
+  );
+  CREATE INDEX appointments_open ON appointments(status, scheduled_for);
+  `,
 ]
 
 export async function migrate(db: Db): Promise<void> {

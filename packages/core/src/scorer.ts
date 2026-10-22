@@ -131,9 +131,10 @@ export const FOLLOWUP_FLOOR = 0.3
  * newborns inside 48 h without a postnatal visit are pinned on top; then
  * anyone scheduled for today, so a planned visit is never pushed off the list
  * by riskier clients. Scheduled means the latest visit's follow-up falls
- * before tomorrow (UTC day, Ghana's time zone), or the client is in `booked`.
+ * before tomorrow (UTC day, Ghana's time zone), or the client has a booked
+ * visit not yet held (`booked`: client id to the booked day).
  */
-export function rank(model: RiskModel, clients: Client[], visits: Visit[], openReferralClientIds: Set<string>, today: number, booked: Set<string> = new Set()): Ranked[] {
+export function rank(model: RiskModel, clients: Client[], visits: Visit[], openReferralClientIds: Set<string>, today: number, booked: Map<string, number> = new Map()): Ranked[] {
   const tomorrow = Math.floor(today / DAY) * DAY + DAY
   const latestDue = new Map<string, number | null>()
   for (const v of [...visits].sort((a, b) => a.visited_at - b.visited_at)) latestDue.set(v.client_id, v.followup_due)
@@ -148,7 +149,8 @@ export function rank(model: RiskModel, clients: Client[], visits: Visit[], openR
     const scheduled = booked.has(c.id) || (due !== null && due < tomorrow)
     const pinned = openReferralClientIds.has(c.id) ? 'open_referral' : newborn48 ? 'newborn_48h' : scheduled ? 'scheduled' : null
     const reasons = [...s.reasons]
-    if (booked.has(c.id)) reasons.unshift({ feature: 'booked', text: 'Visit booked for today' })
+    const bookedDay = booked.get(c.id)
+    if (bookedDay !== undefined) reasons.unshift({ feature: 'booked', text: bookedDay < tomorrow - DAY ? 'Booked visit missed' : 'Visit booked for today' })
     else if (due !== null && due >= tomorrow - DAY && due < tomorrow) reasons.unshift({ feature: 'scheduled', text: 'Follow-up due today' })
     return { client_id: c.id, score: value, reasons: reasons.slice(0, 3), pinned }
   })

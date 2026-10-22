@@ -22,7 +22,7 @@ export const ROW_SCHEMAS = {
   clients: z.object({
     ...base, household_id: id, code: str(32), type: CLIENT_TYPE, name: str(), sex: opt(z.enum(['f', 'm'])),
     dob: opt(z.number().int()), edd: opt(ms), delivery_date: opt(ms), parity: opt(z.number().int().min(0).max(30)),
-    prior_complications: strings, birth_weight_g: opt(z.number().int().min(0).max(9000)), nhis_active: bool.default(false), risk_flags: strings,
+    prior_complications: strings, birth_weight_g: opt(z.number().int().min(0).max(9000)), nhis_active: bool.default(false), risk_flags: strings, phone: opt(str(20)),
   }),
   visits: z.object({
     ...base, client_id: id, protocol_id: str(64), visited_at: ms, answers: z.record(z.string(), z.unknown()).default({}),
