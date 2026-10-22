@@ -120,16 +120,23 @@ export function score(model: RiskModel, x: Features, vars: Record<string, string
 }
 
 /**
+ * A due follow-up is lifted to at least this, plus a tenth of its own score so
+ * that among due follow-ups the riskier one still comes first. The trained
+ * model's probabilities sit mostly below 0.2 for routine clients.
+ */
+export const FOLLOWUP_FLOOR = 0.3
+
+/**
  * Score everyone, then apply the list rules (spec 6.5): open referrals and
  * newborns inside 48 h without a postnatal visit are pinned on top; a due
- * follow-up is lifted to at least 0.6.
+ * follow-up is lifted above the routine list.
  */
 export function rank(model: RiskModel, clients: Client[], visits: Visit[], openReferralClientIds: Set<string>, today: number): Ranked[] {
   const out = clients.map((c): Ranked => {
     const { x, vars } = features(c, visits, today)
     const s = score(model, x, vars)
     let value = s.score
-    if (x.followup_due_days !== undefined) value = Math.max(value, 0.6)
+    if (x.followup_due_days !== undefined) value = Math.max(value, FOLLOWUP_FLOOR + value / 10)
     const birth = birthOf(c)
     const newborn48 = c.type === 'newborn' && birth !== null && today - birth <= 2 * DAY && x.no_pnc_visit === 1
     const pinned = openReferralClientIds.has(c.id) ? 'open_referral' : newborn48 ? 'newborn_48h' : null

@@ -1,7 +1,7 @@
 /// <reference types="node" />
 import { randomBytes, randomUUID } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { PROTOCOLS, evaluate, generateSeed } from '@laafia/core'
+import { FOLLOWUP_FLOOR, PROTOCOLS, evaluate, generateSeed } from '@laafia/core'
 import { testDb } from '../../test/node-db'
 import { createReferral, loadSeed, type Env } from './relay'
 import { addProvider, enrol, facilityInbox, referralList, saveVisit, setProviderActive, todayList } from './register'
@@ -41,7 +41,7 @@ describe('today list', () => {
     expect(visit).toEqual({ followup_due: TODAY + 14 * DAY, outcome: 'followup' })
     cho.tick(14 * DAY)
     const row = (await todayList(cho, { lat: 9.603, lng: -0.805 }, 100)).find((r) => r.client_id === child.id)!
-    expect(row.score).toBeGreaterThanOrEqual(0.6)
+    expect(row.score).toBeGreaterThanOrEqual(FOLLOWUP_FLOOR)
   })
 })
 

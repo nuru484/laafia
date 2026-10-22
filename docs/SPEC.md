@@ -179,7 +179,7 @@ Scoring: `score = sigmoid(intercept + sum(w_i * x_i))`. Reasons: the three large
 
 ### 6.5 Hard rules on top of the score
 
-Regardless of score: a client with an open referral whose status is not `closed` appears pinned at the top with the status; a `followup_due <= today` client is boosted to at least 0.6. These are not model features; they are list rules applied after scoring.
+Regardless of score: a client with an open referral whose status is not `closed` appears pinned at the top with the status; a `followup_due <= today` client is lifted to at least 0.3 plus a tenth of its own score (`FOLLOWUP_FLOOR` in the scorer), above the routine list and in its own risk order. These are not model features; they are list rules applied after scoring.
 
 ### 6.6 Route grouping
 
