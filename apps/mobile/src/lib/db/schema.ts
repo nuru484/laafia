@@ -94,6 +94,11 @@ export const MIGRATIONS: string[] = [
     PRIMARY KEY (prompt_id, lang)
   );
   `,
+  // Recorded clips travel to the server and back (lib/content.ts).
+  `
+  ALTER TABLE audio_clips ADD COLUMN uploaded_sha TEXT;
+  ALTER TABLE audio_clips ADD COLUMN source TEXT NOT NULL DEFAULT 'local';
+  `,
 ]
 
 export async function migrate(db: Db): Promise<void> {

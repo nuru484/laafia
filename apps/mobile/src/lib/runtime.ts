@@ -7,6 +7,7 @@ import type { Db } from './db/db'
 import { openDb, wipeDb } from './db/expo'
 import { applySendResult, dueMessages, markSending, processIncoming, type Env, type Role } from './relay'
 import { clearSession, loadSession, saveSession, type Session } from './session'
+import { syncClips, syncTiles } from './content'
 import { pull, push } from './sync'
 
 /*
@@ -179,6 +180,7 @@ export async function syncNow(): Promise<SyncState> {
     await push(current, api)
     await pull(current, api)
     await pushNativeState()
+    await syncContent()
     syncState = { last_ok: Date.now(), last_error: null, running: false }
   } catch (e) {
     if (e instanceof ApiError && e.code === 'deactivated') {
@@ -191,6 +193,24 @@ export async function syncNow(): Promise<SyncState> {
     changed()
   }
   return syncState
+}
+
+export type ContentState = { tiles: 'current' | 'updated' | 'none' | null; tiles_progress: number | null; clips: string | null; error: string | null }
+let contentState: ContentState = { tiles: null, tiles_progress: null, clips: null, error: null }
+export const getContentState = () => contentState
+
+/** Map tiles and prompt clips; a failure here never fails the register sync. */
+async function syncContent() {
+  if (!current || !session) return
+  const jwt = session.jwt
+  const langs = [...new Set([...(session.facility.languages ?? ['dag']), 'en'])]
+  try {
+    const tiles = await syncTiles(current, api, jwt, (done, total) => { contentState = { ...contentState, tiles_progress: done / total }; changed() })
+    const clips = await syncClips(current, api, jwt, langs)
+    contentState = { tiles, tiles_progress: null, clips: `${clips.uploaded} uploaded, ${clips.downloaded} downloaded`, error: null }
+  } catch (e) {
+    contentState = { ...contentState, tiles_progress: null, error: e instanceof Error ? e.message : String(e) }
+  }
 }
 
 /** Remote deactivation or PIN wipe: drop the data and the identity; the phone returns to activation. */

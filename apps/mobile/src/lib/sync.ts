@@ -51,7 +51,7 @@ function toWire(table: string, local: Row): Row {
   return out
 }
 
-async function referralToWire(env: Env, r: Row): Promise<Row> {
+async function referralToWire(env: Env, r: Row, alwaysWire = false): Promise<Row> {
   const facility = await env.db.get<{ id: string }>('SELECT id FROM facilities WHERE code = ?', [r.destination_code as string])
   const type = r.client_type as ClientWireType
   const out: Row = {
@@ -61,18 +61,19 @@ async function referralToWire(env: Env, r: Row): Promise<Row> {
     next_of_kin: r.next_of_kin, updated_at: r.updated_at, device_id: r.device_id, deleted: r.deleted === 1,
   }
   // The server only accepts a referral from a non-origin device with the origin's signed text.
-  if (r.origin_device_id !== env.self.device_id && r.wire) out.lfr = r.wire
+  if ((alwaysWire || r.origin_device_id !== env.self.device_id) && r.wire) out.lfr = r.wire
   return out
 }
 
-export async function push(env: Env, api: Api): Promise<{ accepted: number; rejected: number }> {
+/** Every unsynced row in the server's shape, parents before children. Also feeds the QR record share. */
+export async function collectUnsynced(env: Env, max = MAX_PER_RUN, alwaysWire = false): Promise<{ table: string; row: Row }[]> {
   const { db } = env
   const records: { table: string; row: Row }[] = []
   for (const table of PUSH_ORDER) {
-    if (records.length >= MAX_PER_RUN) break
-    const limit = MAX_PER_RUN - records.length
+    if (records.length >= max) break
+    const limit = max - records.length
     if (table === 'referrals') {
-      for (const r of await db.all<Row>('SELECT * FROM referrals WHERE synced = 0 LIMIT ?', [limit])) records.push({ table, row: await referralToWire(env, r) })
+      for (const r of await db.all<Row>('SELECT * FROM referrals WHERE synced = 0 LIMIT ?', [limit])) records.push({ table, row: await referralToWire(env, r, alwaysWire) })
     } else if (table === 'referral_events') {
       const rows = await db.all<Row>(
         'SELECT e.*, r.origin_device_id, r.short_id FROM referral_events e JOIN referrals r ON r.id = e.referral_id WHERE e.synced = 0 LIMIT ?', [limit])
@@ -86,6 +87,12 @@ export async function push(env: Env, api: Api): Promise<{ accepted: number; reje
       for (const r of await db.all<Row>(`SELECT * FROM ${table} WHERE synced = 0 LIMIT ?`, [limit])) records.push({ table, row: toWire(table, r) })
     }
   }
+  return records
+}
+
+export async function push(env: Env, api: Api): Promise<{ accepted: number; rejected: number }> {
+  const { db } = env
+  const records = await collectUnsynced(env)
 
   let accepted = 0
   let rejected = 0
@@ -123,7 +130,7 @@ async function upsert(db: Db, table: string, values: Row) {
   )
 }
 
-async function applyPulled(env: Env, table: string, row: Row) {
+export async function applyPulled(env: Env, table: string, row: Row) {
   const { db } = env
   const id = row.id as string
   const updatedAt = Number(row.updated_at ?? 0)

@@ -51,6 +51,6 @@ export async function saveClip(db: Db, promptId: string, lang: string, recordedU
   const target = new File(clipsDir(lang), `${promptId}.m4a`)
   if (target.exists) target.delete()
   await new File(recordedUri).move(target)
-  await db.run('INSERT INTO audio_clips (prompt_id, lang, uri, recorded_at) VALUES (?,?,?,?) ON CONFLICT(prompt_id, lang) DO UPDATE SET uri = excluded.uri, recorded_at = excluded.recorded_at',
+  await db.run("INSERT INTO audio_clips (prompt_id, lang, uri, recorded_at, uploaded_sha, source) VALUES (?,?,?,?,NULL,'local') ON CONFLICT(prompt_id, lang) DO UPDATE SET uri = excluded.uri, recorded_at = excluded.recorded_at, uploaded_sha = NULL, source = 'local'",
     [promptId, lang, target.uri, Date.now()])
 }
