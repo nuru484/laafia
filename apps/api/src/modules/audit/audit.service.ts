@@ -1,11 +1,12 @@
 import type { Deps } from '../../platform/deps.ts'
 import type { Actor } from '../../platform/middleware/auth.ts'
+import { districtOrThrow } from '../../platform/scope.ts'
 
 /** Newest first, paged by `before` (an `at` from the previous page). District admins see their district only. */
 export async function listAudit(deps: Deps, actor: Actor, q: { limit: number; before?: number; target_type?: string }) {
   const rows = await deps.prisma.auditEvent.findMany({
     where: {
-      ...(actor.kind === 'user' ? { districtId: actor.user.districtId ?? '' } : {}),
+      ...(actor.kind === 'user' ? { districtId: districtOrThrow(actor) } : {}),
       ...(q.before ? { at: { lt: q.before } } : {}),
       ...(q.target_type ? { targetType: q.target_type } : {}),
     },

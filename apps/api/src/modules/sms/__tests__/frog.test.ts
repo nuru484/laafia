@@ -67,7 +67,7 @@ describe('Frog delivery receipts', () => {
     const jwt = await activate('D001')
     await pushAs(jwt, [{ table: 'referrals', row: { id: 'r-tth', updated_at: TODAY, origin_device_id: 'D001', short_id: SID, urgency: 3, destination_facility_id: 'fac-0004' } }])
     const sent: string[] = []
-    await runJobs({ ...deps, sms: { send: async (_to, _body, msgid) => void sent.push(msgid) } })
+    await runJobs({ ...deps, sms: { send: async (_to, _body, msgid) => void sent.push(msgid), getBalance: async () => null } })
     expect(sent).toHaveLength(1)
     const msgid = sent[0]!
     expect(msgid).toMatch(/^LF_\d+_\d+$/)

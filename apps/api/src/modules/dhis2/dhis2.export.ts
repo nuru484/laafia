@@ -121,5 +121,10 @@ export function buildDhis2Export(input: ExportInput, mapping: Mapping) {
       { dataElement: de.referrals_completed, value: String(completed) },
     ],
   }
-  return { tracker: { trackedEntities }, dataValueSet }
+  // Plain numbers for people: the dataValueSet carries only DHIS2 ids.
+  const summary = {
+    anc_contacts: anc, pnc_within_48h: pnc48, referrals_made: referrals.length, referrals_completed: completed,
+    tracked_entities: trackedEntities.length, events: trackedEntities.reduce((n, t) => n + t.enrollments[0]!.events.length, 0),
+  }
+  return { tracker: { trackedEntities }, dataValueSet, summary }
 }

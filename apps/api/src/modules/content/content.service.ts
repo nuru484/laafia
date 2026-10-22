@@ -4,8 +4,9 @@ import { rename, rm } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import type { Deps } from '../../platform/deps.ts'
 import { HttpError } from '../../platform/http/errors.ts'
+import { audit } from '../../platform/audit.ts'
 import type { Actor, Device } from '../../platform/middleware/auth.ts'
-import { districtOf } from '../../platform/scope.ts'
+import { districtOrThrow } from '../../platform/scope.ts'
 import type { UploadFields } from './content.schemas.ts'
 
 /*
@@ -34,7 +35,7 @@ const view = (p: Pack, districtCode: string | null) => ({
 export async function addPack(deps: Deps, actor: Actor, file: { path: string; size: number }, f: UploadFields) {
   const district = await deps.prisma.district.findUnique({ where: { code: f.district_code } })
   if (!district) throw new HttpError(404, 'not_found', 'Unknown district')
-  if (actor.kind === 'user' && districtOf(actor) !== district.id) throw new HttpError(403, 'forbidden', 'Outside your district')
+  if (actor.kind === 'user' && districtOrThrow(actor) !== district.id) throw new HttpError(403, 'forbidden', 'Outside your district')
   const language = null
   const districtId = district.id
   const latest = await deps.prisma.contentPack.aggregate({ where: { kind: f.kind, language, districtId }, _max: { version: true } })
@@ -49,6 +50,7 @@ export async function addPack(deps: Deps, actor: Actor, file: { path: string; si
     const pack = await deps.prisma.contentPack.create({
       data: { id, kind: f.kind, language, districtId, version, size: file.size, sha256, filename, contentType: TYPE[f.kind], createdAt: deps.clock() },
     })
+    await audit(deps, actor, 'pack.upload', { type: 'content_pack', id: pack.id, districtId }, { kind: f.kind, district: f.district_code, version, size: file.size })
     return view(pack, f.district_code ?? null)
   } catch (e) {
     await rm(join(contentDir(deps), filename), { force: true })
@@ -59,7 +61,7 @@ export async function addPack(deps: Deps, actor: Actor, file: { path: string; si
 }
 
 export async function listPacks(deps: Deps, actor: Actor) {
-  const where = actor.kind === 'user' ? { districtId: districtOf(actor) ?? '' } : {}
+  const where = actor.kind === 'user' ? { districtId: districtOrThrow(actor) } : {}
   const rows = await deps.prisma.contentPack.findMany({ where, include: { district: { select: { code: true } } }, orderBy: { createdAt: 'desc' } })
   return rows.map((r) => view(r, r.district?.code ?? null))
 }

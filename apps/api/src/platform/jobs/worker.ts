@@ -16,9 +16,19 @@ export const jobIdOfMsgId = (msgid: string) => {
 }
 
 /** Transactional enqueue: the SMS is sent only if the write that caused it commits. */
-export async function enqueueSms(tx: Tx, now: number, to: string, body: string, dedupeKey?: string) {
+export type SmsPurpose = 'ack' | 'status' | 'driver' | 'referral'
+
+/**
+ * `facilityId` is the facility the SMS is about; its district scopes the dashboard SMS log.
+ * `runAt` defaults to now (a scheduled pickup passes a later time).
+ */
+export async function enqueueSms(tx: Tx, now: number, to: string, body: string, opts: { purpose: SmsPurpose; facilityId?: string | null; dedupeKey?: string; runAt?: number }) {
+  const facility = opts.facilityId ? await tx.facility.findUnique({ where: { id: opts.facilityId }, select: { districtId: true } }) : null
   // skipDuplicates: a second job with the same dedupe key is dropped instead of failing the write.
-  await tx.job.createMany({ data: [{ kind: 'sms', payload: { to, body }, runAt: now, createdAt: now, dedupeKey: dedupeKey ?? null }], skipDuplicates: true })
+  await tx.job.createMany({
+    data: [{ kind: 'sms', payload: { to, body }, runAt: opts.runAt ?? now, createdAt: now, dedupeKey: opts.dedupeKey ?? null, purpose: opts.purpose, districtId: facility?.districtId ?? null }],
+    skipDuplicates: true,
+  })
 }
 
 /**

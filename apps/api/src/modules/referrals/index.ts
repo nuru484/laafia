@@ -3,3 +3,4 @@ export {
   GATEWAY_DEVICE, acknowledgeIfNoFacilityPhone, activeKeys, byKey, enqueueStatusSms, hasFacilityPhone, facilityByCode, facilityFor, facilityOfDevice, mayAct, pushEvent, pushReferral,
   referralView, visibleTo, writeAndPublish, type PushEvent, type PushReferral, type Referral, type ReferralView,
 } from './referrals.service.ts'
+export { referralAtFacility } from './referrals.staff.ts'

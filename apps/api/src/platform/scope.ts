@@ -11,9 +11,24 @@ export async function facilityScope(deps: Deps, actor: Actor): Promise<string[] 
   if (actor.kind === 'admin') return null
   if (actor.kind === 'device') return actor.device.facilityId ? [actor.device.facilityId] : []
   const u = actor.user
-  if (u.role === 'facility_staff') return u.facilityId ? [u.facilityId] : []
-  if (!u.districtId) return []
-  return (await deps.prisma.facility.findMany({ where: { districtId: u.districtId }, select: { id: true } })).map((f) => f.id)
+  if (u.role === 'facility_staff') return [staffFacility(actor)!]
+  return (await deps.prisma.facility.findMany({ where: { districtId: districtOrThrow(actor) }, select: { id: true } })).map((f) => f.id)
+}
+
+/**
+ * Scope comes from the role, never from which ids happen to be set: facility staff without a facility,
+ * or a district role without a district, are refused rather than widened.
+ * Returns the staff user's facility, or null for any other actor.
+ */
+export function staffFacility(actor: Actor): string | null {
+  if (actor.kind !== 'user' || actor.user.role !== 'facility_staff') return null
+  if (!actor.user.facilityId) throw new HttpError(403, 'forbidden', 'No facility assigned')
+  return actor.user.facilityId
+}
+
+export function districtOrThrow(actor: Actor & { kind: 'user' }): string {
+  if (!actor.user.districtId) throw new HttpError(403, 'forbidden', 'No district assigned')
+  return actor.user.districtId
 }
 
 export const inScope = (scope: string[] | null, facilityId: string | null | undefined) => scope === null || (!!facilityId && scope.includes(facilityId))
@@ -23,7 +38,3 @@ export async function assertFacility(deps: Deps, actor: Actor, facilityId: strin
   if (!inScope(await facilityScope(deps, actor), facilityId)) throw new HttpError(403, 'forbidden', 'Outside your facility or district')
 }
 
-/** The district a user administers; the admin token may name any. */
-export function districtOf(actor: Actor): string | null {
-  return actor.kind === 'user' ? actor.user.districtId : null
-}

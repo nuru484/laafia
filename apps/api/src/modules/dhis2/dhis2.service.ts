@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+import { audit } from '../../platform/audit.ts'
 import type { Deps } from '../../platform/deps.ts'
 import { HttpError } from '../../platform/http/errors.ts'
 import type { Actor } from '../../platform/middleware/auth.ts'
@@ -63,10 +65,83 @@ export async function pushToDhis2(deps: Deps, actor: Actor, facilityCode: string
   const tracker = await post<TrackerReport>('/api/tracker', payload.tracker)
   const agg = await post<AggregateReport>('/api/dataValueSets', payload.dataValueSet)
   const aggregate = agg.response ?? agg // 2.38+ wraps the import summary in `response`
-  return {
+  const report = {
     dry_run: dryRun,
     tracked_entities: payload.tracker.trackedEntities.length,
+    summary: payload.summary,
     tracker: { status: tracker.status ?? null, stats: tracker.stats ?? null, errors: (tracker.validationReport?.errorReports ?? []).slice(0, 20).map((e) => ({ code: e.errorCode ?? null, message: e.message ?? '' })) },
     aggregate: { status: aggregate.status ?? null, import_count: aggregate.importCount ?? null, conflicts: (aggregate.conflicts ?? []).slice(0, 20) },
+  }
+  const ok = report.tracker.status === 'OK' && report.aggregate.status === 'SUCCESS'
+  const f = await facilityByCode(deps, facilityCode)
+  const runId = randomUUID()
+  await deps.prisma.exportRun.create({
+    data: { id: runId, facilityId: f.id, period, dryRun, actor: actorName(actor), at: deps.clock(), trackedEntities: report.tracked_entities, status: ok ? 'ok' : 'error', result: report },
+  })
+  await audit(deps, actor, 'export.push', { type: 'export', id: runId, districtId: f.districtId }, { facility: f.code, period, dry_run: dryRun, status: ok ? 'ok' : 'error' })
+  return { ...report, run_id: runId, status: ok ? 'ok' : 'error' }
+}
+
+const actorName = (actor: Actor) => (actor.kind === 'user' ? actor.user.name : actor.kind === 'device' ? actor.device.userName : 'Admin token')
+
+type Run = { id: string; facilityId: string; period: string; dryRun: boolean; actor: string; at: number; trackedEntities: number; status: string; result: unknown }
+const runView = (r: Run, code: string) => ({
+  id: r.id, facility_code: code, period: r.period, dry_run: r.dryRun, actor: r.actor, at: r.at, tracked_entities: r.trackedEntities, status: r.status,
+  counts: (r.result as { summary?: unknown } | null)?.summary ?? null, result: r.result,
+})
+
+const periodOf = (t: number) => {
+  const d = new Date(t)
+  return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+}
+
+/**
+ * Complete months from the facility's first recorded activity (a visit or a referral event) to last month
+ * that have no successful real (not dry-run) export. At most 36 months back.
+ */
+async function pendingSinceFirstActivity(deps: Deps, facilityId: string) {
+  const firstVisit = await deps.prisma.visit.findFirst({ where: { facilityId, deleted: false }, orderBy: { visitedAt: 'asc' }, select: { visitedAt: true } })
+  const referralIds = (await deps.prisma.referral.findMany({ where: { facilityId }, select: { id: true } })).map((r) => r.id)
+  const firstEvent = referralIds.length ? await deps.prisma.referralEvent.findFirst({ where: { referralId: { in: referralIds } }, orderBy: { at: 'asc' }, select: { at: true } }) : null
+  const first = Math.min(firstVisit?.visitedAt ?? Infinity, firstEvent?.at ?? Infinity)
+  if (!Number.isFinite(first)) return []
+  const now = new Date(deps.clock())
+  const done = new Set((await deps.prisma.exportRun.findMany({ where: { facilityId, dryRun: false, status: 'ok' }, select: { period: true } })).map((r) => r.period))
+  const out: string[] = []
+  for (let i = 1; i <= 36; i++) {
+    const t = Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1)
+    if (Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i + 1, 1) <= first) break
+    const p = periodOf(t)
+    if (!done.has(p)) out.push(p)
+  }
+  return out
+}
+
+/** Export history for one facility, newest first. */
+export async function exportHistory(deps: Deps, actor: Actor, facilityCode: string, limit: number) {
+  const f = await facilityByCode(deps, facilityCode)
+  await assertFacility(deps, actor, f.id)
+  const runs = await deps.prisma.exportRun.findMany({ where: { facilityId: f.id }, orderBy: { at: 'desc' }, take: limit })
+  return { runs: runs.map((r) => runView(r, f.code)), pending_periods: await pendingSinceFirstActivity(deps, f.id) }
+}
+
+/** The last `months` complete months and whether each has had a successful real (not dry-run) export. */
+export async function pendingPeriods(deps: Deps, actor: Actor, facilityCode: string, months: number) {
+  const f = await facilityByCode(deps, facilityCode)
+  await assertFacility(deps, actor, f.id)
+  const now = new Date(deps.clock())
+  const periods: string[] = []
+  for (let i = 1; i <= months; i++) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1))
+    periods.push(`${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}`)
+  }
+  const runs = await deps.prisma.exportRun.findMany({ where: { facilityId: f.id, period: { in: periods } }, orderBy: { at: 'desc' } })
+  return {
+    facility_code: f.code,
+    periods: periods.map((period) => {
+      const mine = runs.filter((r) => r.period === period)
+      const real = mine.find((r) => !r.dryRun && r.status === 'ok')
+      return { period, exported: !!real, exported_at: real?.at ?? null, last_run: mine[0] ? runView(mine[0], f.code) : null }
+    }),
   }
 }

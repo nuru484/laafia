@@ -98,6 +98,7 @@ export async function seedActivity(deps: Deps, now = Date.now()) {
     // Server-sent SMS with Frog delivery receipts. Bodies are LFS/LFT wire text with codes, never names.
     const job = (n: number, to: string, body: string, ago: number, delivery: string | null, status = 'sent') => ({
       kind: 'sms', payload: { to, body }, status, attempts: status === 'pending' ? 0 : 1, runAt: now - ago, createdAt: now - ago, dedupeKey: `demo:${n}`,
+      purpose: body.startsWith('LAAFIA pickup') ? 'driver' : 'status', districtId: 'dist-sav',
       deliveryStatus: delivery, deliveryReason: delivery === 'failed' ? 'Absent subscriber' : delivery === 'delivered' ? 'Delivered' : null, deliveredAt: delivery === 'delivered' ? now - ago + 20_000 : null,
     })
     await tx.job.createMany({

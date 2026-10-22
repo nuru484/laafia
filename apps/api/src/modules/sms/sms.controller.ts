@@ -2,8 +2,9 @@ import type { Request, RequestHandler } from 'express'
 import type { Deps } from '../../platform/deps.ts'
 import { HttpError } from '../../platform/http/errors.ts'
 import { input } from '../../platform/http/validate.ts'
-import { safeEqual } from '../../platform/middleware/auth.ts'
-import { InboundBody, receiptItems } from './sms.schemas.ts'
+import { actorOf, safeEqual } from '../../platform/middleware/auth.ts'
+import { smsBalance, smsLog } from './sms.admin.ts'
+import { InboundBody, LogQuery, receiptItems } from './sms.schemas.ts'
 import { applyDeliveryReceipts, handleInboundSms } from './sms.service.ts'
 
 /** A shared token from a header or, because a gateway dashboard can only carry a URL, ?token=. */
@@ -42,5 +43,11 @@ export function createSmsController(deps: Deps) {
   const delivery: RequestHandler = async (req, res) => {
     res.json(await applyDeliveryReceipts(deps, receiptItems(req.body)))
   }
-  return { requireWebhookToken, requireCallbackSecret, inbound, delivery }
+  const balance: RequestHandler = async (_req, res) => {
+    res.json(await smsBalance(deps))
+  }
+  const log: RequestHandler = async (_req, res) => {
+    res.json(await smsLog(deps, actorOf(res), input(res, 'query', LogQuery)))
+  }
+  return { requireWebhookToken, requireCallbackSecret, inbound, delivery, balance, log }
 }

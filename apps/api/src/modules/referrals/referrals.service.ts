@@ -15,12 +15,37 @@ type Num<T, K extends keyof T> = Omit<T, K> & { [P in K]: number }
 export type Referral = Num<ReferralRow, 'updatedAt' | 'seq'>
 export type ReferralEvent = Num<EventRow, 'updatedAt' | 'seq' | 'at'>
 /** Wire shape (docs/API.md): a referrals row in snake_case plus its events ordered by `at`. */
-export type ReferralView = Record<string, unknown> & { id: string; facility_id: string | null; destination_facility_id: string | null; status: string; events: Record<string, unknown>[] }
+/** A referral_events row on the wire. */
+export type ReferralEventView = {
+  id: string; updated_at: number; device_id: string | null; deleted: boolean
+  referral_id: string; status: ReferralStatus; at: number; source_device_id: string; via: 'sms' | 'qr' | 'https' | 'local'
+}
 
-export type TransportView = { id: string; provider_id: string; provider_name: string | null; provider_phone: string | null; status: string; scheduled_for: number | null; updated_at: number }
+/** A transport request attached to a referral, with the provider's name and phone. */
+export type TransportView = { id: string; provider_id: string; provider_name: string | null; provider_phone: string | null; status: 'requested' | 'coming' | 'declined' | 'done'; scheduled_for: number | null; updated_at: number }
 
-export const viewOf = (r: Referral, events: ReferralEvent[], transport: TransportView[] = []): ReferralView =>
-  ({ ...toWire(r), events: events.map((e) => toWire(e)), transport }) as unknown as ReferralView
+/** Wire shape of a referral in lists, chains and SSE (docs/API.md, ReferralView). */
+export type ReferralView = {
+  id: string; updated_at: number; device_id: string | null; deleted: boolean; facility_id: string | null
+  origin_device_id: string; short_id: string; client_id: string | null; visit_id: string | null; client_code: string | null
+  client_type: 'pregnant' | 'postpartum' | 'newborn' | 'child' | null; context: string | null; urgency: number | null; danger_signs: string[]
+  destination_facility_id: string | null; next_of_kin: string | null; status: ReferralStatus; delivered_via: 'sms' | 'qr' | 'https' | null
+  parent_referral_id: string | null; onward_referral_id: string | null; onward_status: ReferralStatus | null
+  events: ReferralEventView[]; transport: TransportView[]
+}
+
+export const viewOf = (r: Referral, events: ReferralEvent[], transport: TransportView[] = []): ReferralView => ({
+  id: r.id, updated_at: r.updatedAt, device_id: r.deviceId, deleted: r.deleted, facility_id: r.facilityId,
+  origin_device_id: r.originDeviceId, short_id: r.shortId, client_id: r.clientId, visit_id: r.visitId, client_code: r.clientCode,
+  client_type: r.clientType as ReferralView['client_type'], context: r.context, urgency: r.urgency, danger_signs: (r.dangerSigns as string[]) ?? [],
+  destination_facility_id: r.destinationFacilityId, next_of_kin: r.nextOfKin, status: r.status as ReferralStatus, delivered_via: r.deliveredVia as ReferralView['delivered_via'],
+  parent_referral_id: r.parentReferralId, onward_referral_id: r.onwardReferralId, onward_status: r.onwardStatus as ReferralStatus | null,
+  events: events.map((e) => ({
+    id: e.id, updated_at: e.updatedAt, device_id: e.deviceId, deleted: e.deleted, referral_id: e.referralId, status: e.status as ReferralStatus,
+    at: e.at, source_device_id: e.sourceDeviceId, via: e.via as ReferralEventView['via'],
+  })),
+  transport,
+})
 
 /** Transport requests per referral id, with the provider's name and phone (staff call the driver). */
 async function transportFor(db: Tx, referralIds: string[]): Promise<Map<string, TransportView[]>> {
@@ -31,7 +56,7 @@ async function transportFor(db: Tx, referralIds: string[]): Promise<Map<string, 
   for (const t of reqs) {
     const p = providers.get(t.providerId)
     const list = out.get(t.referralId!) ?? []
-    list.push({ id: t.id, provider_id: t.providerId, provider_name: p?.name ?? null, provider_phone: p?.phone ?? null, status: t.status, scheduled_for: t.scheduledFor, updated_at: t.updatedAt })
+    list.push({ id: t.id, provider_id: t.providerId, provider_name: p?.name ?? null, provider_phone: p?.phone ?? null, status: t.status as TransportView['status'], scheduled_for: t.scheduledFor, updated_at: t.updatedAt })
     out.set(t.referralId!, list)
   }
   return out
@@ -200,6 +225,7 @@ const MAX_HOPS = 10
 
 /** The referral with every hop before and after it (root first). Visible to the admin and to devices on the chain. */
 export async function referralChain(deps: Deps, id: string, actor: Actor) {
+  const scope = await facilityScope(deps, actor) // first, so an unscoped user is refused before any lookup
   const start = await deps.prisma.referral.findUnique({ where: { id } })
   if (!start) throw new HttpError(404, 'not_found', 'Referral not found')
   const chain: Referral[] = [start]
@@ -215,9 +241,13 @@ export async function referralChain(deps: Deps, id: string, actor: Actor) {
     chain.push(next)
     r = next
   }
-  const scope = await facilityScope(deps, actor)
-  const sees = (r: Referral) => (actor.kind === 'device' && r.originDeviceId === actor.device.id) || inScope(scope, r.facilityId) || inScope(scope, r.destinationFacilityId)
-  if (!chain.some(sees)) throw new HttpError(404, 'not_found', 'Referral not found')
+  // A CHO phone sees chains it started; facility phones and dashboard users see chains touching their scope.
+  if (actor.kind === 'device' && actor.device.role !== 'facility') {
+    if (!chain.some((r) => r.originDeviceId === actor.device.id)) throw new HttpError(403, 'forbidden', 'Not your referral')
+  } else {
+    const sees = (r: Referral) => (actor.kind === 'device' && r.originDeviceId === actor.device.id) || inScope(scope, r.facilityId) || inScope(scope, r.destinationFacilityId)
+    if (!chain.some(sees)) throw new HttpError(404, 'not_found', 'Referral not found')
+  }
   const views = await Promise.all(chain.map((r) => referralView(deps, r.id)))
   return { referral: views[chain.indexOf(start)]!, chain: views.filter((v): v is ReferralView => !!v) }
 }
@@ -233,12 +263,12 @@ async function signerFor(tx: Tx, destinationFacilityId: string | null) {
 }
 
 /** `dedupeKey` drops a second LFS for the same (referral, status); acknowledgements of a resent LFR leave it unset on purpose. */
-export async function enqueueStatusSms(tx: Tx, now: number, r: Pick<Referral, 'originDeviceId' | 'shortId' | 'destinationFacilityId'>, status: ReferralStatus, to: string | null, dedupeKey?: string) {
+export async function enqueueStatusSms(tx: Tx, now: number, r: Pick<Referral, 'originDeviceId' | 'shortId' | 'destinationFacilityId' | 'facilityId'>, status: ReferralStatus, to: string | null, dedupeKey?: string) {
   const code = CODE_FROM_STATUS[status]
   if (!code || !to) return
   const signer = await signerFor(tx, r.destinationFacilityId)
   const msg: StatusMessage = { kind: 'LFS', signer: signer.id, origin: r.originDeviceId, short_id: r.shortId, status: code }
-  await enqueueSms(tx, now, to, encode(msg, signer.keyHex!), dedupeKey)
+  await enqueueSms(tx, now, to, encode(msg, signer.keyHex!), { purpose: dedupeKey ? 'status' : 'ack', facilityId: r.facilityId ?? r.destinationFacilityId, dedupeKey })
 }
 
 /** True when the facility has an active device in facility mode, which acknowledges referrals itself. */
@@ -252,7 +282,7 @@ export async function hasFacilityPhone(tx: Tx, facilityId: string | null) {
  * LFS R to the sender) only when the destination has no phone in facility mode to do it.
  * Returns whether it acknowledged.
  */
-export async function acknowledgeIfNoFacilityPhone(tx: Tx, now: number, r: Pick<Referral, 'id' | 'originDeviceId' | 'shortId' | 'destinationFacilityId'>, to: string | null, touched: Set<string>, via: 'sms' | 'https') {
+export async function acknowledgeIfNoFacilityPhone(tx: Tx, now: number, r: Pick<Referral, 'id' | 'originDeviceId' | 'shortId' | 'destinationFacilityId' | 'facilityId'>, to: string | null, touched: Set<string>, via: 'sms' | 'https') {
   if (!r.destinationFacilityId || (await hasFacilityPhone(tx, r.destinationFacilityId))) return false
   await pushEvent(tx, null, {
     id: `gw-${r.originDeviceId}-${r.shortId}-received`, referral_id: r.id, origin_device_id: r.originDeviceId, short_id: r.shortId,

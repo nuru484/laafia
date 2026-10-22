@@ -21,5 +21,10 @@ export const FrogReceipt = z.object({
 })
 export type FrogReceipt = z.infer<typeof FrogReceipt>
 
+export const LogQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  before: z.coerce.number().int().positive().optional(),
+})
+
 /** Frog posts receipts as a JSON array or as an object keyed by index. */
 export const receiptItems = (body: unknown): unknown[] => (Array.isArray(body) ? body : body && typeof body === 'object' ? Object.values(body) : [])

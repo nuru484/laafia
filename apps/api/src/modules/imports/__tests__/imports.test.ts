@@ -77,6 +77,8 @@ describe('register import (CSV / XLSX)', () => {
     expect(undo.body).toMatchObject({ batch: { status: 'undone' }, undone: { clients: 2 }, kept: { clients: 0 } })
     expect(await prisma.client.count({ where: { code: { startsWith: 'RG-' }, deleted: false } })).toBe(0)
     expect((await request(app).post(`/admin/import/batches/${batch.id}/undo`).set(ADMIN)).status).toBe(409)
+    const actions = (await request(app).get('/admin/audit?target_type=import_batch').set(ADMIN)).body.events.map((e: { action: string }) => e.action)
+    expect(actions).toEqual(['import.undo', 'import.commit', 'import.preview'])
   })
 
   it('reads XLSX with the same template, including date cells', async () => {

@@ -9,6 +9,8 @@ import { readCookie, resolveSession, SESSION_COOKIE, sha256 } from '../sessions.
 /** A device row with epoch fields as numbers (see platform/db.ts). */
 export type Device = Omit<DeviceRow, 'updatedAt' | 'seq' | 'activatedAt'> & { updatedAt: number; seq: number; activatedAt: number | null }
 export type Role = 'cho' | 'volunteer' | 'facility' | 'gateway'
+/** Every phone role, for routes any activated phone may call. The gateway is not a phone and never signs in. */
+export const PHONES: Role[] = ['cho', 'volunteer', 'facility']
 export type UserRole = 'district_admin' | 'facility_staff' | 'supervisor'
 export type WebUser = { id: string; name: string; role: UserRole; facilityId: string | null; districtId: string | null }
 /**
@@ -87,7 +89,8 @@ export function createAuth(deps: Deps) {
         return next()
       }
       const device = await deviceFromToken(deps, token)
-      if (opts.roles && !opts.roles.includes(device.role as Role)) throw new HttpError(403, 'forbidden', `Role ${device.role} may not call this`)
+      // Fail closed: a route admits devices only when it names their roles.
+      if (!opts.roles?.includes(device.role as Role)) throw new HttpError(403, 'forbidden', `Role ${device.role} may not call this`)
       res.locals.actor = { kind: 'device', device } satisfies Actor
       next()
     }

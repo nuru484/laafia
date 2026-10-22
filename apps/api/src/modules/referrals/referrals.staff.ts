@@ -21,8 +21,8 @@ const sourceOf = (actor: Actor) => (actor.kind === 'user' ? `web:${actor.user.id
 
 /** The referral if the patient is at (or bound for) a facility in the actor's scope, else 404. */
 export async function referralAtFacility(deps: Deps, db: Tx, actor: Actor, id: string) {
-  const r = await byId(db, id)
   const scope = await facilityScope(deps, actor)
+  const r = await byId(db, id)
   if (!r || !(inScope(scope, r.destinationFacilityId) || inScope(scope, r.facilityId))) throw new HttpError(404, 'not_found', 'Referral not found')
   return { referral: r, scope }
 }
@@ -80,7 +80,7 @@ export async function referOnward(deps: Deps, actor: Actor, parentId: string, bo
     await syncOnward(tx, (await byId(tx, child.id))!, touched)
     if (await hasFacilityPhone(tx, dest.id)) {
       const lfr = dest.phone ? onwardLfr(child, dest.code, gw.keyHex) : null
-      if (lfr) await enqueueSms(tx, now, dest.phone!, lfr, `lfr:${child.id}`)
+      if (lfr) await enqueueSms(tx, now, dest.phone!, lfr, { purpose: 'referral', facilityId: child.facilityId, dedupeKey: `lfr:${child.id}` })
     } else {
       await acknowledgeIfNoFacilityPhone(tx, now, child, null, touched, 'https')
     }

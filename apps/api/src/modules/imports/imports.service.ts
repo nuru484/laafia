@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { audit, districtOfFacility } from '../../platform/audit.ts'
 import { Prisma, write, type Tx } from '../../platform/db.ts'
 import type { Deps } from '../../platform/deps.ts'
 import { HttpError } from '../../platform/http/errors.ts'
@@ -105,14 +106,18 @@ export async function previewFile(deps: Deps, actor: Actor, o: { templateId: str
   const f = await facilityByCode(deps, o.facilityCode)
   await assertFacility(deps, actor, f.id)
   const { source, records } = await tabularRecords(o.file, o.filename)
-  return preview(deps, { facilityId: f.id, templateId: o.templateId, source, filename: o.filename.slice(0, 200), records })
+  const batch = await preview(deps, { facilityId: f.id, templateId: o.templateId, source, filename: o.filename.slice(0, 200), records })
+  await audit(deps, actor, 'import.preview', { type: 'import_batch', id: batch.id, districtId: f.districtId }, { source, counts: batch.counts })
+  return batch
 }
 
 export async function previewDhis2(deps: Deps, actor: Actor, q: Dhis2Input) {
   const f = await facilityByCode(deps, q.facility_code)
   await assertFacility(deps, actor, f.id)
   const records = await dhis2Records(deps.env, deps.logger, q)
-  return preview(deps, { facilityId: f.id, templateId: q.template_id, source: 'dhis2', filename: null, records })
+  const batch = await preview(deps, { facilityId: f.id, templateId: q.template_id, source: 'dhis2', filename: null, records })
+  await audit(deps, actor, 'import.preview', { type: 'import_batch', id: batch.id, districtId: f.districtId }, { source: 'dhis2', counts: batch.counts })
+  return batch
 }
 
 /** Inside write(): the global write lock serialises commits and undos, so a status read here cannot race. */
@@ -126,7 +131,7 @@ async function batchIn(tx: Tx, scope: string[] | null, id: string, status: strin
 /** Writes the previewed rows in one transaction. Dedupe runs again, since the register may have changed since the preview. */
 export async function commit(deps: Deps, actor: Actor, id: string) {
   const scope = await facilityScope(deps, actor)
-  return write(deps.prisma, async (tx) => {
+  const done = await write(deps.prisma, async (tx) => {
     const b = await batchIn(tx, scope, id, 'preview')
     const { fresh, issues } = await dedupe(tx, b.facilityId, b.rows as ImportRow[])
     const now = deps.clock()
@@ -167,6 +172,8 @@ export async function commit(deps: Deps, actor: Actor, id: string) {
     })
     return batchView(done)
   })
+  await audit(deps, actor, 'import.commit', { type: 'import_batch', id, districtId: await districtOfFacility(deps, done.facility_id) }, { counts: done.counts })
+  return done
 }
 
 /**
@@ -176,7 +183,7 @@ export async function commit(deps: Deps, actor: Actor, id: string) {
  */
 export async function undo(deps: Deps, actor: Actor, id: string) {
   const scope = await facilityScope(deps, actor)
-  return write(deps.prisma, async (tx) => {
+  const result = await write(deps.prisma, async (tx) => {
     const b = await batchIn(tx, scope, id, 'committed')
     const created = b.createdIds as { households: string[]; clients: string[] }
     const now = deps.clock()
@@ -195,6 +202,8 @@ export async function undo(deps: Deps, actor: Actor, id: string) {
       kept: { clients: created.clients.length - delClients, households: created.households.length - delHouseholds },
     }
   })
+  await audit(deps, actor, 'import.undo', { type: 'import_batch', id, districtId: await districtOfFacility(deps, result.batch.facility_id) }, { undone: result.undone, kept: result.kept })
+  return result
 }
 
 export async function getBatch(deps: Deps, actor: Actor, id: string) {
