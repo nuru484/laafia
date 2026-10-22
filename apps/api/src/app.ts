@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { activate, ActivateBody, actorOf, auth, deviceOf, keysFor, refresh, safeEqual } from './auth.ts'
 import { listPacks, manifest, packUpload, servePack, uploadPack } from './content.ts'
 import { db, write } from './db.ts'
+import { commit, createTemplate, dhis2Records, Dhis2Body, fileUpload, getBatch, listBatches, listTemplates, preview, tabularRecords, TemplateBody, undo } from './imports.ts'
 import { env } from './env.ts'
 import { errorHandler, HttpError } from './http.ts'
 import { bus, facilityByCode, handleInboundSms, listReferrals, setStatus, visibleTo, WEB_STATUSES, type ReferralView } from './referrals.ts'
@@ -158,6 +159,40 @@ export function createApp() {
     const [d] = await write((tx) => tx.update(devices).set({ active: false, updated_at: Date.now() }).where(eq(devices.id, String(req.params.id))).returning())
     if (!d) throw new HttpError(404, 'not_found', 'Unknown device')
     res.json({ device: publicDevice(d) })
+  })
+
+  // --- Register import pipeline (web dashboard)
+  app.get('/admin/import/templates', admin, async (_req, res) => {
+    res.json({ templates: await listTemplates() })
+  })
+  app.post('/admin/import/templates', admin, async (req, res) => {
+    res.status(201).json({ template: await createTemplate(TemplateBody.parse(req.body)) })
+  })
+  app.post('/admin/import/preview', admin, fileUpload.single('file'), async (req, res) => {
+    const { template_id, facility_code } = z.object({ template_id: z.string().uuid(), facility_code: z.string().max(32) }).parse(req.body)
+    if (!req.file) throw new HttpError(400, 'invalid_request', 'Expected a multipart file field "file"')
+    const f = await facilityByCode(facility_code)
+    const { source, records } = await tabularRecords(req.file.buffer, req.file.originalname)
+    res.status(201).json({ batch: await preview({ facilityId: f.id, templateId: template_id, source, filename: req.file.originalname.slice(0, 200), records }) })
+  })
+  app.post('/admin/import/dhis2/preview', admin, async (req, res) => {
+    const body = Dhis2Body.parse(req.body)
+    const f = await facilityByCode(body.facility_code)
+    const records = await dhis2Records(body)
+    res.status(201).json({ batch: await preview({ facilityId: f.id, templateId: body.template_id, source: 'dhis2', filename: null, records }) })
+  })
+  app.get('/admin/import/batches', admin, async (req, res) => {
+    const q = z.object({ facility: z.string().max(32).optional() }).parse(req.query)
+    res.json({ batches: await listBatches(q.facility ? (await facilityByCode(q.facility)).id : undefined) })
+  })
+  app.get('/admin/import/batches/:id', admin, async (req, res) => {
+    res.json({ batch: await getBatch(String(req.params.id)) })
+  })
+  app.post('/admin/import/batches/:id/commit', admin, async (req, res) => {
+    res.json({ batch: await commit(z.string().uuid().parse(req.params.id)) })
+  })
+  app.post('/admin/import/batches/:id/undo', admin, async (req, res) => {
+    res.json(await undo(z.string().uuid().parse(req.params.id)))
   })
 
   app.get('/admin/content/packs', admin, async (_req, res) => {
