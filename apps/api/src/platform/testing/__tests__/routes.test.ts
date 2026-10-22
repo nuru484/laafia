@@ -13,6 +13,7 @@ const ROUTES: [string, string][] = [
   ['post', '/voice/transcribe'],
   ['get', '/transport/providers'], ['post', '/transport/providers'], ['patch', '/transport/providers/x'], ['post', '/transport/requests'],
   ['post', '/web/login'], ['post', '/web/logout'], ['get', '/web/me'],
+  ['get', '/referrals/x/transport/options'], ['post', '/referrals/x/transport'],
   ['get', '/referrals'], ['get', '/referrals/x'], ['post', '/referrals/x/status'], ['post', '/referrals/x/onward'], ['get', '/referrals/x/client'],
   ['post', '/events/ticket'], ['get', '/events'],
   ['get', '/dashboard/overview'], ['get', '/dashboard/summary'],

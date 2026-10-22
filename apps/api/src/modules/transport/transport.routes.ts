@@ -3,12 +3,13 @@ import type { Deps } from '../../platform/deps.ts'
 import { validate } from '../../platform/http/validate.ts'
 import { PHONES, type Auth } from '../../platform/middleware/auth.ts'
 import { createTransportController } from './transport.controller.ts'
-import { AdminProviderBody, ProviderBody, ProviderParams, ProviderPatch, RequestBody } from './transport.schemas.ts'
+import { AdminProviderBody, ProviderBody, ProviderParams, ProviderPatch, ReferralParams, RequestBody, WebPickupBody } from './transport.schemas.ts'
 
 export function createTransportRouter(deps: Deps, auth: Auth) {
   const c = createTransportController(deps)
   const staff = auth({ roles: ['cho', 'facility'] })
   const admin = auth({ admin: true, roles: [], users: ['district_admin'] })
+  const staffUsers = auth({ admin: true, roles: [], users: ['facility_staff', 'district_admin'] })
   return Router()
     .get('/transport/providers', auth({ roles: PHONES }), c.list)
     .post('/transport/providers', staff, validate({ body: ProviderBody }), c.create)
@@ -17,4 +18,6 @@ export function createTransportRouter(deps: Deps, auth: Auth) {
     .get('/admin/transport/providers', admin, c.adminList)
     .post('/admin/transport/providers', admin, validate({ body: AdminProviderBody }), c.adminCreate)
     .patch('/admin/transport/providers/:id', admin, validate({ params: ProviderParams, body: ProviderPatch }), c.adminUpdate)
+    .get('/referrals/:id/transport/options', staffUsers, validate({ params: ReferralParams }), c.options)
+    .post('/referrals/:id/transport', staffUsers, validate({ params: ReferralParams, body: WebPickupBody }), c.webRequest)
 }

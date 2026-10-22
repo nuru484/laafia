@@ -2,8 +2,8 @@ import type { RequestHandler } from 'express'
 import type { Deps } from '../../platform/deps.ts'
 import { input } from '../../platform/http/validate.ts'
 import { actorOf, deviceOf } from '../../platform/middleware/auth.ts'
-import { AdminProviderBody, ProviderBody, ProviderParams, ProviderPatch, RequestBody } from './transport.schemas.ts'
-import { adminCreateProvider, adminListProviders, adminUpdateProvider, createProvider, listProviders, requestTransport, updateProvider } from './transport.service.ts'
+import { AdminProviderBody, ProviderBody, ProviderParams, ProviderPatch, ReferralParams, RequestBody, WebPickupBody } from './transport.schemas.ts'
+import { adminCreateProvider, adminListProviders, adminUpdateProvider, createProvider, listProviders, requestTransport, requestTransportFromWeb, transportOptions, updateProvider } from './transport.service.ts'
 
 export function createTransportController(deps: Deps) {
   const list: RequestHandler = async (_req, res) => {
@@ -27,5 +27,11 @@ export function createTransportController(deps: Deps) {
   const adminUpdate: RequestHandler = async (_req, res) => {
     res.json({ provider: await adminUpdateProvider(deps, actorOf(res), input(res, 'params', ProviderParams).id, input(res, 'body', ProviderPatch)) })
   }
-  return { list, create, update, request, adminList, adminCreate, adminUpdate }
+  const options: RequestHandler = async (_req, res) => {
+    res.json(await transportOptions(deps, actorOf(res), input(res, 'params', ReferralParams).id))
+  }
+  const webRequest: RequestHandler = async (_req, res) => {
+    res.status(201).json({ transport_request: await requestTransportFromWeb(deps, actorOf(res), input(res, 'params', ReferralParams).id, input(res, 'body', WebPickupBody)) })
+  }
+  return { list, create, update, request, adminList, adminCreate, adminUpdate, options, webRequest }
 }

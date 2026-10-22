@@ -1,6 +1,6 @@
 import { normalizePhone, transportRequestText } from '@laafia/core'
 import { randomUUID } from 'node:crypto'
-import { write } from '../../platform/db.ts'
+import { write, type Tx } from '../../platform/db.ts'
 import type { Deps } from '../../platform/deps.ts'
 import { HttpError } from '../../platform/http/errors.ts'
 import { toWire } from '../../platform/http/wire.ts'
@@ -8,7 +8,7 @@ import { audit, districtOfFacility } from '../../platform/audit.ts'
 import { enqueueSms } from '../../platform/jobs/worker.ts'
 import type { Actor, Device } from '../../platform/middleware/auth.ts'
 import { assertFacility, facilityScope, inScope } from '../../platform/scope.ts'
-import { facilityByCode, mayAct } from '../referrals/index.ts'
+import { facilityByCode, mayAct, referralAtFacility, writeAndPublish } from '../referrals/index.ts'
 import type { ProviderInput, ProviderPatchInput, RequestInput } from './transport.schemas.ts'
 
 /* Transport providers and online pickup requests (spec 15). Rows are the same ones phones sync. */
@@ -89,24 +89,71 @@ export async function requestTransport(deps: Deps, device: Device, body: Request
     if (!referral || !(await mayAct(tx, device, referral))) throw new HttpError(404, 'not_found', 'Unknown referral')
     const provider = await tx.transportProvider.findFirst({ where: { id: body.provider_id, facilityId: device.facilityId ?? '', active: true, deleted: false } })
     if (!provider) throw new HttpError(404, 'not_found', 'Unknown provider')
-    const client = referral.clientId ? await tx.client.findUnique({ where: { id: referral.clientId }, select: { householdId: true } }) : null
-    const home = client ? await tx.household.findUnique({ where: { id: client.householdId } }) : null
-    const destination = referral.destinationFacilityId ? await tx.facility.findUnique({ where: { id: referral.destinationFacilityId }, select: { name: true } }) : null
-    const text = transportRequestText({
-      urgent: (referral.urgency ?? 1) >= 2,
-      pickup: home?.landmark || home?.community || 'see CHO',
-      destination_name: destination?.name ?? 'the facility',
-      cho_phone: device.phoneNumber ?? '-',
-      short_id: referral.shortId,
-      lat: home?.lat ?? null,
-      lng: home?.lng ?? null,
-    })
-    const created = await tx.transportRequest.create({
-      data: { id: body.id ?? randomUUID(), referralId: referral.id, providerId: provider.id, status: 'requested', scheduledFor: body.scheduled_for ?? null, facilityId: device.facilityId, deviceId: device.id, updatedAt: now },
-    })
-    const runAt = body.scheduled_for ? Math.max(now, body.scheduled_for - HOLD_MS) : now
-    await enqueueSms(tx, now, provider.phone, text, { purpose: 'driver', facilityId: device.facilityId, runAt })
-    return created
+    return createPickup(tx, now, { id: body.id, referral, provider, callbackPhone: device.phoneNumber, facilityId: device.facilityId, writer: device.id, scheduledFor: body.scheduled_for })
   })
   return toWire(row)
+}
+
+/** Records the request and texts the driver (core transportRequestText), held until 18 h before a scheduled pickup. */
+async function createPickup(
+  tx: Tx, now: number,
+  o: { id?: string; referral: { id: string; clientId: string | null; destinationFacilityId: string | null; urgency: number | null; shortId: string }; provider: { id: string; phone: string }; callbackPhone: string | null; facilityId: string | null; writer: string; scheduledFor?: number },
+) {
+  const client = o.referral.clientId ? await tx.client.findUnique({ where: { id: o.referral.clientId }, select: { householdId: true } }) : null
+  const home = client ? await tx.household.findUnique({ where: { id: client.householdId } }) : null
+  const destination = o.referral.destinationFacilityId ? await tx.facility.findUnique({ where: { id: o.referral.destinationFacilityId }, select: { name: true } }) : null
+  const text = transportRequestText({
+    urgent: (o.referral.urgency ?? 1) >= 2,
+    pickup: home?.landmark || home?.community || 'see CHO',
+    destination_name: destination?.name ?? 'the facility',
+    cho_phone: o.callbackPhone ?? '-',
+    short_id: o.referral.shortId,
+    lat: home?.lat ?? null,
+    lng: home?.lng ?? null,
+  })
+  const created = await tx.transportRequest.create({
+    data: { id: o.id ?? randomUUID(), referralId: o.referral.id, providerId: o.provider.id, status: 'requested', scheduledFor: o.scheduledFor ?? null, facilityId: o.facilityId, deviceId: o.writer, updatedAt: now },
+  })
+  const runAt = o.scheduledFor ? Math.max(now, o.scheduledFor - HOLD_MS) : now
+  await enqueueSms(tx, now, o.provider.phone, text, { purpose: 'driver', facilityId: o.facilityId, runAt })
+  return created
+}
+
+// --- Dashboard: facility staff arrange a pickup for a referral at their facility.
+
+/** Active providers serving the client's community, else the origin catchment's, within the actor's district. */
+async function providersFor(deps: Deps, db: Tx, referral: { facilityId: string | null; clientId: string | null }) {
+  const client = referral.clientId ? await db.client.findUnique({ where: { id: referral.clientId }, select: { householdId: true } }) : null
+  const home = client ? await db.household.findUnique({ where: { id: client.householdId }, select: { community: true } }) : null
+  const where = { active: true, deleted: false }
+  const local = home ? await db.transportProvider.findMany({ where: { ...where, community: { equals: home.community, mode: 'insensitive' as const } }, orderBy: { name: 'asc' } }) : []
+  const catchment = referral.facilityId ? await db.transportProvider.findMany({ where: { ...where, facilityId: referral.facilityId }, orderBy: { name: 'asc' } }) : []
+  const seen = new Set<string>()
+  return { community: home?.community ?? null, providers: [...local, ...catchment].filter((p) => !seen.has(p.id) && seen.add(p.id)) }
+}
+
+export async function transportOptions(deps: Deps, actor: Actor, referralId: string) {
+  const { referral } = await referralAtFacility(deps, deps.prisma, actor, referralId)
+  const { community, providers } = await providersFor(deps, deps.prisma, referral)
+  return { community, providers: providers.map((p) => toWire(p)) }
+}
+
+export async function requestTransportFromWeb(deps: Deps, actor: Actor, referralId: string, body: { provider_id: string; scheduled_for?: number }) {
+  const now = deps.clock()
+  let created: Awaited<ReturnType<typeof createPickup>> | null = null
+  await writeAndPublish(deps, async (tx, touched) => {
+    const { referral, scope } = await referralAtFacility(deps, tx, actor, referralId)
+    const { providers } = await providersFor(deps, tx, referral)
+    const provider = providers.find((p) => p.id === body.provider_id)
+    if (!provider) throw new HttpError(404, 'not_found', 'Unknown provider for this referral')
+    // The staff member's facility phone is the callback number; the request belongs to the origin catchment so the CHO phone syncs it.
+    const here = scope?.[0] ? await tx.facility.findUnique({ where: { id: scope[0] }, select: { phone: true } }) : null
+    created = await createPickup(tx, now, {
+      referral, provider, callbackPhone: here?.phone ?? null, facilityId: referral.facilityId,
+      writer: actor.kind === 'user' ? `web:${actor.user.id}` : 'WEB', scheduledFor: body.scheduled_for,
+    })
+    touched.add(referral.id)
+  })
+  await audit(deps, actor, 'transport.request', { type: 'transport_request', id: created!.id, districtId: await districtOfFacility(deps, created!.facilityId) }, { referral: referralId, provider: body.provider_id })
+  return toWire(created!)
 }

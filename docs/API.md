@@ -311,6 +311,14 @@ Facility phone that may act on it, `facility_staff` (referrals from or to their 
 
 `facility_staff` or `district_admin`, for a referral from or to their scope. `{ "client": clients row | null, "household": { "community", "head_name", "landmark", "lat", "lng" } | null, "visits": [visits row] }` (latest 5 visits). The client is found by `client_id`, else by `client_code` in the origin catchment.
 
+### GET /referrals/:id/transport/options
+
+`facility_staff` or `district_admin`, for a referral from or to their scope (`404` otherwise). `{ "community": "Kanshegu" | null, "providers": [transport_providers row] }`: active providers serving the client's household community, then the origin catchment's.
+
+### POST /referrals/:id/transport
+
+Same access. `{ "provider_id": "tp-0001", "scheduled_for"?: 1792628325516 }` → `201 { "transport_request": transport_requests row }` (`status: "requested"`, in the origin catchment so the CHO phone syncs it). The server texts the driver the pickup message with the staff member's facility phone as the callback number (held until 18 h before a scheduled pickup). The driver's reply (`1`/`2`) to the gateway updates `status`, which shows in `ReferralView.transport`. `404` for a provider not offered for this referral.
+
 ### POST /events/ticket
 
 Facility phone (own facility), `facility_staff` (own facility), `district_admin` or `supervisor` (a facility in their district). Request `{ "facility": "SAV-HOSP-01" }` (send `X-CSRF-Token` from the dashboard). Response `200 { "ticket": "base64url", "expires_at": 1792628385516 }`. The ticket is single use, valid 60 s, bound to that facility. `403` outside scope.
@@ -356,7 +364,8 @@ The server gateway is Frog by Wigal, and it is the fallback path: phones text ea
 
 - `LFS` status from the web inbox (`POST /referrals/:id/status`);
 - the `LFS ... R` acknowledgement for a referral that reaches a facility by HTTPS push or inbound SMS while that facility has no active device in facility mode (the server records the `received` event for it);
-- driver messages when a CHO requests transport online (`POST /transport/requests`).
+- driver messages when a CHO requests transport online (`POST /transport/requests`) or facility staff arrange one from the dashboard (`POST /referrals/:id/transport`);
+- the onward LFR when facility staff refer onward from the dashboard (`POST /referrals/:id/onward`).
 
 Outgoing SMS go through a `jobs` table (retry at 30 s, 2 min, 10 min, then hourly; failed after 8 attempts) to Frog `POST https://frogapi.wigal.com.gh/api/v3/sms/send` with `API-KEY` / `USERNAME` headers. Each send carries `msgid` `LF_<job id>_<ms>`. Without `FROG_API_KEY`, `FROG_USERNAME` and `FROG_SENDER_ID` the message is only logged (masked number and length, never the body).
 
@@ -390,7 +399,7 @@ Body `{ "from": "+233240000001", "text": "LFR|1|..." }` (also accepts `sender` /
 
 ## Admin (`district_admin`, or the script token)
 
-All admin routes are scoped to the admin's district; a facility, device, provider, user or batch outside it is `403` (or `404` for an id). Every change is written to the audit log.
+All admin routes accept the `district_admin` session cookie (with `X-CSRF-Token` on mutations) or the script token, and are scoped to the admin's district; a facility, device, provider, user or batch outside it is `403` (or `404` for an id). Every change is written to the audit log.
 
 ### Users
 
@@ -418,9 +427,18 @@ All admin routes are scoped to the admin's district; a facility, device, provide
 - `POST /admin/transport/providers` `{ "facility_code", "name", "phone", "vehicle"?, "community"?, "active"? }` → `201 { "provider": row }`.
 - `PATCH /admin/transport/providers/:id` with any of `name, phone, vehicle, community, active` → `{ "provider": row }`. Retire a provider with `{ "active": false }`.
 
+### SMS gateway panel
+
+- `GET /admin/sms/balance` → `{ "configured": true, "balance": 42.5, "currency": "GHS", "sms_units": 1250 }` from Frog `GET /api/v3/balance` (`cashbalance` and `bundles.SMS`, as in dms-backend). Without Frog credentials: `{ "configured": false, "balance": null, "currency": null, "sms_units": null }`, not an error. `502 sms_balance_unavailable` if Frog cannot be reached.
+- `GET /admin/sms/log?limit=50&before=<ms>` → `{ "messages": [{ "id": "42", "at": 1792628325516, "to_masked": "*******001", "kind": "ack" | "status" | "driver" | "referral", "status": "queued" | "sent" | "delivered" | "failed", "attempts": 1, "error": string | null, "delivered_at": number | null }], "next_before": number | null }`, newest first, for the admin's district. Page by passing `next_before` as `before`. `kind`: `ack` is the server's acknowledgement for a facility without a phone, `status` an LFS from the web, `driver` a pickup SMS, `referral` an onward LFR. `status` combines the send and Frog's delivery receipt. Bodies and full numbers are never returned.
+
+### Checklists
+
+`GET /protocols` (every dashboard role) → `{ "protocols": [Protocol] }`: each protocol exactly as phones run it (from `packages/core`), with `id`, `version`, `clinical_review`, `questions`, `rules` (with thresholds), `signs`, `actions` and `destination`. Read-only.
+
 ### Audit log
 
-`GET /admin/audit?limit=50&before=<at>&target_type=<type>` → `{ "events": [{ "id", "at", "actor_kind": "user"|"device"|"script", "actor_id", "actor_name", "action", "target_type", "target_id", "details" }], "next_before": number | null }`, newest first. Page by passing `next_before` as `before`. Actions: `user.create|password_reset|deactivate|activate`, `device.create|code_reissue|deactivate`, `facility.create|update`, `provider.create|update|retire`, `import.preview|commit|undo`, `export.push`, `clip.upload|delete`, `pack.upload`, `referral.refer_onward`.
+`GET /admin/audit?limit=50&before=<at>&target_type=<type>` → `{ "events": [{ "id", "at", "actor_kind": "user"|"device"|"script", "actor_id", "actor_name", "action", "target_type", "target_id", "details" }], "next_before": number | null }`, newest first. Page by passing `next_before` as `before`. Actions: `user.create|password_reset|deactivate|activate`, `device.create|code_reissue|deactivate`, `facility.create|update`, `provider.create|update|retire`, `export.push`, `clip.upload|delete`, `pack.upload`, `referral.refer_onward`, `transport.request`.
 
 ### Content
 
@@ -434,25 +452,27 @@ All admin routes are scoped to the admin's district; a facility, device, provide
                 "clips": { "dag": Clip & { "recorded_by": "Abiba Sulemana" }, "en": null } }] }
 ```
 
-- `POST /admin/content/clips`, `multipart/form-data`: file field `audio` (m4a, mp3, webm/opus from MediaRecorder, ogg or wav; at most 5 MB), fields `prompt_id`, `lang`. Converted server-side to mono AAC m4a with ffmpeg, then stored like a phone recording (newest per prompt and language wins). → `201 { "id", "sha256", "size" }`; `415 unsupported_audio` if it cannot be decoded.
-- `GET /content/clips/:id/file` also admits the dashboard admin, for playback.
-- `GET /admin/content/clips` → `{ "clips": [Clip & { "device_id", "recorded_by" }] }`, newest first. `device_id` is a device id or `web:<user id>`.
-- `DELETE /admin/content/clips/:id` → `{ "deleted": "uuid" }`; `404` if unknown.
+- `POST /admin/content/clips`, `multipart/form-data`: fields `prompt_id` (`^[a-z0-9_]{1,64}$`, must be a prompt from the catalogue above, else `400`), `lang` (`^[a-z]{2,3}$`), file field `audio` (at most 2 MB, else `413 too_large`): m4a/AAC, mp3, webm/opus or ogg/opus (what browsers' MediaRecorder produces), or wav. The server converts it with ffmpeg to mono AAC m4a at 32 kbps, capped at 20 s, and stores it like a phone recording (newest per prompt and language wins; the older file is removed). Recorded in the audit log. → `201 { "clip": Clip & { "recorded_by": "Alhassan Yakubu" } }`; `415 unsupported_audio` for anything that is not one of those formats or cannot be decoded.
+- `GET /admin/content/clips?lang=<code>` → `{ "clips": [Clip & { "device_id", "recorded_by" }] }`, newest first. `device_id` is a phone's device id or `web:<user id>`; `recorded_by` is the phone's user name or the dashboard user's name.
+- `GET /admin/content/clips/:id/file` streams the clip (`audio/mp4`, Range supported) for playback in the browser. (`GET /content/clips/:id/file` also admits the dashboard admin.)
+- `DELETE /admin/content/clips/:id` → `{ "deleted": "uuid" }`; `404` if unknown. Recorded in the audit log.
+
+`Clip = { "id", "prompt_id", "lang", "sha256", "size", "recorded_at", "url": "/content/clips/<id>/file" }`.
 
 ### DHIS2 export (spec 17)
 
-- `GET /export/dhis2?facility=<code>&period=YYYYMM` → `{ "tracker": { "trackedEntities": [...] }, "dataValueSet": {...} }`. Built by a pure function (`apps/api/src/modules/dhis2/dhis2.export.ts`) with the mapping in `docs/dhis2-mapping.json` (override with `DHIS2_MAPPING_FILE`). Each client with a visit or referral in the month becomes a tracked entity (attributes: first name, last name, sex, client code; UID from `dhis2_uid` or derived from the client id), enrolled in the program for its type, with one event per visit and per referral (a summary data element). UIDs are derived from Laafia ids, so re-exporting updates instead of duplicating. The `dataValueSet` holds the month's ANC contacts, PNC visits within 48 h of delivery, referrals made and referrals completed (treated or closed). `400` for a bad period or a facility with no mapped orgUnit.
+- `GET /export/dhis2?facility=<code>&period=YYYYMM` → `{ "tracker": { "trackedEntities": [...] }, "dataValueSet": {...}, "summary": { "anc_contacts", "pnc_within_48h", "referrals_made", "referrals_completed", "tracked_entities", "events" } }` (`summary` holds plain numbers for people; the dataValueSet carries only DHIS2 ids). Built by a pure function (`apps/api/src/modules/dhis2/dhis2.export.ts`) with the mapping in `docs/dhis2-mapping.json` (override with `DHIS2_MAPPING_FILE`). Each client with a visit or referral in the month becomes a tracked entity (attributes: first name, last name, sex, client code; UID from `dhis2_uid` or derived from the client id), enrolled in the program for its type, with one event per visit and per referral (a summary data element). UIDs are derived from Laafia ids, so re-exporting updates instead of duplicating. The `dataValueSet` holds the month's ANC contacts, PNC visits within 48 h of delivery, referrals made and referrals completed (treated or closed). `400` for a bad period or a facility with no mapped orgUnit.
 - `POST /export/dhis2` `{ "facility": "SAV-CHPS-01", "period": "202610", "dry_run"?: true }` pushes to `DHIS2_BASE_URL` (`POST /api/tracker` and `POST /api/dataValueSets` with `importStrategy=CREATE_AND_UPDATE` and DHIS2's own `dryRun`, default true, so nothing is written there). Every push is recorded in the export history:
 
 ```json
-{ "dry_run": true, "tracked_entities": 28, "run_id": "uuid", "status": "ok" | "error",
+{ "dry_run": true, "tracked_entities": 28, "run_id": "uuid", "status": "ok" | "error", "summary": { ... as above },
   "tracker": { "status": "OK", "stats": { "created": 0, "updated": 84, "ignored": 0, "total": 84 }, "errors": [] },
   "aggregate": { "status": "SUCCESS", "import_count": { "imported": 0, "updated": 4, "ignored": 0 }, "conflicts": [] } }
 ```
 
 `status` is `ok` when the tracker report is `OK` and the aggregate `SUCCESS`. `503 dhis2_unconfigured` without credentials; `502 dhis2_error` if DHIS2 cannot be reached.
 
-- `GET /export/dhis2/history?facility=<code>&limit=50` → `{ "runs": [Run] }`, newest first. `Run = { "id", "facility_code", "period", "dry_run", "actor", "at", "tracked_entities", "status", "result" }` (`result` is the push response above).
+- `GET /export/dhis2/history?facility=<code>&limit=50` → `{ "runs": [Run], "pending_periods": ["202609", "202608"] }`, runs newest first. `Run = { "id", "facility_code", "period", "dry_run", "actor" (user name), "at", "tracked_entities", "status": "ok" | "error", "counts": summary | null, "result" }` (`result` is the push response above). `pending_periods` lists the complete months since the facility's first activity (a visit or referral event; at most 36 months back) with no successful real export, newest first.
 - `GET /export/dhis2/pending?facility=<code>&months=12` → `{ "facility_code", "periods": [{ "period": "202609", "exported": false, "exported_at": number | null, "last_run": Run | null }] }` for the last `months` complete months, newest first. `exported` means a successful real (not dry-run) push.
 
 ### Register import

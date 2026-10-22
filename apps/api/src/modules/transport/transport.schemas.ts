@@ -19,6 +19,9 @@ export const ProviderParams = z.object({ id })
 
 export const AdminProviderBody = ProviderBody.extend({ facility_code: z.string().max(32) })
 
+export const ReferralParams = z.object({ id })
+export const WebPickupBody = z.object({ provider_id: id, scheduled_for: z.number().int().nonnegative().optional() })
+
 export const RequestBody = z.object({
   id: id.optional(),
   referral_id: id,
