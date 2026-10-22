@@ -18,9 +18,9 @@ export async function smsBalance(deps: Deps) {
   return { configured: true, balance: b.cash, currency: 'GHS', sms_units: b.smsUnits }
 }
 
-type Kind = 'ack' | 'status' | 'driver' | 'referral'
+type Kind = 'ack' | 'status' | 'referral'
 const kindOf = (purpose: string | null, body: string): Kind =>
-  (purpose as Kind | null) ?? (body.startsWith('LFR|') ? 'referral' : body.startsWith('LAAFIA pickup') ? 'driver' : 'status')
+  (purpose as Kind | null) ?? (body.startsWith('LFR|') ? 'referral' : 'status')
 
 export async function smsLog(deps: Deps, actor: Actor, q: { limit: number; before?: number }) {
   const rows = await deps.prisma.job.findMany({

@@ -1,11 +1,9 @@
 import { PROTOCOLS, evaluate, next, resolveDestination, type Facility, type Question } from '@laafia/core'
 import { router, useLocalSearchParams } from 'expo-router'
-import { useEffect, useMemo, useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { useMemo, useState } from 'react'
+import { Pressable, View } from 'react-native'
 import { outcomeTone } from '../../features/format'
-import { TranscribeReply } from '../../features/TranscribeReply'
 import { armAckAlarm } from '../../lib/alarms'
-import { LANGS, speak, stop } from '../../lib/audio'
 import { createReferral } from '../../lib/relay'
 import { saveVisit, toClient } from '../../lib/register'
 import { changed, currentSession, env, sendDue } from '../../lib/runtime'
@@ -19,13 +17,10 @@ const DAY = 86_400_000
 export default function Visit() {
   const { clientId, protocol: pid } = useLocalSearchParams<{ clientId: string; protocol: ProtocolId }>()
   const protocol = PROTOCOLS[pid ?? 'child']
-  const facilityLangs = currentSession()?.facility.languages ?? ['dag']
-  const [lang, setLang] = useState(facilityLangs.find((l) => l !== 'en') ?? 'en')
   const [answers, setAnswers] = useState<Record<string, unknown>>({})
   const [history, setHistory] = useState<string[]>([])
   const [number, setNumber] = useState('')
   const [saving, setSaving] = useState(false)
-  const [heard, setHeard] = useState<string | null>(null)
   const [destCode, setDestCode] = useState<string | null>(null)
 
   const { data } = useQuery(async () => {
@@ -50,8 +45,6 @@ export default function Visit() {
   const result = evaluate(protocol, all)
   const done = question === null
 
-  useEffect(() => () => stop(), [])
-
   if (data === undefined) return <Loading />
   if (data === null) return <Screen title="Client not found"><Button label="Back" onPress={() => router.back()} /></Screen>
 
@@ -63,17 +56,12 @@ export default function Visit() {
     setAnswers((a) => ({ ...a, [q.id]: value }))
     setHistory((h) => [...h, q.id])
     setNumber('')
-    setHeard(null)
   }
   function back() {
     const last = history[history.length - 1]
     if (!last) return
     setHistory((h) => h.slice(0, -1))
     setAnswers((a) => { const { [last]: _, ...rest } = a; return rest })
-  }
-  async function play(promptId: string, text: string) {
-    const how = await speak(env().db, promptId, text, lang)
-    setHeard(how === 'tts' && lang !== 'en' ? `No ${LANGS.find((l) => l.code === lang)?.name ?? lang} recording yet; read in English.` : null)
   }
 
   async function finish(refer: boolean) {
@@ -101,15 +89,6 @@ export default function Visit() {
   return (
     <Screen title={data.client.name} subtitle={`Checklist: ${protocol.id.replace('_', ' ')} · question ${answeredCount + (done ? 0 : 1)}`}
       right={<Button tone="quiet" label="Close" onPress={() => router.back()} />}>
-      <View style={{ flexDirection: 'row', gap: space.sm, flexWrap: 'wrap' }}>
-        {LANGS.map((l) => (
-          <Pressable key={l.code} onPress={() => setLang(l.code)} accessibilityRole="radio" accessibilityState={{ checked: lang === l.code }}
-            style={{ minHeight: 40, paddingHorizontal: space.md, borderRadius: 999, justifyContent: 'center', backgroundColor: lang === l.code ? color.primary : color.card, borderWidth: 1, borderColor: color.line }}>
-            <Text style={{ color: lang === l.code ? '#fff' : color.text, fontWeight: '700' }}>{l.name}</Text>
-          </Pressable>
-        ))}
-      </View>
-
       {result.outcome === 'refer' ? (
         <Banner tone="refer" text={`Danger sign: ${result.danger_signs.map((s) => protocol.signs[s]?.text_en ?? s).join(', ')}. Refer now (rule ${result.rule_id}).`} />
       ) : null}
@@ -117,9 +96,6 @@ export default function Visit() {
       {!done && question ? (
         <Card>
           <Heading>{question.text_en}</Heading>
-          <Button tone="plain" label="Play question aloud" onPress={() => play(question.prompt, question.text_en)} accessibilityHint="Plays the recorded question in the chosen language" />
-          {heard ? <Body muted>{heard}</Body> : null}
-          <TranscribeReply lang={lang === 'en' ? 'eng' : lang} />
           {question.type === 'yesno' ? (
             <View style={{ flexDirection: 'row', gap: space.md }}>
               <Button style={{ flex: 1 }} label="Yes" onPress={() => answer(question, true)} />
@@ -147,10 +123,9 @@ export default function Visit() {
           {result.actions.map((a) => {
             const act = protocol.actions[a]
             return act ? (
-              <Pressable key={a} onPress={() => play(act.prompt, act.text_en)} accessibilityRole="button" accessibilityHint="Plays this instruction aloud"
-                style={{ minHeight: touch, padding: space.md, borderRadius: radius, backgroundColor: color.bg, borderWidth: 1, borderColor: color.line, justifyContent: 'center' }}>
+              <View key={a} style={{ minHeight: touch, padding: space.md, borderRadius: radius, backgroundColor: color.bg, borderWidth: 1, borderColor: color.line, justifyContent: 'center' }}>
                 <Body>{act.text_en}</Body>
-              </Pressable>
+              </View>
             ) : null
           })}
           {result.outcome === 'followup' ? <Body>Follow-up visit in {result.followup_days} day{result.followup_days === 1 ? '' : 's'}; it will appear on the Today list.</Body> : null}

@@ -11,7 +11,6 @@ import {
   markSending,
   processIncoming,
   referralStatus,
-  requestTransport,
   type Env,
 } from './relay'
 
@@ -121,25 +120,13 @@ describe('referral relay over SMS', () => {
   })
 })
 
-describe('QR hop', () => {
-  it('a volunteer carries the signed referral and forwards it; the facility verifies the CHO signature from the volunteer SIM', async () => {
+describe('who takes in a referral', () => {
+  it('a CHO phone ignores a referral addressed to a facility', async () => {
     const cho = await phone('D001')
-    const volunteer = await phone('V001')
-    // Volunteers hold no keys: a lost volunteer phone must not be able to sign referrals.
-    await volunteer.db.run('UPDATE devices SET key_hex = NULL')
-    const hospital = await phone('F003')
+    const otherCho = await phone('D002')
     const { wire } = await referNewborn(cho)
-
-    expect(await processIncoming(volunteer, { sender: 'qr', body: wire, received_at: 1, via: 'qr' })).toMatchObject({ kind: 'referral', isNew: true })
-    const carried = await volunteer.db.get<{ id: string }>('SELECT id FROM referrals')
-    expect(await referralStatus(volunteer, carried!.id)).toBe('carrying')
-
-    const forward = await radioSends(volunteer)
-    expect(forward).toMatchObject({ recipient: '0200000003', body: wire })
-
-    expect(await processIncoming(hospital, { sender: volunteer.self.phone, body: forward.body, received_at: 2, via: 'sms' })).toMatchObject({ kind: 'referral', isNew: true })
-    const ack = await radioSends(hospital)
-    expect(ack.recipient).toBe(cho.self.phone)
+    expect(await processIncoming(otherCho, { sender: cho.self.phone, body: wire, received_at: 1, via: 'sms' })).toEqual({ kind: 'ignored' })
+    expect(await otherCho.db.all('SELECT id FROM referrals')).toHaveLength(0)
   })
 })
 
@@ -208,26 +195,26 @@ describe('status authority', () => {
     const cho = await phone('D001')
     const { referral } = await referNewborn(cho)
     const { encode } = await import('@laafia/core')
-    const forged = encode({ kind: 'LFS', signer: 'V001', origin: 'D001', short_id: referral.short_id, status: 'T' }, dev('V001').key_hex)
-    expect(await processIncoming(cho, { sender: '0240000002', body: forged, received_at: 1, via: 'sms' })).toEqual({ kind: 'rejected', error: 'not_a_facility' })
+    const forged = encode({ kind: 'LFS', signer: 'D002', origin: 'D001', short_id: referral.short_id, status: 'T' }, dev('D002').key_hex)
+    expect(await processIncoming(cho, { sender: '0240000003', body: forged, received_at: 1, via: 'sms' })).toEqual({ kind: 'rejected', error: 'not_a_facility' })
     expect(await referralStatus(cho, referral.id)).toBe('created')
   })
 })
 
-describe('QR hop safety', () => {
-  it('a carrier holding the signer key still refuses a tampered QR', async () => {
+describe('referral signatures', () => {
+  it('a facility refuses a tampered referral', async () => {
     const cho = await phone('D001')
-    const otherCho = await phone('D001')
+    const hospital = await phone('F003')
     const { wire } = await referNewborn(cho)
-    expect(await processIncoming(otherCho, { sender: 'qr', body: wire.replace('|3|', '|1|'), received_at: 1, via: 'qr' })).toEqual({ kind: 'rejected', error: 'bad_signature' })
+    expect(await processIncoming(hospital, { sender: cho.self.phone, body: wire.replace('|3|', '|1|'), received_at: 1, via: 'sms' })).toEqual({ kind: 'rejected', error: 'bad_signature' })
   })
 
-  it('an unverifiable referral is carried only from a QR scan, never accepted by SMS', async () => {
+  it('a facility refuses a referral from a signer it holds no key for', async () => {
     const cho = await phone('D001')
-    const volunteer = await phone('V001')
-    await volunteer.db.run('UPDATE devices SET key_hex = NULL')
+    const hospital = await phone('F003')
+    await hospital.db.run("UPDATE devices SET key_hex = NULL WHERE id = 'D001'")
     const { wire } = await referNewborn(cho)
-    expect(await processIncoming(volunteer, { sender: cho.self.phone, body: wire, received_at: 1, via: 'sms' })).toEqual({ kind: 'rejected', error: 'unknown_signer' })
+    expect(await processIncoming(hospital, { sender: cho.self.phone, body: wire, received_at: 1, via: 'sms' })).toEqual({ kind: 'rejected', error: 'unknown_signer' })
   })
 })
 
@@ -262,48 +249,5 @@ describe('outbox', () => {
     expect(await dueMessages(cho)).toHaveLength(0)
     cho.tick(15 * 60_000)
     expect(await dueMessages(cho)).toHaveLength(1)
-  })
-})
-
-describe('scheduled pickup', () => {
-  it('holds a planned pickup SMS until 18 hours before the appointment', async () => {
-    const cho = await phone('D001')
-    const { referral } = await referNewborn(cho)
-    await radioSends(cho)
-    const appointment = cho.now() + 3 * 86_400_000
-    await requestTransport(cho, { referral_id: referral.id, provider_id: seed.transport_providers[0]!.id, scheduled_for: appointment })
-    expect(await dueMessages(cho)).toHaveLength(0)
-    cho.tick(appointment - 18 * 3_600_000 - cho.now())
-    const [sms] = await dueMessages(cho)
-    expect(sms!.body).toContain('Reply 1 = coming')
-  })
-})
-
-describe('pickup for a planned follow-up', () => {
-  it('needs no referral: the driver gets the house landmark and the CHO compound as destination', async () => {
-    const cho = await phone('D001')
-    const client = seed.clients.find((c) => c.type === 'pregnant')!
-    await requestTransport(cho, { client_id: client.id, provider_id: seed.transport_providers[0]!.id, scheduled_for: cho.now() + 86_400_000 })
-    cho.tick(6 * 3_600_000)
-    const [sms] = await dueMessages(cho)
-    expect(sms!.body).toContain('To Kanshegu CHPS')
-    expect(sms!.body).not.toContain('URGENT')
-  })
-})
-
-describe('transport', () => {
-  it('sends the driver a readable SMS and reads a 1 reply as coming', async () => {
-    const cho = await phone('D001')
-    const { referral } = await referNewborn(cho)
-    await radioSends(cho)
-    const driver = seed.transport_providers[0]!
-    await requestTransport(cho, { referral_id: referral.id, provider_id: driver.id })
-    const sms = await radioSends(cho)
-    expect(sms.recipient).toBe(driver.phone)
-    expect(sms.body).toContain('Reply 1 = coming')
-    expect(sms.body).toContain('Savelugu Municipal Hospital')
-
-    expect(await processIncoming(cho, { sender: '+233' + driver.phone.slice(1), body: '1 coming now', received_at: 9, via: 'sms' })).toMatchObject({ kind: 'driver', status: 'coming' })
-    expect(await cho.db.get('SELECT status FROM transport_requests')).toEqual({ status: 'coming' })
   })
 })

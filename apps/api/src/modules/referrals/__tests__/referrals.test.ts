@@ -74,18 +74,18 @@ describe('referral merge and status', () => {
 
 describe('referral origin and event authority', () => {
   it('refuses a referral or stub created under another device as origin', async () => {
-    const volunteer = await activate('V001', '0240000002')
-    const spoof = await pushAs(volunteer, [
+    const other = await activate('D002', '0240000003')
+    const spoof = await pushAs(other, [
       { table: 'referrals', row: referralRow() },
-      { table: 'referral_events', row: event({ referral_id: 'r-stub', status: 'arrived', source_device_id: 'V001' }) },
+      { table: 'referral_events', row: event({ referral_id: 'r-stub', status: 'arrived', source_device_id: 'D002' }) },
     ])
     expect(reasons(spoof)).toEqual(['forbidden', 'unknown_referral'])
     expect(await prisma.referral.findMany()).toHaveLength(0)
 
-    // A carried referral (QR hop) is accepted from another device when it brings the origin's signed LFR.
-    const carried = await pushAs(volunteer, [{ table: 'referrals', row: referralRow({ lfr: encode(lfr, KEYS.D001!) }) }])
+    // A referral another device received is accepted when it brings the origin's signed LFR.
+    const carried = await pushAs(other, [{ table: 'referrals', row: referralRow({ lfr: encode(lfr, KEYS.D001!) }) }])
     expect(carried.body.accepted).toEqual(['r-spoof'])
-    const forged = await pushAs(volunteer, [{ table: 'referrals', row: referralRow({ id: 'r-2', short_id: 'AAAAAAAA', lfr: encode({ ...lfr, short_id: 'AAAAAAAA' }, KEYS.V001!) }) }])
+    const forged = await pushAs(other, [{ table: 'referrals', row: referralRow({ id: 'r-2', short_id: 'AAAAAAAA', lfr: encode({ ...lfr, short_id: 'AAAAAAAA' }, KEYS.D002!) }) }])
     expect(reasons(forged)).toEqual(['forbidden'])
   })
 

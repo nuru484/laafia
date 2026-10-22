@@ -3,15 +3,15 @@ import { PROTOCOLS, type ReferralStatus } from '@laafia/core'
 export const TYPE_LABEL: Record<string, string> = { pregnant: 'Pregnant woman', postpartum: 'Mother after delivery', newborn: 'Newborn', child: 'Child' }
 
 export const STATUS_LABEL: Record<ReferralStatus, string> = {
-  created: 'Not sent', carrying: 'Carried by hand', sent: 'Sent, not acknowledged', received: 'Received',
+  created: 'Not sent', sent: 'Sent, not acknowledged', received: 'Received',
   arrived: 'Arrived', treated: 'Treated', closed: 'Closed', cancelled: 'Cancelled',
 }
 
-export const STATUS_ORDER: ReferralStatus[] = ['created', 'carrying', 'sent', 'received', 'arrived', 'treated', 'closed']
-export const OPEN: ReferralStatus[] = ['created', 'carrying', 'sent', 'received', 'arrived', 'treated']
+export const STATUS_ORDER: ReferralStatus[] = ['created', 'sent', 'received', 'arrived', 'treated', 'closed']
+export const OPEN: ReferralStatus[] = ['created', 'sent', 'received', 'arrived', 'treated']
 
 export function statusTone(s: ReferralStatus): string {
-  if (s === 'created' || s === 'carrying' || s === 'sent') return 'bg-followup-tint text-followup'
+  if (s === 'created' || s === 'sent') return 'bg-followup-tint text-followup'
   if (s === 'cancelled') return 'bg-muted text-muted-foreground'
   return 'bg-routine-tint text-routine'
 }

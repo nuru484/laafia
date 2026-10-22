@@ -101,6 +101,10 @@ export const MIGRATIONS: string[] = [
   `,
   // Refer onward: the facility's own referral points back at the one it received.
   `ALTER TABLE referrals ADD COLUMN parent_referral_id TEXT;`,
+  // Spoken prompts were removed from the app.
+  `DROP TABLE audio_clips;`,
+  // Drivers and transport requests were removed from the app.
+  `DROP TABLE transport_requests; DROP TABLE transport_providers;`,
 ]
 
 export async function migrate(db: Db): Promise<void> {

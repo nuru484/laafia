@@ -7,11 +7,8 @@ import {
   deriveStatus,
   encode,
   normalizePhone,
-  parse,
-  parseDriverReply,
   shortIdFromBytes,
   signCodes,
-  transportRequestText,
   type ClientType,
   type ClientWireType,
   type Evaluation,
@@ -26,15 +23,14 @@ import type { Db } from './db/db'
  * over the Db interface, so the same code is tested on node:sqlite.
  */
 
-export type Role = 'cho' | 'volunteer' | 'facility'
+export type Role = 'cho' | 'facility'
 export type Self = { device_id: string; role: Role; key_hex: string; phone: string }
 export type Env = { db: Db; self: Self; now: () => number; uuid: () => string; random: (n: number) => Uint8Array }
 
-export type Incoming = { sender: string; body: string; received_at: number; via: 'sms' | 'qr' }
+export type Incoming = { sender: string; body: string; received_at: number; via: 'sms' }
 export type IncomingResult =
   | { kind: 'referral'; referral_id: string; isNew: boolean }
   | { kind: 'status'; referral_id: string | null; status: ReferralStatus }
-  | { kind: 'driver'; request_id: string; status: 'coming' | 'declined' }
   | { kind: 'rejected'; error: string }
   | { kind: 'ignored' }
   | { kind: 'duplicate' }
@@ -61,7 +57,6 @@ const RETRY_NO_SIGNAL_MS = MIN
 const STUCK_SENDING_MS = 15 * MIN
 const REACK_AFTER_MS = 2 * MIN
 const DAY = 86_400_000
-const PICKUP_NOTICE_MS = 18 * 60 * MIN
 
 const sync = (env: Env) => [env.now(), env.self.device_id] as const
 
@@ -90,10 +85,6 @@ export async function loadSeed(env: Env, seed: Seed): Promise<void> {
       await db.run(
         'INSERT OR REPLACE INTO visits (id, client_id, protocol_id, protocol_version, visited_at, answers, outcome, rule_id, followup_due, muac_mm, updated_at, device_id, synced) VALUES (?,?,?,1,?,?,?,?,?,?,?,?,1)',
         [v.id, v.client_id, v.protocol_id, v.visited_at, JSON.stringify(v.answers), v.outcome, v.rule_id, v.followup_due, v.muac_mm, t, 'seed'])
-    }
-    for (const p of seed.transport_providers) {
-      await db.run('INSERT OR REPLACE INTO transport_providers (id, name, phone, vehicle, community, active, updated_at, device_id, synced) VALUES (?,?,?,?,?,1,?,?,1)',
-        [p.id, p.name, p.phone, p.vehicle, p.community, t, 'seed'])
     }
   })
 }
@@ -216,7 +207,7 @@ async function keyDirectory(db: Db): Promise<Map<string, string>> {
 async function acknowledge(env: Env, referral: ReferralRow, status: 'R' | 'A' | 'T' | 'C', fallbackRecipient: string | null) {
   const origin = await env.db.get<{ phone_number: string }>('SELECT phone_number FROM devices WHERE id = ?', [referral.origin_device_id])
   const to = origin?.phone_number ?? fallbackRecipient
-  if (!to || to === 'qr') return
+  if (!to) return
   const body = encode({ kind: 'LFS', signer: env.self.device_id, origin: referral.origin_device_id, short_id: referral.short_id, status }, env.self.key_hex)
   await enqueueSms(env, to, body, 'acks', referral.id)
 }
@@ -237,24 +228,9 @@ async function handle(env: Env, raw: Incoming): Promise<IncomingResult> {
   const { db } = env
   const keys = await keyDirectory(db)
   const verified = decode(raw.body, (id) => keys.get(id))
-  // A carrier without the signer's key (volunteers hold none) may still carry a scanned
-  // referral; the facility verifies it. A bad signature against a known key is refused.
-  const carriedUnverified = !verified.ok && verified.error === 'unknown_signer' && raw.via === 'qr' && env.self.role !== 'facility'
-  const message = verified.ok ? verified.message : carriedUnverified ? parse(raw.body)?.message : undefined
+  if (!verified.ok) return verified.error === 'not_laafia' ? { kind: 'ignored' } : { kind: 'rejected', error: verified.error }
 
-  if (!message || (message.kind === 'LFS' && !verified.ok)) {
-    if (!verified.ok && verified.error !== 'not_laafia') return { kind: 'rejected', error: verified.error }
-    const reply = parseDriverReply(raw.body)
-    if (!reply || raw.via !== 'sms') return { kind: 'ignored' }
-    const request = await db.get<{ id: string }>(
-      "SELECT r.id FROM transport_requests r JOIN transport_providers p ON p.id = r.provider_id WHERE p.phone = ? AND r.status = 'requested' ORDER BY r.requested_at DESC LIMIT 1",
-      [normalizePhone(raw.sender)])
-    if (!request) return { kind: 'ignored' }
-    await db.run('UPDATE transport_requests SET status = ?, updated_at = ?, device_id = ?, synced = 0 WHERE id = ?', [reply, ...sync(env), request.id])
-    return { kind: 'driver', request_id: request.id, status: reply }
-  }
-
-  const m = message
+  const m = verified.message
   if (m.kind === 'LFS') {
     // Only facilities move a referral forward; any other key holder signing an LFS is refused.
     const signer = await db.get<{ role: string }>('SELECT role FROM devices WHERE id = ?', [m.signer])
@@ -282,6 +258,8 @@ async function handle(env: Env, raw: Incoming): Promise<IncomingResult> {
     }
     return { kind: 'referral', referral_id: existing.id, isNew: false }
   }
+  // Only facilities receive referrals; a CHO phone has no use for someone else's.
+  if (!facilityMode) return { kind: 'ignored' }
 
   const client = await db.get<{ id: string }>('SELECT id FROM clients WHERE code = ?', [m.client_code])
   const referral: ReferralRow = {
@@ -290,15 +268,8 @@ async function handle(env: Env, raw: Incoming): Promise<IncomingResult> {
     destination_code: m.destination, next_of_kin: m.next_of_kin, visit_id: null, wire: raw.body.trim(), created_at: env.now(),
   }
   await insertReferral(env, referral)
-  if (facilityMode) {
-    await addEvent(env, referral.id, 'received', env.self.device_id, raw.via)
-    await acknowledge(env, referral, 'R', raw.sender)
-  } else {
-    // Carried by hand: hold a copy and forward it, signature untouched, when this phone has signal.
-    await addEvent(env, referral.id, 'carrying', env.self.device_id, raw.via)
-    const dest = await db.get<{ phone: string | null }>('SELECT phone FROM facilities WHERE code = ?', [m.destination])
-    if (dest?.phone) await enqueueSms(env, dest.phone, referral.wire, 'referrals', referral.id)
-  }
+  await addEvent(env, referral.id, 'received', env.self.device_id, raw.via)
+  await acknowledge(env, referral, 'R', raw.sender)
   return { kind: 'referral', referral_id: referral.id, isNew: true }
 }
 
@@ -371,44 +342,4 @@ export async function applySendResult(env: Env, r: SendResult): Promise<void> {
     await db.run('UPDATE outbox SET status = ?, attempts = ?, last_error = ?, next_attempt_at = ? WHERE id = ?',
       [failed ? 'failed' : 'pending', attempts, r.error, env.now() + BACKOFF_MS[Math.min(attempts - 1, BACKOFF_MS.length - 1)]!, r.id])
   })
-}
-
-type Trip = { short_id: string; urgency: number; destination: string; landmark: string | null; lat: number | null; lng: number | null; client_id: string | null }
-
-/** Emergency pickup for a referral, or a planned trip for a follow-up visit to this CHO's compound. */
-export async function requestTransport(env: Env, input: { referral_id?: string | null; client_id?: string | null; provider_id: string; scheduled_for?: number | null }): Promise<string> {
-  const { db } = env
-  let r: Trip | undefined
-  if (input.referral_id) {
-    r = await db.get<Trip>(
-      `SELECT r.short_id, r.urgency, f.name AS destination, h.landmark, h.lat, h.lng, r.client_id
-         FROM referrals r JOIN facilities f ON f.code = r.destination_code
-         LEFT JOIN clients c ON c.id = r.client_id LEFT JOIN households h ON h.id = c.household_id
-        WHERE r.id = ?`, [input.referral_id])
-    if (!r) throw new Error(`unknown referral ${input.referral_id}`)
-  } else if (input.client_id) {
-    r = await db.get<Trip>(
-      `SELECT c.code AS short_id, 0 AS urgency, f.name AS destination, h.landmark, h.lat, h.lng, c.id AS client_id
-         FROM clients c JOIN households h ON h.id = c.household_id
-         JOIN devices d ON d.id = ? JOIN facilities f ON f.code = d.facility_code
-        WHERE c.id = ?`, [env.self.device_id, input.client_id])
-    if (!r) throw new Error(`unknown client ${input.client_id}`)
-  } else {
-    throw new Error('A pickup needs a referral or a client')
-  }
-  const provider = await db.get<{ phone: string }>('SELECT phone FROM transport_providers WHERE id = ? AND active = 1', [input.provider_id])
-  if (!provider) throw new Error(`unknown transport provider ${input.provider_id}`)
-  const id = env.uuid()
-  await db.tx(async () => {
-    await db.run('INSERT INTO transport_requests (id, referral_id, client_id, provider_id, status, scheduled_for, requested_at, updated_at, device_id) VALUES (?,?,?,?,?,?,?,?,?)',
-      [id, input.referral_id ?? null, r.client_id, input.provider_id, 'requested', input.scheduled_for ?? null, env.now(), ...sync(env)])
-    const text = transportRequestText({
-      urgent: r.urgency >= 2, pickup: r.landmark ?? 'Ask the CHO for the house', destination_name: r.destination,
-      cho_phone: env.self.phone, short_id: r.short_id, lat: r.lat, lng: r.lng,
-    })
-    // A planned trip is texted the day before (spec 15), so the driver can plan; an emergency goes now.
-    const sendAt = input.scheduled_for ? input.scheduled_for - PICKUP_NOTICE_MS : undefined
-    await enqueueSms(env, provider.phone, text, 'transport_requests', id, sendAt)
-  })
-  return id
 }

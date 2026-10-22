@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { errorMessage } from '@/redux/api'
 import { useSmsBalanceQuery, useSmsLogQuery } from '@/redux/endpoints'
 
-const KIND: Record<string, string> = { ack: 'Acknowledgement to CHO', status: 'Status to CHO', driver: 'Driver pickup', referral: 'Referral to facility' }
+const KIND: Record<string, string> = { ack: 'Acknowledgement to CHO', status: 'Status to CHO', referral: 'Referral to facility' }
 const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = { delivered: 'default', sent: 'secondary', queued: 'outline', failed: 'destructive' }
 
 export default function SmsPage() {
@@ -18,9 +18,9 @@ export default function SmsPage() {
 
   return (
     <>
-      <PageHeader title="SMS gateway" description="Texts the server sends through Frog when a phone cannot: web acknowledgements, status updates and driver pickups. Phones text each other directly from their own SIMs." />
+      <PageHeader title="SMS gateway" description="Texts the server sends through Frog when a phone cannot: web acknowledgements and status updates. Phones text each other directly from their own SIMs." />
       <Card className="mb-6">
-        <CardHeader><CardTitle><h2>Frog balance</h2></CardTitle><CardDescription>Top up before it runs low; without credit the server cannot text CHOs or drivers.</CardDescription></CardHeader>
+        <CardHeader><CardTitle><h2>Frog balance</h2></CardTitle><CardDescription>Top up before it runs low; without credit the server cannot text CHOs.</CardDescription></CardHeader>
         <CardContent>
           {balance.isLoading ? <LoadingRows rows={1} /> : balance.error ? <ErrorState message={errorMessage(balance.error)} onRetry={balance.refetch} /> : !balance.data?.configured ? (
             <p className="text-sm text-muted-foreground">Frog is not connected on this server, so texts are logged instead of sent.</p>

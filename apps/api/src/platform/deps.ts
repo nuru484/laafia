@@ -2,7 +2,6 @@ import { EventEmitter } from 'node:events'
 import { env as processEnv, type Env } from '../config/env.ts'
 import { createPrisma, type Db } from './db.ts'
 import { createLogger, type Logger } from './logger.ts'
-import { createMapExtractor, type MapExtractor } from './map-extractor.ts'
 import { createSmsGateway, type SmsGateway } from './sms-gateway.ts'
 
 /**
@@ -15,7 +14,6 @@ export type Deps = {
   env: Env
   logger: Logger
   sms: SmsGateway
-  maps: MapExtractor
   clock: () => number
   /** In-process bus feeding /events (SSE). Emits 'referral' with a ReferralView after the write commits. */
   bus: EventEmitter
@@ -34,6 +32,5 @@ export function buildDeps(over: Partial<Deps> = {}): Deps {
     prisma: over.prisma ?? createPrisma(env.DATABASE_URL),
     sms: over.sms ?? createSmsGateway(env, logger),
     clock,
-    maps: over.maps ?? createMapExtractor(env, clock),
   }
 }

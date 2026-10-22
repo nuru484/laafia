@@ -16,7 +16,7 @@ export const jobIdOfMsgId = (msgid: string) => {
 }
 
 /** Transactional enqueue: the SMS is sent only if the write that caused it commits. */
-export type SmsPurpose = 'ack' | 'status' | 'driver' | 'referral'
+export type SmsPurpose = 'ack' | 'status' | 'referral'
 
 /**
  * `facilityId` is the facility the SMS is about; its district scopes the dashboard SMS log.

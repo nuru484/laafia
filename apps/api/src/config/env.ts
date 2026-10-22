@@ -27,14 +27,6 @@ const Env = z.object({
   FROG_USERNAME: optional,
   FROG_SENDER_ID: blank(z.string().max(11).optional()),
   SMS_CALLBACK_SECRET: optional,
-  KHAYA_API_KEY: optional,
-  KHAYA_BASE_URL: z.url().default('https://translation-api.ghananlp.org'),
-  DHIS2_BASE_URL: blank(z.url().optional()),
-  DHIS2_USERNAME: optional,
-  DHIS2_PASSWORD: optional,
-  DHIS2_MAPPING_FILE: optional,
-  CONTENT_DIR: z.string().default('./content'),
-  PMTILES_BIN: z.string().default('./bin/pmtiles'),
 })
 
 const parsed = Env.safeParse(process.env)

@@ -11,7 +11,7 @@ export default function Inbox() {
   const open = data?.filter((r) => !['closed', 'cancelled'].includes(r.status)).length ?? 0
   return (
     <View style={{ flex: 1 }}>
-      <Screen title="Incoming referrals" subtitle={`${currentSession()?.facility.name ?? ''} · ${open} open. Received by SMS, QR or internet.`}>
+      <Screen title="Incoming referrals" subtitle={`${currentSession()?.facility.name ?? ''} · ${open} open. Received by SMS or internet.`}>
         {error ? <Banner tone="refer" text={error.message} /> : null}
         {!data ? <Loading /> : data.length === 0 ? <Empty title="No referrals yet" body="Referrals sent to this facility appear here and ring the phone, even when the app is closed." /> : data.map((r) => <ReferralRow key={r.id} r={r} showOrigin />)}
       </Screen>

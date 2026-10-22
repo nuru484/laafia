@@ -10,7 +10,7 @@ describe('facilities, providers and devices from the dashboard', () => {
     const cho = await activate('D001')
     const { body: first } = await pullAs(cho)
     const { agent, csrf } = await signIn(USERS.admin)
-    const created = await agent.post('/admin/facilities').set(csrf).send({ code: 'SAV-CHPS-09', name: 'Moglaa CHPS', level: 'chps', phone: '+233 20 000 0009', lat: 9.655, lng: -0.87, capabilities: [], languages: ['dag'] })
+    const created = await agent.post('/admin/facilities').set(csrf).send({ code: 'SAV-CHPS-09', name: 'Moglaa CHPS', level: 'chps', phone: '+233 20 000 0009', lat: 9.655, lng: -0.87, capabilities: [] })
     expect(created.status).toBe(201)
     expect(created.body.facility).toMatchObject({ code: 'SAV-CHPS-09', district_id: 'dist-sav', phone: '0200000009' })
     const id = created.body.facility.id as string
@@ -23,19 +23,6 @@ describe('facilities, providers and devices from the dashboard', () => {
     const staff = await signIn(USERS.hospital)
     expect((await staff.agent.get('/admin/facilities')).body.facilities.map((f: { code: string }) => f.code)).toEqual(['SAV-HOSP-01'])
     expect((await staff.agent.post('/admin/facilities').set(staff.csrf).send({ code: 'X-01', name: 'X', level: 'chps', lat: 9, lng: -1 })).status).toBe(403)
-  })
-
-  it('manages transport providers per community, including retiring one', async () => {
-    const { agent, csrf } = await signIn(USERS.admin)
-    const created = await agent.post('/admin/transport/providers').set(csrf).send({ facility_code: 'SAV-CHPS-01', name: 'Diare tricycle', phone: '0240000150', vehicle: 'tricycle', community: 'Diare' })
-    expect(created.status).toBe(201)
-    const retired = await agent.patch(`/admin/transport/providers/${created.body.provider.id}`).set(csrf).send({ active: false })
-    expect(retired.body.provider.active).toBe(false)
-    const list = (await agent.get('/admin/transport/providers')).body.providers
-    expect(list.find((p: { id: string }) => p.id === created.body.provider.id)).toMatchObject({ facility_code: 'SAV-CHPS-01', active: false })
-    expect((await agent.post('/admin/transport/providers').set(csrf).send({ facility_code: 'TTH-HOSP-01', name: 'X', phone: '0240000151' })).status).toBe(403)
-    const audit = (await agent.get('/admin/audit?target_type=transport_provider')).body.events.map((e: { action: string }) => e.action)
-    expect(audit).toEqual(['provider.retire', 'provider.create'])
   })
 
   it('reissues an activation code for a replacement phone and reactivates the device', async () => {

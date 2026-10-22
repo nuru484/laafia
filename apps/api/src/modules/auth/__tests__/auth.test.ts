@@ -31,7 +31,7 @@ describe('activation and tokens', () => {
     const res = await request(app).post('/auth/activate').send({ activation_code: DEMO_CODES.D001, phone_number: '+233 24 000 0001' })
     expect(res.body).toMatchObject({
       device_id: 'D001', device_key: KEYS.D001,
-      profile: { device_id: 'D001', role: 'cho', phone_number: '0240000001', facility: { id: 'fac-0001', code: 'SAV-CHPS-01', district_id: 'dist-sav', languages: ['dag'] } },
+      profile: { device_id: 'D001', role: 'cho', phone_number: '0240000001', facility: { id: 'fac-0001', code: 'SAV-CHPS-01', district_id: 'dist-sav' } },
     })
     expect(res.body.profile.facility).not.toHaveProperty('seq')
     const refreshed = await request(app).post('/auth/refresh').set(bearer(res.body.jwt))
@@ -59,14 +59,12 @@ describe('facility phone number', () => {
 })
 
 describe('key directory policy', () => {
-  it('gives CHOs their district facility keys, volunteers none, facilities the field device keys', async () => {
+  it('gives CHOs their district facility keys and facilities the field device keys', async () => {
     const cho = await pullAs(await activate('D001'))
     expect(Object.keys(cho.body.keys).sort()).toEqual(['F001', 'F002', 'F003', 'GW01'])
     expect(cho.body.keys.F003).toBe(KEYS.F003)
-    const vol = await pullAs(await activate('V001', '0240000002'))
-    expect(vol.body.keys).toBeUndefined()
     const fac = await pullAs(await activate('F001', '0200000001'))
-    expect(fac.body.keys).toMatchObject({ D001: KEYS.D001, V001: KEYS.V001 })
+    expect(fac.body.keys).toMatchObject({ D001: KEYS.D001, D002: KEYS.D002 })
   })
 
   it('returns the same directory at activation', async () => {

@@ -21,16 +21,13 @@ datasource db {
   provider = "postgresql"
 }
 
-/// Districts own the facility directory a phone receives and the languages its content packs cover.
+/// Districts own the facility directory a phone receives.
 model District {
-  id           String        @id
-  code         String        @unique(map: "districts_code_unique")
-  name         String
-  languages    Json          @default("[]")
-  facilities   Facility[]
-  contentPacks ContentPack[]
-  mapBuilds    MapBuild[]
-  users        User[]
+  id         String     @id
+  code       String     @unique(map: "districts_code_unique")
+  name       String
+  facilities Facility[]
+  users      User[]
 
   @@map("districts")
 }
@@ -76,24 +73,22 @@ model WebSession {
 }
 
 model Facility {
-  id            String        @id
-  updatedAt     BigInt        @map("updated_at")
-  deviceId      String?       @map("device_id")
-  deleted       Boolean       @default(false)
-  seq           BigInt        @default(0)
-  districtId    String?       @map("district_id")
-  district      District?     @relation(fields: [districtId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "facilities_district_id_districts_id_fk")
-  languages     Json          @default("[]")
-  code          String        @unique(map: "facilities_code_unique")
-  name          String
-  level         String
-  phone         String?
-  lat           Float
-  lng           Float
-  capabilities  Json          @default("[]")
-  devices       Device[]
-  importBatches ImportBatch[]
-  users         User[]
+  id           String    @id
+  updatedAt    BigInt    @map("updated_at")
+  deviceId     String?   @map("device_id")
+  deleted      Boolean   @default(false)
+  seq          BigInt    @default(0)
+  districtId   String?   @map("district_id")
+  district     District? @relation(fields: [districtId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "facilities_district_id_districts_id_fk")
+  code         String    @unique(map: "facilities_code_unique")
+  name         String
+  level        String
+  phone        String?
+  lat          Float
+  lng          Float
+  capabilities Json      @default("[]")
+  devices      Device[]
+  users        User[]
 
   @@index([seq], map: "facilities_seq")
   @@index([districtId], map: "facilities_district")
@@ -170,8 +165,6 @@ model Client {
   birthWeightG       Int?    @map("birth_weight_g")
   nhisActive         Boolean @default(false) @map("nhis_active")
   riskFlags          Json    @default("[]") @map("risk_flags")
-  /// Set by register/DHIS2 import; server-owned, never overwritten by a phone push. Unique allows many NULLs.
-  dhis2Uid           String? @unique(map: "clients_dhis2_uid") @map("dhis2_uid")
 
   @@index([facilityId, seq], map: "clients_scope")
   @@index([householdId], map: "clients_household")
@@ -255,58 +248,23 @@ model ReferralEvent {
   @@map("referral_events")
 }
 
-model TransportProvider {
-  id         String  @id
-  updatedAt  BigInt  @map("updated_at")
-  deviceId   String? @map("device_id")
-  deleted    Boolean @default(false)
-  seq        BigInt  @default(0)
-  facilityId String? @map("facility_id")
-  name       String
-  phone      String
-  vehicle    String  @default("")
-  community  String  @default("")
-  active     Boolean @default(true)
-
-  @@index([facilityId, seq], map: "transport_providers_scope")
-  @@index([phone], map: "transport_providers_phone")
-  @@map("transport_providers")
-}
-
-model TransportRequest {
-  id           String  @id
-  updatedAt    BigInt  @map("updated_at")
-  deviceId     String? @map("device_id")
-  deleted      Boolean @default(false)
-  seq          BigInt  @default(0)
-  facilityId   String? @map("facility_id")
-  referralId   String? @map("referral_id")
-  providerId   String  @map("provider_id")
-  status       String
-  scheduledFor BigInt? @map("scheduled_for")
-
-  @@index([facilityId, seq], map: "transport_requests_scope")
-  @@index([providerId, status], map: "transport_requests_provider")
-  @@map("transport_requests")
-}
-
 /// Outgoing gateway SMS with retry and backoff (spec 16.5).
 model Job {
-  id        BigInt  @id @default(autoincrement())
-  kind      String
-  payload   Json
-  status    String  @default("pending")
-  attempts  Int     @default(0)
-  runAt     BigInt  @map("run_at")
-  lastError String? @map("last_error")
-  createdAt BigInt  @map("created_at")
+  id             BigInt  @id @default(autoincrement())
+  kind           String
+  payload        Json
+  status         String  @default("pending")
+  attempts       Int     @default(0)
+  runAt          BigInt  @map("run_at")
+  lastError      String? @map("last_error")
+  createdAt      BigInt  @map("created_at")
   /// From Frog's delivery receipt (POST /sms/delivery): delivered | failed | pending, with Frog's reason.
   deliveryStatus String? @map("delivery_status")
   deliveryReason String? @map("delivery_reason")
   deliveredAt    BigInt? @map("delivered_at")
   /// e.g. lfs:<referral id>:<status>; a second enqueue with the same key is dropped. Unique allows many NULLs.
   dedupeKey      String? @unique(map: "jobs_dedupe_key") @map("dedupe_key")
-  /// ack (LFS R for a facility without a phone) | status (LFS from the web) | driver (pickup SMS) | referral (onward LFR)
+  /// ack (LFS R for a facility without a phone) | status (LFS from the web) | referral (onward LFR)
   purpose        String?
   /// District of the referral or facility the SMS is about, so the SMS log is scoped like everything else.
   districtId     String? @map("district_id")
@@ -316,97 +274,6 @@ model Job {
   @@map("jobs")
 }
 
-/// Saved column mapping for a national register form; one template serves every CHPS using that form.
-model MappingTemplate {
-  id        String        @id
-  name      String        @unique(map: "mapping_templates_name_unique")
-  source    String
-  /// target field -> source column header (tabular) or DHIS2 attribute UID / display name
-  mapping   Json
-  /// target field -> fixed value for every row, e.g. { "type": "pregnant" } for the ANC register
-  constants Json          @default("{}")
-  createdAt BigInt        @map("created_at")
-  batches   ImportBatch[]
-
-  @@map("mapping_templates")
-}
-
-/// One upload or DHIS2 pull: previewed (dry run), then committed in one transaction, and undoable.
-model ImportBatch {
-  id          String           @id
-  facilityId  String           @map("facility_id")
-  facility    Facility         @relation(fields: [facilityId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "import_batches_facility_id_facilities_id_fk")
-  templateId  String?          @map("template_id")
-  template    MappingTemplate? @relation(fields: [templateId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "import_batches_template_id_mapping_templates_id_fk")
-  source      String
-  filename    String?
-  status      String           @default("preview")
-  counts      Json
-  issues      Json             @default("[]")
-  rows        Json             @default("[]")
-  createdIds  Json             @default("{\"households\":[],\"clients\":[]}") @map("created_ids")
-  createdAt   BigInt           @map("created_at")
-  committedAt BigInt?          @map("committed_at")
-  undoneAt    BigInt?          @map("undone_at")
-
-  @@index([facilityId, createdAt], map: "import_batches_facility")
-  @@map("import_batches")
-}
-
-/// Downloadable content (audio per language, PMTiles per district), stored on disk under CONTENT_DIR.
-model ContentPack {
-  id          String    @id
-  kind        String
-  language    String?
-  districtId  String?   @map("district_id")
-  district    District? @relation(fields: [districtId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "content_packs_district_id_districts_id_fk")
-  version     Int
-  size        BigInt
-  sha256      String
-  filename    String
-  contentType String    @map("content_type")
-  createdAt   BigInt    @map("created_at")
-  mapBuilds   MapBuild[]
-
-  @@unique([kind, language, districtId, version], map: "content_packs_version")
-  @@map("content_packs")
-}
-
-/// A district map cut on the server from the Protomaps planet build; at most one running per district.
-model MapBuild {
-  id         String       @id
-  districtId String       @map("district_id")
-  district   District     @relation(fields: [districtId], references: [id], onDelete: Cascade)
-  /// [west, south, east, north] in degrees
-  bbox       Float[]
-  /// running | done | failed
-  status     String
-  error      String?
-  packId     String?      @map("pack_id")
-  pack       ContentPack? @relation(fields: [packId], references: [id], onDelete: SetNull)
-  startedAt  BigInt       @map("started_at")
-  finishedAt BigInt?      @map("finished_at")
-
-  @@index([districtId, startedAt])
-  @@index([packId])
-  @@map("map_builds")
-}
-
-/// One recorded prompt clip per (lang, promptId): a newer recording replaces the older row and file.
-model ContentClip {
-  id         String @id
-  lang       String
-  promptId   String @map("prompt_id")
-  sha256     String
-  size       Int
-  filename   String
-  deviceId   String @map("device_id")
-  recordedAt BigInt @map("recorded_at")
-
-  @@unique([lang, promptId], map: "content_clips_prompt")
-  @@map("content_clips")
-}
-
 /// Last contact per device. Kept apart from `devices` so a sync does not bump the synced devices row.
 model DeviceStatus {
   deviceId   String  @id @map("device_id")
@@ -414,23 +281,6 @@ model DeviceStatus {
   appVersion String? @map("app_version")
 
   @@map("device_status")
-}
-
-/// One DHIS2 export push (dry run or real), for the export history and the "not exported yet" view.
-model ExportRun {
-  id              String  @id
-  facilityId      String  @map("facility_id")
-  period          String
-  dryRun          Boolean @map("dry_run")
-  actor           String
-  at              BigInt
-  trackedEntities Int     @map("tracked_entities")
-  status          String
-  /// The report returned to the caller (statuses, stats, first errors).
-  result          Json
-
-  @@index([facilityId, period], map: "export_runs_facility_period")
-  @@map("export_runs")
 }
 
 /// Append-only record of dashboard and admin actions.

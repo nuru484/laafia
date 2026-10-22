@@ -28,8 +28,8 @@ export default function Checks() {
   const maker = c.power.manufacturer
   return (
     <Screen title="Phone setup" subtitle={`${maker} ${c.power.model} · Android API ${c.power.sdk}`} right={<Button tone="quiet" label="Done" onPress={() => router.back()} />}>
-      <Row onChange={q.reload} ok={c.sms} title="Send and read SMS" why="Referrals, acknowledgements and driver replies travel by SMS." action={{ label: 'Allow SMS', run: async () => { await requestSms(); await pushNativeState() } }} />
-      <Row onChange={q.reload} ok={c.notifications} title="Notifications" why={facility ? 'An incoming referral rings like an alarm, even when the app is closed.' : 'Shows when the facility acknowledges or a driver replies.'} action={{ label: 'Allow notifications', run: requestNotifications }} />
+      <Row onChange={q.reload} ok={c.sms} title="Send and read SMS" why="Referrals and acknowledgements travel by SMS." action={{ label: 'Allow SMS', run: async () => { await requestSms(); await pushNativeState() } }} />
+      <Row onChange={q.reload} ok={c.notifications} title="Notifications" why={facility ? 'An incoming referral rings like an alarm, even when the app is closed.' : 'Shows when the facility acknowledges a referral.'} action={{ label: 'Allow notifications', run: requestNotifications }} />
       {facility ? <Row onChange={q.reload} ok={c.power.canUseFullScreenIntent} title="Alarm over the lock screen" why="Lets an emergency referral wake the screen." action={{ label: 'Open setting', run: () => LaafiaSms.openFullScreenIntentSettings() }} /> : null}
       <Row onChange={q.reload} ok={c.power.ignoringBatteryOptimizations} title="Battery: never restrict Laafia" why="Battery savers stop apps in the background, and a stopped app misses SMS." action={{ label: 'Allow', run: () => LaafiaSms.requestIgnoreBatteryOptimizations() }} />
       <Card>
@@ -37,7 +37,7 @@ export default function Checks() {
         <Body muted>{/samsung/i.test(maker) ? 'Samsung: Settings, Battery, Background usage limits. Remove Laafia from Sleeping and Deep sleeping apps and add it to Never sleeping apps.' : /tecno|infinix|itel/i.test(maker) ? 'Phone Master: Auto-start manager, turn Laafia on. Also lock Laafia in recent apps.' : 'Allow Laafia to auto-start and run in the background.'} Android does not report this setting, so check it by hand.</Body>
         <Button tone="plain" label="Open the setting" onPress={() => LaafiaSms.openAutostartSettings()} />
       </Card>
-      <Row onChange={q.reload} ok={c.location} title="Location" why="Records where each house is for the route and the driver." action={{ label: 'Allow location', run: requestLocation }} />
+      <Row onChange={q.reload} ok={c.location} title="Location" why="Records where each house is, for the visit route and directions." action={{ label: 'Allow location', run: requestLocation }} />
       <Row onChange={q.reload} ok={c.power.verifierOk} title="Signature check" why="The SMS receiver can verify Laafia signatures on this phone." />
     </Screen>
   )

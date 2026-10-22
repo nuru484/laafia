@@ -10,7 +10,7 @@ describe('inbound SMS verification', () => {
   it('rejects a bad signature and an unknown signer', async () => {
     const body = encode(lfr, KEYS.D001!)
     expect((await sms(body.replace('|3|', '|1|'))).body).toEqual({ ok: false, error: 'bad_signature' })
-    expect((await sms(encode(lfr, KEYS.V001!))).body).toEqual({ ok: false, error: 'bad_signature' })
+    expect((await sms(encode(lfr, KEYS.D002!))).body).toEqual({ ok: false, error: 'bad_signature' })
     expect((await sms(encode({ ...lfr, signer: 'ZZ99' }, KEYS.D001!))).body).toEqual({ ok: false, error: 'unknown_signer' })
     expect((await sms('Hello, are you coming?')).body).toEqual({ ok: false, error: 'not_laafia' })
     expect(await prisma.referral.findMany()).toHaveLength(0)

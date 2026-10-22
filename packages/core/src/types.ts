@@ -12,7 +12,7 @@ export const WIRE_TYPE: Record<ClientType, ClientWireType> = {
 
 export type Outcome = 'routine' | 'followup' | 'refer'
 
-export type ReferralStatus = 'created' | 'carrying' | 'sent' | 'received' | 'arrived' | 'treated' | 'closed' | 'cancelled'
+export type ReferralStatus = 'created' | 'sent' | 'received' | 'arrived' | 'treated' | 'closed' | 'cancelled'
 
 export type FacilityLevel = 'chps' | 'health_centre' | 'hospital'
 
@@ -71,5 +71,5 @@ export type ReferralEvent = {
   status: ReferralStatus
   at: number
   source_device_id: string
-  via: 'sms' | 'qr' | 'https' | 'local'
+  via: 'sms' | 'https' | 'local'
 }

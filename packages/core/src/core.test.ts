@@ -12,7 +12,6 @@ import {
   next,
   normalizePhone,
   parse,
-  parseDriverReply,
   planRoute,
   rank,
   referralAlert,
@@ -20,7 +19,6 @@ import {
   shortIdFromBytes,
   signCodes,
   signNames,
-  transportRequestText,
   type Client,
   type Facility,
   type ReferralMessage,
@@ -91,20 +89,11 @@ describe('codec', () => {
     expect(d.ok && d.message.kind === 'LFS' && d.message.status).toBe('A')
   })
 
-  it('normalizes Ghana numbers and parses driver replies', () => {
+  it('normalizes Ghana numbers', () => {
     expect(normalizePhone('+233 24 123 4567')).toBe('0241234567')
     expect(normalizePhone('0241234567')).toBe('0241234567')
-    expect(parseDriverReply(' 1 ok I am coming')).toBe('coming')
-    expect(parseDriverReply('2')).toBe('declined')
-    expect(parseDriverReply('12')).toBeNull()
-    expect(parseDriverReply('yes')).toBeNull()
   })
 
-  it('writes a driver SMS with a maps link when the house has GPS', () => {
-    const text = transportRequestText({ urgent: true, pickup: 'Mba Alhassan house, behind mosque, Zoggu', destination_name: 'Savelugu Hospital', cho_phone: '0241234567', short_id: referral.short_id, lat: 9.62, lng: -0.82 })
-    expect(text).toContain('maps.google.com/?q=9.62000,-0.82000')
-    expect(text).toContain('Reply 1 = coming, 2 = cannot')
-  })
 })
 
 describe('rules', () => {
@@ -285,16 +274,5 @@ describe('seed', () => {
     expect(new Set(a.clients.map((c) => c.code)).size).toBe(a.clients.length)
     const top = rank(RISK_MODEL, a.clients, a.visits, new Set(), TODAY).slice(0, 5).map((r) => a.clients.find((c) => c.id === r.client_id)!.name)
     expect(top.some((n) => n.startsWith('Baby of Amina'))).toBe(true)
-  })
-})
-
-describe('prompt catalogue', () => {
-  it('lists every question, action and sign prompt once, with numbers for spoken values', async () => {
-    const { allPrompts } = await import('./prompts.ts')
-    const prompts = allPrompts()
-    const ids = prompts.map((p) => p.id)
-    expect(new Set(ids).size).toBe(ids.length)
-    for (const p of Object.values(PROTOCOLS)) for (const q of p.questions) expect(ids).toContain(q.prompt)
-    expect(ids).toContain('num_30')
   })
 })

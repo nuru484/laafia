@@ -5,9 +5,8 @@ import { currentSession } from '../lib/runtime'
 import { color, font, touch } from '../ui/theme'
 
 const TABS = {
-  cho: [['/today', 'Today'], ['/referrals', 'Referrals'], ['/map', 'Map'], ['/more', 'More']],
-  volunteer: [['/today', 'Today'], ['/referrals', 'Carrying'], ['/more', 'More']],
-  facility: [['/inbox', 'Inbox'], ['/scan', 'Scan'], ['/more', 'More']],
+  cho: [['/today', 'Today'], ['/referrals', 'Referrals'], ['/more', 'More']],
+  facility: [['/inbox', 'Inbox'], ['/more', 'More']],
 } as const
 
 export function TabBar() {

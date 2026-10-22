@@ -11,7 +11,7 @@ import { districtOrThrow, staffFacility } from '../../platform/scope.ts'
  */
 
 const DAY = 86_400_000
-const STATES = ['created', 'carrying', 'sent', 'received', 'arrived', 'treated', 'closed', 'cancelled'] as const
+const STATES = ['created', 'sent', 'received', 'arrived', 'treated', 'closed', 'cancelled'] as const
 
 const median = (xs: number[]) => {
   if (!xs.length) return null
@@ -62,7 +62,7 @@ export async function overview(deps: Deps, actor: Actor, districtCode?: string) 
   })
   const devices = staffView
     ? []
-    : await deps.prisma.device.findMany({ where: { facilityId: { in: facilityIds }, active: true, role: { in: ['cho', 'volunteer', 'facility'] } }, select: { id: true, role: true, userName: true, facilityId: true } })
+    : await deps.prisma.device.findMany({ where: { facilityId: { in: facilityIds }, active: true, role: { in: ['cho', 'facility'] } }, select: { id: true, role: true, userName: true, facilityId: true } })
   const status = new Map((await deps.prisma.deviceStatus.findMany({ where: { deviceId: { in: devices.map((d) => d.id) } } })).map((s) => [s.deviceId, s.lastSyncAt]))
   const stale = devices
     .map((d) => ({ id: d.id, role: d.role, user_name: d.userName, facility_id: d.facilityId, last_sync_at: status.get(d.id) ?? null }))

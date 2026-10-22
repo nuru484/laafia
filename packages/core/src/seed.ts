@@ -20,8 +20,7 @@ function prng(seed: number) {
   }
 }
 
-export type SeedDevice = { id: string; role: 'cho' | 'volunteer' | 'facility'; user_name: string; phone_number: string; facility_code: string; key_hex: string }
-export type TransportProvider = { id: string; name: string; phone: string; vehicle: string; community: string }
+export type SeedDevice = { id: string; role: 'cho' | 'facility'; user_name: string; phone_number: string; facility_code: string; key_hex: string }
 
 export type Seed = {
   facilities: Facility[]
@@ -29,7 +28,6 @@ export type Seed = {
   households: Household[]
   clients: Client[]
   visits: Visit[]
-  transport_providers: TransportProvider[]
 }
 
 const COMMUNITIES = [
@@ -62,7 +60,6 @@ export function generateSeed(today: number): Seed {
 
   const devices: SeedDevice[] = [
     { id: 'D001', role: 'cho', user_name: 'Abiba Sulemana', phone_number: '0240000001', facility_code: 'SAV-CHPS-01', key_hex: demoKey(1) },
-    { id: 'V001', role: 'volunteer', user_name: 'Iddrisu Mahama', phone_number: '0240000002', facility_code: 'SAV-CHPS-01', key_hex: demoKey(2) },
     { id: 'F001', role: 'facility', user_name: 'Kanshegu CHPS', phone_number: '0200000001', facility_code: 'SAV-CHPS-01', key_hex: demoKey(3) },
     { id: 'F002', role: 'facility', user_name: 'Pong-Tamale HC', phone_number: '0200000002', facility_code: 'PTA-HC-01', key_hex: demoKey(4) },
     { id: 'F003', role: 'facility', user_name: 'Savelugu Hospital', phone_number: '0200000003', facility_code: 'SAV-HOSP-01', key_hex: demoKey(5) },
@@ -133,10 +130,5 @@ export function generateSeed(today: number): Seed {
   const amina = addClient(demoHh, 'postpartum', { name: `Amina ${demoHh.head_name.split(' ').pop()}`, delivery_date: today - DAY, parity: 2, prior_complications: ['pph'] })
   addClient(demoHh, 'newborn', { name: `Baby of ${amina.name}`, sex: 'm', dob: today - DAY, birth_weight_g: 2300 })
 
-  const transport_providers: TransportProvider[] = [
-    { id: 'tp-0001', name: 'Fuseini Abukari', phone: '0240000101', vehicle: 'motor king tricycle', community: 'Kanshegu' },
-    { id: 'tp-0002', name: 'Moglaa community ambulance', phone: '0240000102', vehicle: 'ambulance', community: 'Moglaa' },
-  ]
-
-  return { facilities, devices, households, clients, visits, transport_providers }
+  return { facilities, devices, households, clients, visits }
 }

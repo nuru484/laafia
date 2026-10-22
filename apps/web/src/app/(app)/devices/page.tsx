@@ -15,7 +15,7 @@ import { errorMessage } from '@/redux/api'
 import { useCreateDeviceMutation, useDeactivateDeviceMutation, useDevicesQuery, useFacilitiesQuery, useReissueCodeMutation } from '@/redux/endpoints'
 import type { Device } from '@/types/api'
 
-const ROLE: Record<string, string> = { cho: 'CHO', volunteer: 'Volunteer', facility: 'Facility phone' }
+const ROLE: Record<string, string> = { cho: 'CHO', facility: 'Facility phone' }
 const STALE_MS = 3 * 86_400_000
 
 function state(d: Device): { label: string; tone: 'default' | 'secondary' | 'destructive' | 'outline' } {
@@ -65,7 +65,7 @@ export default function DevicesPage() {
 
   return (
     <>
-      <PageHeader title="Phones" description="Each CHO, volunteer and facility phone. Create one to get its 8-digit activation code; the phone downloads its catchment when it is activated." actions={<Button className="h-11" onClick={() => setAdding(true)}>Add phone</Button>} />
+      <PageHeader title="Phones" description="Each CHO and facility phone. Create one to get its 8-digit activation code; the phone downloads its catchment when it is activated." actions={<Button className="h-11" onClick={() => setAdding(true)}>Add phone</Button>} />
       {isLoading ? <LoadingRows /> : error ? <ErrorState message={errorMessage(error)} onRetry={refetch} /> : !devices.length ? <EmptyState title="No phones yet" /> : (
         <>
           <ul className="flex flex-col gap-3 md:hidden">
@@ -165,7 +165,7 @@ function AddPhone({ open, onOpenChange, facilities, onCreated }: { open: boolean
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <span className="text-sm font-medium">Who uses it</span>
-            <FilterSelect label="Role" value={role} onChange={setRole} options={[{ value: 'cho', label: 'Community Health Officer' }, { value: 'volunteer', label: 'Community Health Volunteer' }, { value: 'facility', label: 'Facility phone (receives referrals)' }]} />
+            <FilterSelect label="Role" value={role} onChange={setRole} options={[{ value: 'cho', label: 'Community Health Officer' }, { value: 'facility', label: 'Facility phone (receives referrals)' }]} />
           </div>
           <FormField label={role === 'facility' ? 'Facility phone label' : 'Full name'} value={name} onChange={(e) => setName(e.target.value)} autoComplete="off" />
           <div className="flex flex-col gap-2">

@@ -8,9 +8,9 @@ import { readCookie, resolveSession, SESSION_COOKIE, sha256 } from '../sessions.
 
 /** A device row with epoch fields as numbers (see platform/db.ts). */
 export type Device = Omit<DeviceRow, 'updatedAt' | 'seq' | 'activatedAt'> & { updatedAt: number; seq: number; activatedAt: number | null }
-export type Role = 'cho' | 'volunteer' | 'facility' | 'gateway'
+export type Role = 'cho' | 'facility' | 'gateway'
 /** Every phone role, for routes any activated phone may call. The gateway is not a phone and never signs in. */
-export const PHONES: Role[] = ['cho', 'volunteer', 'facility']
+export const PHONES: Role[] = ['cho', 'facility']
 export type UserRole = 'district_admin' | 'facility_staff' | 'supervisor'
 export type WebUser = { id: string; name: string; role: UserRole; facilityId: string | null; districtId: string | null }
 /**

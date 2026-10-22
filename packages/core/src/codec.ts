@@ -9,8 +9,8 @@ import type { ClientWireType } from './types.ts'
  *
  * A referral is identified by (origin device, short id), so short ids never
  * collide across devices. The signer field names the key to verify with, not
- * the sender's phone number: a referral carried by QR and forwarded by a
- * volunteer's SIM still verifies against the CHO who signed it.
+ * the sender's phone number: an onward referral or a resend from another SIM
+ * still verifies against the device that signed it.
  */
 
 export const WIRE_VERSION = '1'
@@ -146,30 +146,4 @@ export function normalizePhone(raw: string): string {
   if (digits.startsWith('233') && digits.length === 12) return '0' + digits.slice(3)
   if (digits.length === 9) return '0' + digits
   return digits
-}
-
-export type TransportRequestText = {
-  urgent: boolean
-  pickup: string
-  destination_name: string
-  cho_phone: string
-  short_id: string
-  lat?: number | null
-  lng?: number | null
-}
-
-/** Human-readable driver SMS (spec 11.3 LFT). A maps link is added when the house has a GPS fix. */
-export function transportRequestText(t: TransportRequestText): string {
-  const where = t.lat != null && t.lng != null ? ` maps.google.com/?q=${t.lat.toFixed(5)},${t.lng.toFixed(5)}` : ''
-  return (
-    `LAAFIA pickup${t.urgent ? ': URGENT' : ''}. ${t.pickup}.${where} To ${t.destination_name}. ` +
-    `Call CHO ${t.cho_phone}. Reply 1 = coming, 2 = cannot. Ref ${t.short_id}`
-  )
-}
-
-/** Driver reply: a leading 1 or 2, anything after it ignored. */
-export function parseDriverReply(body: string): 'coming' | 'declined' | null {
-  const m = /^\s*([12])\b/.exec(body)
-  if (!m) return null
-  return m[1] === '1' ? 'coming' : 'declined'
 }

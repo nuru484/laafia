@@ -1,4 +1,4 @@
-import type { AuditEvent, Bbox, MapArea, MapBuild, Overview, SmsBalance, Clip, Device, SmsMessage, ExportPreview, ExportRecord, ExportResult, Facility, ImportBatch, ImportTemplate, Pack, Provider, Referral, Summary, User } from '@/types/api'
+import type { AuditEvent, Device, Facility, Overview, Referral, SmsBalance, SmsMessage, Summary, User } from '@/types/api'
 import { api } from './api'
 
 export const endpoints = api.injectEndpoints({
@@ -8,8 +8,6 @@ export const endpoints = api.injectEndpoints({
     logout: b.mutation<{ ok: true }, void>({ query: () => ({ url: '/web/logout', method: 'POST' }) }),
 
     overview: b.query<Overview, void>({ query: () => '/dashboard/overview', providesTags: ['Summary'] }),
-    transportOptions: b.query<{ community: string | null; providers: Provider[] }, string>({ query: (id) => `/referrals/${id}/transport/options` }),
-    requestTransport: b.mutation<unknown, { id: string; provider_id: string }>({ query: ({ id, provider_id }) => ({ url: `/referrals/${id}/transport`, method: 'POST', body: { provider_id } }), invalidatesTags: ['Referral'] }),
     summary: b.query<Summary, number>({ query: (days) => `/dashboard/summary?days=${days}`, providesTags: ['Summary'] }),
     referrals: b.query<{ referrals: Referral[] }, { facility?: string; status?: string; urgency?: string }>({
       query: (q) => ({ url: '/referrals', params: Object.fromEntries(Object.entries(q).filter(([, v]) => v)) }),
@@ -44,47 +42,18 @@ export const endpoints = api.injectEndpoints({
     reissueCode: b.mutation<{ device: Device; activation_code: string; expires_at: number }, string>({ query: (id) => ({ url: `/admin/devices/${id}/code`, method: 'POST' }), invalidatesTags: ['Device'] }),
     deactivateDevice: b.mutation<unknown, string>({ query: (id) => ({ url: `/admin/devices/${id}/deactivate`, method: 'POST' }), invalidatesTags: ['Device'] }),
 
-    providers: b.query<{ providers: Provider[] }, void>({ query: () => '/admin/transport/providers', providesTags: ['Provider'] }),
-    createProvider: b.mutation<unknown, { facility_code: string; name: string; phone: string; vehicle: string; community: string }>({
-      query: (body) => ({ url: '/admin/transport/providers', method: 'POST', body }), invalidatesTags: ['Provider'],
-    }),
-    updateProvider: b.mutation<unknown, Partial<Provider> & { id: string }>({ query: ({ id, ...body }) => ({ url: `/admin/transport/providers/${id}`, method: 'PATCH', body }), invalidatesTags: ['Provider'] }),
-
-    templates: b.query<{ templates: ImportTemplate[] }, void>({ query: () => '/admin/import/templates', providesTags: ['Import'] }),
-    createTemplate: b.mutation<{ template: ImportTemplate }, Omit<ImportTemplate, 'id' | 'created_at'>>({ query: (body) => ({ url: '/admin/import/templates', method: 'POST', body }), invalidatesTags: ['Import'] }),
-    previewUpload: b.mutation<{ batch: ImportBatch }, FormData>({ query: (body) => ({ url: '/admin/import/preview', method: 'POST', body }), invalidatesTags: ['Import'] }),
-    previewDhis2: b.mutation<{ batch: ImportBatch }, { template_id: string; facility_code: string; org_unit: string; program?: string }>({ query: (body) => ({ url: '/admin/import/dhis2/preview', method: 'POST', body }), invalidatesTags: ['Import'] }),
-    batches: b.query<{ batches: ImportBatch[] }, void>({ query: () => '/admin/import/batches', providesTags: ['Import'] }),
-    commitBatch: b.mutation<{ batch: ImportBatch }, string>({ query: (id) => ({ url: `/admin/import/batches/${id}/commit`, method: 'POST' }), invalidatesTags: ['Import'] }),
-    undoBatch: b.mutation<{ batch: ImportBatch; undone: { clients: number; households: number }; kept: { clients: number; households: number } }, string>({ query: (id) => ({ url: `/admin/import/batches/${id}/undo`, method: 'POST' }), invalidatesTags: ['Import'] }),
-
-    exportPreview: b.query<ExportPreview, { facility: string; period: string }>({ query: (q) => ({ url: '/export/dhis2', params: q }) }),
-    exportPush: b.mutation<ExportResult, { facility: string; period: string; dry_run: boolean }>({ query: (body) => ({ url: '/export/dhis2', method: 'POST', body }), invalidatesTags: ['Export'] }),
-    exportHistory: b.query<{ runs: ExportRecord[]; pending_periods: string[] }, string>({ query: (facility) => ({ url: '/export/dhis2/history', params: { facility, limit: 20 } }), providesTags: ['Export'] }),
-
     audit: b.query<{ events: AuditEvent[]; next_before: number | null }, { before?: number; target_type?: string }>({
       query: (q) => ({ url: '/admin/audit', params: { limit: 50, ...Object.fromEntries(Object.entries(q).filter(([, v]) => v !== undefined && v !== '')) } }),
       providesTags: ['Audit'],
     }),
     smsBalance: b.query<SmsBalance, void>({ query: () => '/admin/sms/balance', providesTags: ['Sms'] }),
     smsLog: b.query<{ messages: SmsMessage[]; next_before: number | null }, { before?: number }>({ query: (q) => ({ url: '/admin/sms/log', params: { limit: 50, ...(q.before ? { before: q.before } : {}) } }), providesTags: ['Sms'] }),
-
-    packs: b.query<{ packs: Pack[] }, void>({ query: () => '/admin/content/packs', providesTags: ['Pack'] }),
-    uploadPack: b.mutation<{ pack: Pack }, FormData>({ query: (body) => ({ url: '/admin/content/packs', method: 'POST', body }), invalidatesTags: ['Pack'] }),
-    mapArea: b.query<MapArea, string>({ query: (district) => `/admin/maps/${district}`, providesTags: ['Map'] }),
-    startMapBuild: b.mutation<{ build: MapBuild }, { district: string; bbox: Bbox }>({ query: ({ district, bbox }) => ({ url: `/admin/maps/${district}/builds`, method: 'POST', body: { bbox } }), invalidatesTags: ['Map'] }),
-    clips: b.query<{ clips: Clip[] }, string>({ query: (lang) => ({ url: '/admin/content/clips', params: { lang } }), providesTags: ['Clip'] }),
-    uploadClip: b.mutation<{ clip: Clip }, FormData>({ query: (body) => ({ url: '/admin/content/clips', method: 'POST', body }), invalidatesTags: ['Clip'] }),
-    deleteClip: b.mutation<unknown, string>({ query: (id) => ({ url: `/admin/content/clips/${id}`, method: 'DELETE' }), invalidatesTags: ['Clip'] }),
   }),
 })
 
 export const {
-  useMeQuery, useLoginMutation, useOverviewQuery, useTransportOptionsQuery, useRequestTransportMutation, useLogoutMutation, useSummaryQuery, useReferralsQuery, useReferralQuery, useReferralClientQuery,
+  useMeQuery, useLoginMutation, useLogoutMutation, useOverviewQuery, useSummaryQuery, useReferralsQuery, useReferralQuery, useReferralClientQuery,
   useSetStatusMutation, useOnwardMutation, useFacilitiesQuery, useCreateFacilityMutation, useUpdateFacilityMutation,
   useUsersQuery, useCreateUserMutation, useSetUserPasswordMutation, useSetUserActiveMutation, useDevicesQuery, useCreateDeviceMutation,
-  useReissueCodeMutation, useDeactivateDeviceMutation, useProvidersQuery, useCreateProviderMutation, useUpdateProviderMutation,
-  usePacksQuery, useUploadPackMutation, useMapAreaQuery, useStartMapBuildMutation, useClipsQuery, useDeleteClipMutation, useUploadClipMutation, useTemplatesQuery, useCreateTemplateMutation,
-  usePreviewUploadMutation, usePreviewDhis2Mutation, useBatchesQuery, useCommitBatchMutation, useUndoBatchMutation,
-  useExportPreviewQuery, useExportPushMutation, useExportHistoryQuery, useAuditQuery, useSmsBalanceQuery, useSmsLogQuery,
+  useReissueCodeMutation, useDeactivateDeviceMutation, useAuditQuery, useSmsBalanceQuery, useSmsLogQuery,
 } = endpoints

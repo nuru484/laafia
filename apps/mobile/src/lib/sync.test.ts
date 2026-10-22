@@ -71,11 +71,11 @@ describe('push', () => {
     expect(await cho.db.all('SELECT id FROM referrals WHERE synced = 0')).toHaveLength(0)
   })
 
-  it('a carrier pushes the origin LFR; unknown_referral stays pending, permanent rejections stop retrying', async () => {
+  it('a facility pushes the origin LFR; unknown_referral stays pending, permanent rejections stop retrying', async () => {
     const cho = await phone('D001')
-    const volunteer = await phone('V001')
+    const hospital = await phone('F003')
     const { wire } = await refer(cho)
-    await processIncoming(volunteer, { sender: 'qr', body: wire, received_at: 1, via: 'qr' })
+    await processIncoming(hospital, { sender: cho.self.phone, body: wire, received_at: 1, via: 'sms' })
 
     const api = fakeApi({
       push: (records) => ({
@@ -83,10 +83,10 @@ describe('push', () => {
         rejected: records.map((x) => ({ id: x.row.id as string, table: x.table, reason: x.table === 'referral_events' ? 'unknown_referral' : 'invalid: urgency' })),
       }),
     })
-    await push(volunteer, api)
+    await push(hospital, api)
     expect(api.pushed.flat().find((x) => x.table === 'referrals')!.row.lfr).toBe(wire)
-    expect(await volunteer.db.get('SELECT synced FROM referrals')).toEqual({ synced: -1 })
-    expect(await volunteer.db.get('SELECT synced FROM referral_events')).toEqual({ synced: 0 })
+    expect(await hospital.db.get('SELECT synced FROM referrals')).toEqual({ synced: -1 })
+    expect(await hospital.db.get('SELECT synced FROM referral_events')).toEqual({ synced: 0 })
   })
 
   it('sends at most 200 records per request', async () => {
@@ -156,6 +156,6 @@ describe('pull', () => {
     const hospital = await phone('F003')
     await pull(hospital, fakeApi({ pages: [{ records: [], cursor: 'c', more: false, keys: { D001: 'ab'.repeat(32) } }] }))
     expect(await hospital.db.get("SELECT key_hex FROM devices WHERE id = 'D001'")).toEqual({ key_hex: 'ab'.repeat(32) })
-    expect(await hospital.db.get("SELECT key_hex FROM devices WHERE id = 'V001'")).toEqual({ key_hex: null })
+    expect(await hospital.db.get("SELECT key_hex FROM devices WHERE id = 'D002'")).toEqual({ key_hex: null })
   })
 })

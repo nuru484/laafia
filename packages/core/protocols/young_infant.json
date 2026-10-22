@@ -3,14 +3,14 @@
   "version": 1,
   "clinical_review": "pending: WHO IMNCI young infant 0-59 days, to be reviewed by the team clinician",
   "questions": [
-    { "id": "yi_feeding", "type": "yesno", "prompt": "yi_feeding", "text_en": "Is the baby feeding well?" },
-    { "id": "yi_convulsions", "type": "yesno", "prompt": "yi_convulsions", "text_en": "Has the baby had fits or convulsions?" },
-    { "id": "yi_movement", "type": "yesno", "prompt": "yi_movement", "text_en": "Does the baby move only when touched, or not at all?" },
-    { "id": "yi_breaths", "type": "number", "unit": "breaths/min", "prompt": "yi_breaths", "text_en": "Count the baby's breaths for one full minute." },
-    { "id": "yi_chest_indrawing", "type": "yesno", "prompt": "yi_chest_indrawing", "text_en": "Does the lower chest pull in strongly when the baby breathes in?" },
-    { "id": "yi_temp", "type": "number", "unit": "°C", "prompt": "yi_temp", "text_en": "Take the baby's temperature." },
-    { "id": "yi_jaundice", "type": "yesno", "prompt": "yi_jaundice", "text_en": "Are the palms or soles yellow?" },
-    { "id": "yi_cord", "type": "yesno", "prompt": "yi_cord", "text_en": "Is the cord stump red or draining pus?" }
+    { "id": "yi_feeding", "type": "yesno", "text_en": "Is the baby feeding well?" },
+    { "id": "yi_convulsions", "type": "yesno", "text_en": "Has the baby had fits or convulsions?" },
+    { "id": "yi_movement", "type": "yesno", "text_en": "Does the baby move only when touched, or not at all?" },
+    { "id": "yi_breaths", "type": "number", "unit": "breaths/min", "text_en": "Count the baby's breaths for one full minute." },
+    { "id": "yi_chest_indrawing", "type": "yesno", "text_en": "Does the lower chest pull in strongly when the baby breathes in?" },
+    { "id": "yi_temp", "type": "number", "unit": "°C", "text_en": "Take the baby's temperature." },
+    { "id": "yi_jaundice", "type": "yesno", "text_en": "Are the palms or soles yellow?" },
+    { "id": "yi_cord", "type": "yesno", "text_en": "Is the cord stump red or draining pus?" }
   ],
   "rules": [
     { "id": "YI-R1", "when": { "yi_feeding": false }, "outcome": "refer", "urgency": 3, "danger_sign": "not_feeding", "actions": ["keep_warm", "breastfeed_on_way", "go_now"], "stop": true },
@@ -27,24 +27,24 @@
     { "id": "YI-DEFAULT", "when": {}, "outcome": "routine", "actions": ["counsel_feeding", "counsel_danger_signs"] }
   ],
   "signs": {
-    "not_feeding": { "code": "nf", "prompt": "sign_not_feeding", "text_en": "Not feeding well" },
-    "convulsions": { "code": "cv", "prompt": "sign_convulsions", "text_en": "Convulsions" },
-    "movement": { "code": "mv", "prompt": "sign_movement", "text_en": "Moves only when stimulated, or not at all" },
-    "fast_breathing": { "code": "fb", "prompt": "sign_fast_breathing", "text_en": "Fast breathing (60 or more per minute)" },
-    "chest_indrawing": { "code": "ci", "prompt": "sign_chest_indrawing", "text_en": "Severe chest indrawing" },
-    "fever": { "code": "fv", "prompt": "sign_fever", "text_en": "Fever (37.5 °C or above)" },
-    "hypothermia": { "code": "ht", "prompt": "sign_hypothermia", "text_en": "Low body temperature (below 35.5 °C)" },
-    "jaundice": { "code": "jd", "prompt": "sign_jaundice", "text_en": "Yellow palms or soles" }
+    "not_feeding": { "code": "nf", "text_en": "Not feeding well" },
+    "convulsions": { "code": "cv", "text_en": "Convulsions" },
+    "movement": { "code": "mv", "text_en": "Moves only when stimulated, or not at all" },
+    "fast_breathing": { "code": "fb", "text_en": "Fast breathing (60 or more per minute)" },
+    "chest_indrawing": { "code": "ci", "text_en": "Severe chest indrawing" },
+    "fever": { "code": "fv", "text_en": "Fever (37.5 °C or above)" },
+    "hypothermia": { "code": "ht", "text_en": "Low body temperature (below 35.5 °C)" },
+    "jaundice": { "code": "jd", "text_en": "Yellow palms or soles" }
   },
   "actions": {
-    "keep_warm": { "prompt": "act_keep_warm", "text_en": "Keep the baby warm, skin to skin with the mother." },
-    "breastfeed_on_way": { "prompt": "act_breastfeed_on_way", "text_en": "Keep breastfeeding, also on the way." },
-    "go_now": { "prompt": "act_go_now", "text_en": "Go to the facility now. Do not wait." },
-    "go_today": { "prompt": "act_go_today", "text_en": "Go to the facility today." },
-    "kangaroo": { "prompt": "act_kangaroo", "text_en": "Keep the baby skin to skin on the mother's chest day and night." },
-    "cord_care": { "prompt": "act_cord_care", "text_en": "Keep the cord clean and dry. Put nothing on it." },
-    "counsel_feeding": { "prompt": "act_counsel_feeding", "text_en": "Breastfeed only, day and night, at least 8 times." },
-    "counsel_danger_signs": { "prompt": "act_counsel_danger_signs", "text_en": "Explain the danger signs and to come at once if any appear." }
+    "keep_warm": { "text_en": "Keep the baby warm, skin to skin with the mother." },
+    "breastfeed_on_way": { "text_en": "Keep breastfeeding, also on the way." },
+    "go_now": { "text_en": "Go to the facility now. Do not wait." },
+    "go_today": { "text_en": "Go to the facility today." },
+    "kangaroo": { "text_en": "Keep the baby skin to skin on the mother's chest day and night." },
+    "cord_care": { "text_en": "Keep the cord clean and dry. Put nothing on it." },
+    "counsel_feeding": { "text_en": "Breastfeed only, day and night, at least 8 times." },
+    "counsel_danger_signs": { "text_en": "Explain the danger signs and to come at once if any appear." }
   },
   "destination": {
     "default": "nearest:health_centre",

@@ -8,7 +8,6 @@ import type { Db } from './db/db'
 import { openDb, wipeDb } from './db/expo'
 import { applySendResult, dueMessages, markSending, processIncoming, referralStatus, type Env, type Role } from './relay'
 import { clearSession, loadSession, saveSession, type Session } from './session'
-import { syncClips, syncTiles } from './content'
 import { pull, push } from './sync'
 
 /*
@@ -106,15 +105,12 @@ export async function activate(code: string, phone: string, onProgress: (p: Acti
   changed()
 }
 
-/** Copies what the SMS receiver needs when JavaScript is not running: mode, keys, and numbers to watch. */
+/** Copies what the SMS receiver needs when JavaScript is not running: mode and keys. */
 export async function pushNativeState() {
   if (!current || !session) return
   const { db: d } = current
   const keys = await d.all<{ id: string; key_hex: string }>('SELECT id, key_hex FROM devices WHERE active = 1 AND key_hex IS NOT NULL')
   LaafiaSms.setKeys(Object.fromEntries(keys.map((k) => [k.id, k.key_hex])))
-  const watched = await d.all<{ phone: string }>(
-    "SELECT DISTINCT p.phone FROM transport_requests r JOIN transport_providers p ON p.id = r.provider_id WHERE r.status = 'requested'")
-  LaafiaSms.setWatchedNumbers(watched.map((w) => w.phone))
   LaafiaSms.setMode(session.role)
 }
 
@@ -177,7 +173,7 @@ async function clearAnsweredAlarms(e: Env) {
   for (const { key } of armed) {
     const referralId = key.slice('ack_alarm_'.length)
     const status = await referralStatus(e, referralId)
-    if (!['created', 'carrying', 'sent'].includes(status)) await cancelAckAlarm(e.db, referralId)
+    if (!['created', 'sent'].includes(status)) await cancelAckAlarm(e.db, referralId)
   }
 }
 
@@ -191,7 +187,6 @@ export async function syncNow(): Promise<SyncState> {
     await pull(current, api)
     await clearAnsweredAlarms(current)
     await pushNativeState()
-    await syncContent()
     syncState = { last_ok: Date.now(), last_error: null, running: false }
   } catch (e) {
     if (e instanceof ApiError && e.code === 'deactivated') {
@@ -204,33 +199,6 @@ export async function syncNow(): Promise<SyncState> {
     changed()
   }
   return syncState
-}
-
-export type ContentState = { tiles: 'current' | 'updated' | 'none' | null; tiles_progress: number | null; clips: string | null; error: string | null }
-let contentState: ContentState = { tiles: null, tiles_progress: null, clips: null, error: null }
-export const getContentState = () => contentState
-
-/** Map tiles and prompt clips; a failure here never fails the register sync. */
-async function syncContent() {
-  if (!current || !session) return
-  const jwt = session.jwt
-  const langs = [...new Set([...(session.facility.languages ?? ['dag']), 'en'])]
-  try {
-    const tiles = await syncTiles(current, api, jwt, (done, total) => { contentState = { ...contentState, tiles_progress: done / total }; changed() })
-    const clips = await syncClips(current, api, jwt, langs)
-    contentState = { tiles, tiles_progress: null, clips: `${clips.uploaded} uploaded, ${clips.downloaded} downloaded`, error: null }
-  } catch (e) {
-    contentState = { ...contentState, tiles_progress: null, error: e instanceof Error ? e.message : String(e) }
-  }
-}
-
-/** Caregiver reply to text through the API's Khaya proxy. Translation only; it never feeds the rules. */
-export async function transcribe(uri: string, lang: string): Promise<string> {
-  const form = new FormData()
-  form.append('audio', { uri, name: 'reply.m4a', type: 'audio/mp4' } as unknown as Blob)
-  form.append('lang', lang)
-  const res = await api.upload(`/voice/transcribe?lang=${encodeURIComponent(lang)}`, form)
-  return String(res.text ?? '')
 }
 
 /** Remote deactivation or PIN wipe: drop the data and the identity; the phone returns to activation. */

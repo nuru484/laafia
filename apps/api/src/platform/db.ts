@@ -26,18 +26,10 @@ const numbers = {
   visit: { ...sync, ...num('visitedAt'), ...numOrNull('followupDue') },
   referral: sync,
   referralEvent: { ...sync, ...num('at') },
-  transportProvider: sync,
-  transportRequest: { ...sync, ...numOrNull('scheduledFor') },
   job: { ...num('id', 'runAt', 'createdAt'), ...numOrNull('deliveredAt') },
-  mappingTemplate: num('createdAt'),
-  importBatch: { ...num('createdAt'), ...numOrNull('committedAt', 'undoneAt') },
-  contentPack: num('size', 'createdAt'),
-  mapBuild: { ...num('startedAt'), ...numOrNull('finishedAt') },
-  contentClip: num('recordedAt'),
   user: { ...num('passwordChangedAt', 'createdAt'), ...numOrNull('lastLoginAt') },
   webSession: { ...num('expiresAt', 'lastSeenAt', 'createdAt'), ...numOrNull('revokedAt') },
   deviceStatus: num('lastSyncAt'),
-  exportRun: num('at'),
   auditEvent: num('at'),
 }
 

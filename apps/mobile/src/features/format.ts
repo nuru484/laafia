@@ -4,12 +4,12 @@ import { color } from '../ui/theme'
 export const TYPE_NAME: Record<string, string> = { pregnant: 'Pregnant', postpartum: 'After delivery', newborn: 'Newborn', child: 'Child' }
 
 export const STATUS_TEXT: Record<ReferralStatus, string> = {
-  created: 'Not sent yet', carrying: 'Carried, waiting to forward', sent: 'Sent, waiting for the facility', received: 'Facility received it',
+  created: 'Not sent yet', sent: 'Sent, waiting for the facility', received: 'Facility received it',
   arrived: 'Arrived at the facility', treated: 'Treated', closed: 'Closed, follow-up scheduled', cancelled: 'Cancelled',
 }
 
 export function statusTone(s: ReferralStatus): { fg: string; bg: string } {
-  if (s === 'created' || s === 'carrying' || s === 'sent') return { fg: color.followup, bg: color.followupBg }
+  if (s === 'created' || s === 'sent') return { fg: color.followup, bg: color.followupBg }
   if (s === 'cancelled') return { fg: color.muted, bg: color.line }
   return { fg: color.routine, bg: color.routineBg }
 }

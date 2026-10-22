@@ -15,7 +15,6 @@ export type Question = {
   id: string
   type: 'yesno' | 'number' | 'select'
   text_en: string
-  prompt: string
   unit?: string
   options?: string[]
   ask_if?: Condition
@@ -38,8 +37,8 @@ export type Protocol = {
   clinical_review: string
   questions: Question[]
   rules: Rule[]
-  signs: Record<string, { code: string; text_en: string; prompt: string }>
-  actions: Record<string, { text_en: string; prompt: string }>
+  signs: Record<string, { code: string; text_en: string }>
+  actions: Record<string, { text_en: string }>
   destination: { default: string; by_danger_sign: Record<string, string> }
 }
 

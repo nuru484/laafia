@@ -1,9 +1,8 @@
 import {
-  PROTOCOLS, STATUS_FROM_CODE, decode, normalizePhone, parse, parseDriverReply, signNames,
+  PROTOCOLS, STATUS_FROM_CODE, decode, normalizePhone, parse, signNames,
   type ClientType, type ClientWireType, type ReferralMessage, type ReferralStatus, type StatusMessage,
 } from '@laafia/core'
 import { randomUUID } from 'node:crypto'
-import { write } from '../../platform/db.ts'
 import { jobIdOfMsgId } from '../../platform/jobs/worker.ts'
 import { FrogReceipt } from './sms.schemas.ts'
 import type { Deps } from '../../platform/deps.ts'
@@ -19,7 +18,6 @@ const PROTOCOL_OF: Record<ClientWireType, keyof typeof PROTOCOLS> = { PW: 'mater
 export type InboundResult =
   | { ok: true; kind: 'referral'; referral_id: string; duplicate: boolean }
   | { ok: true; kind: 'status'; referral_id: string; status: ReferralStatus }
-  | { ok: true; kind: 'driver_reply'; transport_request_id: string; status: 'coming' | 'declined' }
   | { ok: false; error: 'not_laafia' | 'unknown_signer' | 'bad_signature' | 'conflict' | 'forbidden' }
 
 function sameReferral(r: Referral, m: ReferralMessage, destinationId: string | null) {
@@ -85,20 +83,6 @@ async function onStatus(deps: Deps, m: StatusMessage): Promise<InboundResult> {
   })
 }
 
-async function onDriverReply(deps: Deps, from: string, body: string): Promise<InboundResult | null> {
-  const reply = parseDriverReply(body)
-  if (!reply) return null
-  return write(deps.prisma, async (tx) => {
-    const providers = await tx.transportProvider.findMany({ where: { phone: normalizePhone(from) }, select: { id: true } })
-    const req = await tx.transportRequest.findFirst({
-      where: { providerId: { in: providers.map((p) => p.id) }, status: 'requested' }, orderBy: { updatedAt: 'desc' }, select: { id: true },
-    })
-    if (!req) return null
-    await tx.transportRequest.update({ where: { id: req.id }, data: { status: reply, updatedAt: deps.clock(), deviceId: GATEWAY_DEVICE } })
-    return { ok: true, kind: 'driver_reply', transport_request_id: req.id, status: reply } as const
-  })
-}
-
 const DELIVERY: Record<string, 'delivered' | 'failed' | 'pending'> = {
   DELIVRD: 'delivered', ANSWERED: 'delivered', ACCEPTD: 'pending', WAITING: 'pending', BUSY: 'pending',
   UNDELIV: 'failed', REJECTD: 'failed', FAILED: 'failed', EXPIRED: 'failed', DELETED: 'failed', UNKNOWN: 'failed',
@@ -126,7 +110,7 @@ export async function applyDeliveryReceipts(deps: Deps, items: unknown[]) {
 }
 
 export async function handleInboundSms(deps: Deps, from: string, body: string): Promise<InboundResult> {
-  if (!parse(body)) return (await onDriverReply(deps, from, body)) ?? { ok: false, error: 'not_laafia' }
+  if (!parse(body)) return { ok: false, error: 'not_laafia' }
   const keys = await activeKeys(deps.prisma)
   const d = decode(body, (id) => keys.get(id))
   if (!d.ok) {

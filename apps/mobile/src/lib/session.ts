@@ -5,7 +5,7 @@ import * as Crypto from 'expo-crypto'
 import * as SecureStore from 'expo-secure-store'
 import type { Role } from './relay'
 
-export type Facility = { id: string; code: string; name: string; level: string; phone: string | null; lat: number; lng: number; languages?: string[] }
+export type Facility = { id: string; code: string; name: string; level: string; phone: string | null; lat: number; lng: number }
 export type Session = {
   device_id: string
   device_key: string

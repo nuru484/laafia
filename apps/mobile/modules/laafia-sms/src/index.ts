@@ -1,6 +1,6 @@
 import { requireNativeModule, type EventSubscription } from 'expo-modules-core'
 
-export type AppMode = 'cho' | 'volunteer' | 'facility'
+export type AppMode = 'cho' | 'facility'
 export type Sim = { subscriptionId: number; slot: number; carrier: string | null }
 export type RawSms = { from: string; body: string; receivedAt: number }
 export type SendResult = { id: string; status: 'sent' | 'failed' | 'delivered'; error: string | null; at: number }

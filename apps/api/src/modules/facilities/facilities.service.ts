@@ -30,7 +30,7 @@ export async function createFacility(deps: Deps, actor: Actor, body: CreateFacil
     tx.facility.create({
       data: {
         id: `fac-${randomBytes(4).toString('hex')}`, code: body.code, name: body.name, level: body.level, phone: body.phone ? normalizePhone(body.phone) : null,
-        lat: body.lat, lng: body.lng, capabilities: body.capabilities, languages: body.languages, districtId, updatedAt: now, deviceId: 'web',
+        lat: body.lat, lng: body.lng, capabilities: body.capabilities, districtId, updatedAt: now, deviceId: 'web',
       },
     }),
   )

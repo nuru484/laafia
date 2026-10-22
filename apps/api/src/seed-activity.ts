@@ -5,8 +5,8 @@ import type { Deps } from './platform/deps.ts'
 /*
  * Demo activity on top of the catchment seed, so every dashboard screen has real content:
  * referrals across the last two weeks in every state (including overdue acknowledgements and
- * patients who did not arrive), an onward chain, transport requests, device sync times,
- * server SMS with delivery receipts, export history and audit rows. Re-running replaces it.
+ * patients who did not arrive), an onward chain, device sync times,
+ * server SMS with delivery receipts and audit rows. Re-running replaces it.
  * Not used by the tests, which start from the bare catchment.
  */
 
@@ -43,10 +43,8 @@ const source = (status: ReferralStatus, origin: string, dest: string) =>
   status === 'sent' || status === 'cancelled' ? origin : dest === 'fac-0003' ? 'F003' : dest === 'fac-0002' ? 'F002' : 'GW01'
 
 async function clear(tx: Tx) {
-  await tx.transportRequest.deleteMany({ where: { id: { startsWith: 'demo-' } } })
   await tx.referral.deleteMany({ where: { id: { startsWith: 'demo-' } } }) // events cascade
   await tx.job.deleteMany({ where: { dedupeKey: { startsWith: 'demo:' } } })
-  await tx.exportRun.deleteMany({ where: { id: { startsWith: 'demo-' } } })
   await tx.auditEvent.deleteMany({ where: { id: { startsWith: 'demo-' } } })
 }
 
@@ -84,53 +82,36 @@ export async function seedActivity(deps: Deps, now = Date.now()) {
     }
     // Onward chain: r09 (Pong-Tamale) continued as r10 (Savelugu Hospital).
     await tx.referral.update({ where: { id: 'demo-r09' }, data: { onwardReferralId: 'demo-r10', onwardStatus: 'closed' } })
-    const t = (n: number, status: string, provider: string, agoMin: number) => ({
-      id: `demo-t${n}`, referralId: `demo-r${String(n).padStart(2, '0')}`, providerId: provider, status, facilityId: 'fac-0001', deviceId: 'D001', updatedAt: now - agoMin * MIN,
-    })
-    await tx.transportRequest.createMany({ data: [t(1, 'coming', 'tp-0001', 44), t(2, 'requested', 'tp-0001', 30), t(5, 'done', 'tp-0002', 29 * 60), t(13, 'declined', 'tp-0001', 12 * 24 * 60)] })
 
-    // Last sync per device: V001 has not synced for five days.
+    // Last sync per device: D002 has not synced for five days.
     const sync = (deviceId: string, ago: number, appVersion: string) => ({ deviceId, lastSyncAt: now - ago, appVersion })
-    for (const s of [sync('D001', 12 * MIN, '0.4.2'), sync('V001', 5 * DAY, '0.4.0'), sync('F001', 2 * HOUR, '0.4.2'), sync('F002', 40 * MIN, '0.4.2'), sync('F003', 6 * MIN, '0.4.2')]) {
+    for (const s of [sync('D001', 12 * MIN, '0.4.2'), sync('D002', 5 * DAY, '0.4.0'), sync('F001', 2 * HOUR, '0.4.2'), sync('F002', 40 * MIN, '0.4.2'), sync('F003', 6 * MIN, '0.4.2')]) {
       await tx.deviceStatus.upsert({ where: { deviceId: s.deviceId }, create: s, update: s })
     }
 
     // Server-sent SMS with Frog delivery receipts. Bodies are LFS/LFT wire text with codes, never names.
     const job = (n: number, to: string, body: string, ago: number, delivery: string | null, status = 'sent') => ({
       kind: 'sms', payload: { to, body }, status, attempts: status === 'pending' ? 0 : 1, runAt: now - ago, createdAt: now - ago, dedupeKey: `demo:${n}`,
-      purpose: body.startsWith('LAAFIA pickup') ? 'driver' : 'status', districtId: 'dist-sav',
+      purpose: 'status', districtId: 'dist-sav',
       deliveryStatus: delivery, deliveryReason: delivery === 'failed' ? 'Absent subscriber' : delivery === 'delivered' ? 'Delivered' : null, deliveredAt: delivery === 'delivered' ? now - ago + 20_000 : null,
     })
     await tx.job.createMany({
       data: [
         job(1, '0240000001', 'LFS|1|F003|D001|UAIAOFOD|R|DEMOSIGN', 44 * MIN, 'delivered'),
-        job(2, '0240000101', 'LAAFIA pickup: URGENT. Mba Alhassan house, behind the mosque, Kanshegu. To Savelugu Municipal Hospital. Call CHO 0240000001. Reply 1 = coming, 2 = cannot. Ref UAIAOFOD', 44 * MIN, 'delivered'),
         job(3, '0240000001', 'LFS|1|F002|D001|UAIQOFOD|A|DEMOSIGN', 4 * HOUR, 'delivered'),
-        job(4, '0240000102', 'LAAFIA pickup: URGENT. Naa Wumbei house, near the borehole, Moglaa. To Savelugu Municipal Hospital. Call CHO 0240000001. Reply 1 = coming, 2 = cannot. Ref UAJAOFOD', 29 * HOUR, 'failed'),
+        job(4, '0240000001', 'LFS|1|F003|D001|UAJAOFOD|R|DEMOSIGN', 29 * HOUR, 'failed'),
         job(5, '0240000001', 'LFS|1|GW01|D001|UALAOFOD|T|DEMOSIGN', 2 * DAY, 'delivered'),
         job(6, '0240000001', 'LFS|1|F003|D001|UAJQOFOD|C|DEMOSIGN', 5 * MIN, null, 'pending'),
       ],
     })
-
-    const period = (monthsAgo: number) => {
-      const d = new Date(now)
-      d.setUTCMonth(d.getUTCMonth() - monthsAgo)
-      return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}`
-    }
-    const run = (n: number, p: string, dryRun: boolean, ago: number, status: string, tes: number) => ({
-      id: `demo-x${n}`, facilityId: 'fac-0001', period: p, dryRun, actor: 'Alhassan Yakubu', at: now - ago, trackedEntities: tes, status,
-      result: { tracker: { status: status === 'ok' ? 'OK' : 'ERROR' }, aggregate: { status: status === 'ok' ? 'SUCCESS' : 'ERROR' } },
-    })
-    await tx.exportRun.createMany({ data: [run(1, period(2), true, 40 * DAY, 'ok', 31), run(2, period(2), false, 40 * DAY - HOUR, 'ok', 31), run(3, period(1), true, 9 * DAY, 'error', 29)] })
 
     const audit = (n: number, ago: number, action: string, targetType: string, targetId: string, details: object) => ({
       id: `demo-a${n}`, at: now - ago, actorKind: 'user', actorId: 'usr-0001', actorName: 'Alhassan Yakubu', action, targetType, targetId, districtId: 'dist-sav', details,
     })
     await tx.auditEvent.createMany({
       data: [
-        audit(1, 9 * DAY, 'export.push', 'export', 'demo-x3', { facility: 'SAV-CHPS-01', dry_run: true }),
-        audit(2, 6 * DAY, 'device.code_reissue', 'device', 'V001', {}),
-        audit(3, 3 * DAY, 'provider.update', 'transport_provider', 'tp-0002', { fields: ['phone'] }),
+        audit(2, 6 * DAY, 'device.code_reissue', 'device', 'D002', {}),
+        audit(3, 3 * DAY, 'facility.update', 'facility', 'fac-0002', { fields: ['phone'] }),
         audit(4, 26 * HOUR, 'user.create', 'user', 'usr-0003', { role: 'facility_staff' }),
       ],
     })

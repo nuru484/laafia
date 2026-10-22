@@ -7,7 +7,6 @@ const fields = {
   lat: z.number().min(-90).max(90),
   lng: z.number().min(-180).max(180),
   capabilities: z.array(z.string().regex(/^[a-z0-9_]{1,32}$/)).max(20).default([]),
-  languages: z.array(z.string().regex(/^[a-z]{2,3}$/)).max(10).default([]),
 }
 
 export const CreateFacilityBody = z.object({

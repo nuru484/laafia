@@ -48,14 +48,12 @@ describe('refer onward chain', () => {
     expect(unknown.body.rejected[0].reason).toBe('unknown_referral')
   })
 
-  it('refuses CHO and volunteer devices on the dashboard chain endpoint', async () => {
+  it('refuses CHO devices on the dashboard chain endpoint', async () => {
     const cho = await activate('D001')
     await pushAs(cho, [{ table: 'referrals', row: ref({}) }])
     const created = await request(app).post('/admin/devices').set(ADMIN).send({ id: 'D009', role: 'cho', user_name: 'Other CHO', facility_code: 'SAV-CHPS-01' })
     const otherCho = (await request(app).post('/auth/activate').send({ activation_code: created.body.activation_code, phone_number: '0240000009' })).body.jwt as string
-    const volunteer = await activate('V001', '0240000002')
     expect((await request(app).get('/referrals/r-root').set(bearer(otherCho))).status).toBe(403)
-    expect((await request(app).get('/referrals/r-root').set(bearer(volunteer))).status).toBe(403)
   })
 
   it('hides a chain from devices outside it', async () => {

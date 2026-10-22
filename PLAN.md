@@ -4,8 +4,13 @@ Build brief: `docs/SPEC.md`. Demo due 23 October 2026, 09:20, HOPin Academy, Tam
 
 ## Scope
 
-In: CHO, volunteer and facility modes on one Android app; Express API with sync; web facility inbox; SMS, QR and HTTPS relay; ranked visit list; WHO checklists with audio.
-Out (non-goals): diagnosis, a caregiver chatbot, iOS, Play Store distribution (SMS permissions are refused there; the APK is sideloaded from EAS), a server at the CHPS compound.
+Two problems, nothing else:
+
+1. Risk before crisis: a local model ranks who needs a visit today from the nurse's own assessments, and anyone scheduled for today always appears.
+2. The last-mile follow-up: a referral travels by signed SMS, every step (received, arrived, treated, discharged) comes back by SMS, and discharge schedules the follow-up visit.
+
+In: CHO and facility modes on one Android app; WHO checklists; SMS relay with HTTPS sync; ranked visit list with route order; Express API; admin dashboard (nurses' phones, facilities, referral board).
+Out (non-goals): diagnosis, spoken prompts, volunteers and QR hand-carry, transport booking, in-app maps, DHIMS2 import and export (until GHS authorises it), a caregiver chatbot, iOS, Play Store distribution (SMS permissions are refused there; the APK is sideloaded from EAS), a server at the CHPS compound.
 
 ## Decisions (settled)
 
@@ -15,11 +20,11 @@ Out (non-goals): diagnosis, a caregiver chatbot, iOS, Play Store distribution (S
 - Referral status is derived from `referral_events` and only moves forward.
 - Acknowledgement timeout by urgency: 10 min (3), 30 min (2), 2 h (1); then the backup number and a call button.
 - Mobile uses raw SQL over `expo-sqlite` with SQLCipher (no Drizzle on the phone; a dozen tables do not need it).
-- Low-end Android first: minSdk 24, Hermes, arm64-v8a and armeabi-v7a only, virtualised lists, no raster maps. Content is not bundled per language: the device downloads only its catchment's language audio pack and district map pack (versioned, sha256-verified, resumable). English text and clips stay bundled as the fallback.
+- Low-end Android first: minSdk 24, Hermes, arm64-v8a and armeabi-v7a only, virtualised lists, no map tiles (directions open the phone's own map app).
 - Background survival: a manifest SMS receiver; at every launch a catch-up scan of the SMS inbox for anything missed while the app was force-stopped; in facility mode a foreground service. Onboarding opens the right battery and autostart screen for the manufacturer (Samsung sleeping apps, Transsion, Xiaomi) and checks that the setting took effect.
 - WHO checklists ship inside the app bundle (`packages/core/protocols`), fully offline. Every visit stores the protocol id and version. Protocol updates go out by EAS Update.
-- Register onboarding is one scalable pipeline on the server: CSV/XLSX with saved column-mapping templates, or a direct DHIS2 Tracker pull. Each runs as a dry run, then commits, and can be undone. The web app drives it. Devices pull only their catchment's active clients and 12 months of visits, paged and resumable.
-- Secrets (Khaya, Arkesel, DHIS2, JWT) live only in server env. The phone calls Khaya through the API, never directly.
+- Clients come from the nurse's enrolment and assessments. Devices pull only their catchment's active clients and 12 months of visits, paged and resumable.
+- Secrets (Frog, JWT) live only in server env.
 - iOS cannot read or send SMS from an app, so iPhones are out of scope.
 - Protocol tables await review by the team clinician before any field use.
 
@@ -27,7 +32,7 @@ Out (non-goals): diagnosis, a caregiver chatbot, iOS, Play Store distribution (S
 
 Every feature in the spec works live in front of the judges. Nothing is shown as a placeholder or described as coming later.
 
-Inputs only the team can supply: three Android phones with SIMs and airtime; a Dagbani speaker to record the clips (about 80, recorded in the app); a Khaya API key; a clinician's review of `packages/core/protocols`.
+Inputs only the team can supply: Android phones with SIMs and airtime; a clinician's review of `packages/core/protocols`.
 
 ## Open risks
 
@@ -39,7 +44,7 @@ Inputs only the team can supply: three Android phones with SIMs and airtime; a D
 ## Web dashboard
 
 Roles: district admin (everything for the district), supervisor (reports and referral board, read-only), facility staff (live inbox for their own facility only; health centres and hospitals with a computer, CHPS compounds use the phone).
-Screens: overview, live referral board, users and devices with activation codes, transport providers, facilities, register import (CSV/XLSX templates or DHIMS2, preview, commit, undo), DHIMS2 export with dry run and history, voice recordings per prompt and language, district map packs, checklist review, SMS gateway balance and log, audit log.
+Screens: overview, live referral board (which CHPS referred whom to which facility, and its status), users, nurses' phones with activation codes, facilities, checklist review, SMS gateway balance and log, audit log.
 
 ## Domain invariants
 
@@ -56,17 +61,13 @@ Screens: overview, live referral board, users and devices with activation codes,
 - Refer now sends one signed SMS of 160 characters or fewer; in airplane mode it queues and sends when signal returns.
 - The facility phone, with the app closed, raises a full-screen alert for a valid referral, ignores ordinary SMS, and rejects a tampered or unknown-signer message.
 - The facility acknowledges and the CHO phone shows "received"; with no acknowledgement within the urgency timeout the CHO sees the escalation.
-- A referral scanned by QR on a third phone verifies, is forwarded, and arrives once (no duplicate).
-- A driver's reply "1" marks the transport request coming; "2" or silence offers the next driver.
 - Pushing the same sync batch twice changes nothing; a deactivated device gets 401.
 
 ## Milestones
 
-| # | Milestone | Owner | Evidence | State |
-| --- | --- | --- | --- | --- |
-| M0 | `packages/core`: codec, signing, rules + 3 protocols, scorer, route, destination, status, seed | lead | 44 Vitest tests passing | done |
-| M1 | API: schema, seed, activation, sync push/pull, referral merge, inbound SMS, SSE | subagent, branch `api` | API tests incl. idempotency, merge, bad signature, 401 | in progress |
-| M2 | Mobile slice: SMS native module, encrypted DB, seeded register, ranked list, checklist with audio, refer now by SMS, facility receive + acknowledge | lead | Two phones on an EAS build, airplane-mode script from spec 20 | next |
-| M3 | QR hop, driver SMS and replies, escalation timers | lead | Three-phone run | |
-| M4 | Mobile sync to the API; web facility inbox | lead | Push from phone appears live in the web inbox | |
-| M5 | Offline map with route, DHIS2 export, in-app clip recorder + Dagbani clips, `model/train.py` writing `risk_model.json`, Khaya transcription, CSV register import | lead + team inputs | Every spec feature shown live in the demo script | |
+| # | Milestone | State |
+| --- | --- | --- |
+| M0 to M5 | Core, API, mobile, sync, web inbox and dashboard | done |
+| M6 | Trim to the two problems: remove spoken prompts, DHIS2 import and export, transport, volunteers and QR, in-app maps | done |
+| M7 | Scheduled clients always on Today; clients book by texting the nurse; printable monthly report | next |
+| M8 | UI overhaul, phone and dashboard | |

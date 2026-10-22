@@ -26,14 +26,6 @@ Check it from a phone's browser: `<LAN URL>/health` returns `{"ok":true}`.
 
 Re-running the seed resets the demo data and the activation codes.
 
-Install the map cutter once per machine (the API runs it from `apps/api/bin`):
-
-```bash
-scripts/get-pmtiles.sh
-```
-
-Then make each district's offline map from the dashboard: **Maps → Make the map**. Phones download it on their next sync with internet.
-
 ## 3. Web dashboard
 
 ```bash
@@ -78,11 +70,10 @@ Each phone is activated once with internet. Use the codes the seed printed:
 | Code | Device | Mode |
 | --- | --- | --- |
 | 26100001 | D001 Abiba Sulemana | CHO |
-| 26100002 | V001 Iddrisu Mahama | Volunteer |
 | 26100003 | F001 Kanshegu CHPS | Facility |
 | 26100004 | F002 Pong-Tamale Health Centre | Facility |
 | 26100005 | F003 Savelugu Municipal Hospital | Facility |
-| 26100006 | D002 Mariama Abdulai, Nabogu CHPS (no catchment until the register is imported) | CHO |
+| 26100006 | D002 Mariama Abdulai, Nabogu CHPS (no clients yet: enrol them on the phone) | CHO |
 
 Enter the phone's real number at activation; acknowledgements and status SMS go to it. A facility phone becomes the number CHO phones text referrals to.
 
@@ -98,38 +89,34 @@ Two phones: CHO (D001) and hospital (F003).
 4. CHO phone shows Facility received it.
 5. Hospital: Arrived, Treated, Discharged. The CHO phone follows each step; after discharge the baby is back on the CHO's Today list with a follow-up.
 
-Offline variants: put the CHO phone in airplane mode with mobile signal only (no data), or with no signal at all; the SMS queues and sends when signal returns. QR hop: on the referral, Show QR code; scan it from the volunteer phone (More, Scan a referral QR), which forwards it by SMS.
+Offline variants: put the CHO phone in airplane mode with mobile signal only (no data), or with no signal at all; the SMS queues and sends when signal returns.
 
-## 7. Demo: onboard a CHPS and DHIMS2
-
-DHIMS2 runs here against DHIS2's public demo server (Sierra Leone sample data), set in `apps/api/.env`. The live DHIMS2 needs Ghana Health Service authorisation; only the URL, the login and `docs/dhis2-mapping.json` change.
-
-Before the demo (the demo server resets now and then):
-
-```bash
-scripts/dhis2-demo-setup.sh               # loads the Laafia CHPS programme onto the DHIS2 server; safe to re-run
-```
-
-1. **Import the register.** Dashboard as admin, Import, From a file: template *CHPS client register*, facility *Nabogu CHPS*, file `docs/demo/nabogu-chps-register.csv`. The preview shows 28 people in 13 households ready, row 29 rejected (ANC without an EDD) and row 30 a duplicate. Confirm the import.
-2. **Map the new area.** Maps, Make the map: the suggested area now takes in Nabogu, Gushie and Dipale.
-3. **CHO phone.** Activate with `26100006`. The first sync brings Nabogu's 28 clients, ranked, and the map. A phone already activated as another device needs its app data cleared first (Android Settings, Apps, Laafia, Storage).
-4. **Pull from DHIMS2.** Import, DHIMS2: template *DHIS2 Child Programme*, any facility, org unit `DiszpKrYNg8`, programme `IpHINAT79UW`. The preview lists the server's children; leave it unconfirmed.
-5. **Report to DHIMS2.** DHIMS2 export: *Kanshegu CHPS*, this month, Check with DHIMS2. DHIS2 validates the people, visits, referrals and monthly totals and saves nothing.
-
-To run it again, Undo the Nabogu import on the Import page.
-
-## 8. Tests
+## 7. Tests
 
 ```bash
 npm test    # core, api, mobile and web
 ```
 
-## 9. Standalone APK
+## 8. Deploy
 
-For phones that should run without the development machine, set the API URL for the profile in `apps/mobile/eas.json` (`env.EXPO_PUBLIC_API_URL`) and build:
+The API and the dashboard go online; the phones keep working offline and sync when they reach the API.
+
+**API on Render** (Web Service, Node, repository root as the root directory):
+
+- Database: a Render or Neon PostgreSQL; set its URL as `DATABASE_URL`.
+- Build command: `npm ci --include=dev && npm run db:migrate -w @laafia/api` (`tsx` and the Prisma CLI are dev dependencies)
+- Start command: `npm start -w @laafia/api`
+- Environment: `NODE_ENV=production`, `DATABASE_URL`, `JWT_SECRET` (32+ characters), `ADMIN_TOKEN` and `SMS_WEBHOOK_TOKEN` (24+ characters), and the Frog variables if the server should send SMS. Render sets `PORT`.
+- Seed once from a shell with the production `DATABASE_URL`: `npm run seed -w @laafia/api`.
+- Render's free plan sleeps after 15 idle minutes, so the first sync afterwards waits for it to wake.
+
+**Dashboard on Vercel** (root directory `apps/web`): set `API_URL` to the Render URL. The dashboard proxies `/api` to it, so sign-in cookies stay on the dashboard's own domain.
+
+**Standalone APK** (runs without the development machine). Set `EXPO_PUBLIC_API_URL` to the Render URL under the profile's `env` in `apps/mobile/eas.json`, then:
 
 ```bash
 cd apps/mobile
 npx eas-cli build --platform android --profile preview
-cd apps/mobile && npx expo start --dev-client --lan
 ```
+
+Install the APK from the build page on any Android phone (allow installing unknown apps) and activate it with a code from the dashboard's Phones page. Each new version is a new APK to install.

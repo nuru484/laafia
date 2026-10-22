@@ -2,21 +2,18 @@ import { ACK_TIMEOUT_MS, deriveStatus, referralAlert, type ReferralStatus } from
 import { router, useLocalSearchParams } from 'expo-router'
 import { useState } from 'react'
 import { Alert, Linking, View } from 'react-native'
-import QRCode from 'react-native-qrcode-svg'
 import { STATUS_TEXT, ago, statusTone } from '../../features/format'
-import { facilityUpdate, referOnward, requestTransport, resendReferral } from '../../lib/relay'
-import { changed, currentSession, env, pushNativeState, sendDue } from '../../lib/runtime'
+import { facilityUpdate, referOnward, resendReferral } from '../../lib/relay'
+import { changed, currentSession, env, sendDue } from '../../lib/runtime'
 import { TYPE_LABEL, signLabels } from '../../lib/signs'
 import { useQuery } from '../../lib/useQuery'
-import { Banner, Body, Button, Card, Chip, Field, Heading, Label, Loading, Screen } from '../../ui/kit'
+import { Banner, Body, Button, Card, Chip, Field, Label, Loading, Screen } from '../../ui/kit'
 import { color, space } from '../../ui/theme'
 
 const ORDER: ReferralStatus[] = ['created', 'sent', 'received', 'arrived', 'treated', 'closed']
-const TRANSPORT_TEXT: Record<string, string> = { requested: 'Waiting for a reply', coming: 'Coming', declined: 'Cannot come', done: 'Done' }
 
 export default function ReferralScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
-  const [showQr, setShowQr] = useState(false)
   const [backup, setBackup] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
   const role = currentSession()?.role
@@ -29,18 +26,16 @@ export default function ReferralScreen() {
         WHERE r.id = ?`, [id])
     if (!r) return null
     const events = await db.all<{ status: ReferralStatus; at: number; via: string; source_device_id: string }>('SELECT status, at, via, source_device_id FROM referral_events WHERE referral_id = ? ORDER BY at', [id])
-    const providers = await db.all<{ id: string; name: string; phone: string; vehicle: string; community: string }>('SELECT * FROM transport_providers WHERE active = 1 AND deleted = 0 ORDER BY community, name')
-    const requests = await db.all<{ id: string; provider_id: string; status: string; requested_at: number }>('SELECT id, provider_id, status, requested_at FROM transport_requests WHERE referral_id = ? ORDER BY requested_at DESC', [id])
     const outbox = await db.all<{ status: string; last_error: string | null; recipient: string }>("SELECT status, last_error, recipient FROM outbox WHERE ref_id = ? AND ref_table = 'referrals' ORDER BY created_at DESC LIMIT 1", [id])
     const facilities = await db.all<{ code: string; name: string; level: string }>('SELECT code, name, level FROM facilities ORDER BY level, name')
     const onward = await db.all<{ id: string; destination_code: string; short_id: string }>('SELECT id, destination_code, short_id FROM referrals WHERE parent_referral_id = ?', [id])
     const myCode = (await db.get<{ facility_code: string | null }>('SELECT facility_code FROM devices WHERE id = ?', [env().self.device_id]))?.facility_code ?? null
-    return { r, events, providers, requests, lastSms: outbox[0], facilities, onward, myCode }
+    return { r, events, lastSms: outbox[0], facilities, onward, myCode }
   }, [id])
 
   if (data === undefined) return <Loading />
   if (data === null) return <Screen title="Referral not found"><Button label="Back" onPress={() => router.back()} /></Screen>
-  const { r, events, providers, requests, lastSms, facilities, onward, myCode } = data
+  const { r, events, lastSms, facilities, onward, myCode } = data
   const status = deriveStatus(events)
   const alert = referralAlert(events, r.urgency, Date.now())
   const tone = statusTone(status)
@@ -52,8 +47,6 @@ export default function ReferralScreen() {
     setBusy(label)
     try {
       await fn()
-      // A new transport request adds the driver to the numbers the SMS receiver watches.
-      await pushNativeState()
       changed()
       void sendDue()
     } catch (e) {
@@ -127,37 +120,6 @@ export default function ReferralScreen() {
             <Button tone="plain" label="Send to backup number" disabled={backup.replace(/\D/g, '').length < 9 || !r.wire} busy={busy === 'backup'} onPress={() => act('backup', () => resendReferral(env(), r.id, backup))} />
             <Button tone="plain" label="Call ambulance 112" onPress={() => Linking.openURL('tel:112')} />
           </Card>
-          {r.wire ? (
-            <Card>
-              <Label>Hand-carry by QR</Label>
-              <Body muted>Any Laafia phone that scans this carries the referral and forwards it when it finds signal. No internet needed.</Body>
-              {showQr ? (
-                <View style={{ alignItems: 'center', padding: space.md, backgroundColor: '#fff' }} accessibilityLabel="Referral QR code">
-                  <QRCode value={r.wire} size={240} ecl="M" />
-                </View>
-              ) : null}
-              <Button tone="plain" label={showQr ? 'Hide QR code' : 'Show QR code'} onPress={() => setShowQr((v) => !v)} />
-            </Card>
-          ) : null}
-          <Heading>Transport</Heading>
-          {requests.map((t) => {
-            const p = providers.find((x) => x.id === t.provider_id)
-            return <Card key={t.id}><Body>{p?.name ?? 'Driver'}: {TRANSPORT_TEXT[t.status] ?? t.status}</Body><Body muted>Asked {ago(t.requested_at)}</Body></Card>
-          })}
-          {requests.some((t) => t.status === 'declined') || (requests[0] && requests[0].status === 'requested' && Date.now() - requests[0].requested_at > 5 * 60_000) ? (
-            <Banner tone="followup" text="No driver confirmed yet. Ask the next driver below, or call 112." />
-          ) : null}
-          {providers.length === 0 ? <Body muted>No drivers registered for this community.</Body> : providers.map((p) => (
-            <Card key={p.id}>
-              <Body style={{ fontWeight: '700' }}>{p.name}</Body>
-              <Body muted>{p.vehicle} · {p.community}</Body>
-              <View style={{ flexDirection: 'row', gap: space.sm }}>
-                <Button style={{ flex: 1 }} label="Text pickup" busy={busy === p.id} disabled={requests.some((t) => t.provider_id === p.id && (t.status === 'requested' || t.status === 'coming'))}
-                  onPress={() => act(p.id, () => requestTransport(env(), { referral_id: r.id, provider_id: p.id }))} />
-                <Button style={{ flex: 1 }} tone="plain" label="Call" onPress={() => Linking.openURL(`tel:${p.phone}`)} />
-              </View>
-            </Card>
-          ))}
         </>
       )}
     </Screen>

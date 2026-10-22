@@ -86,7 +86,7 @@ export async function push(deps: Deps, device: Device, body: PushInput) {
 
 const DAY = 86_400_000
 const ACTIVE = { postpartumDays: 42, childMonths: 60, visitDays: 365, closedReferralDays: 30 }
-const SYNC_TABLES = ['facilities', 'devices', 'households', 'clients', 'visits', 'transport_providers', 'transport_requests', 'referrals', 'referral_events'] as const
+const SYNC_TABLES = ['facilities', 'devices', 'households', 'clients', 'visits', 'referrals', 'referral_events'] as const
 type SyncTable = (typeof SYNC_TABLES)[number]
 type Where = Record<string, unknown>
 const NOTHING: Where = { id: { in: [] } }
@@ -119,8 +119,6 @@ async function snapshotFilters(deps: Deps, facilityId: string, myReferrals: Wher
     clients: active,
     households: { OR: [{ id: { in: activeClients.map((c) => c.householdId) } }, { id: { notIn: withClients.map((c) => c.householdId) } }] },
     visits: { visitedAt: { gte: now - ACTIVE.visitDays * DAY }, clientId: { in: activeClients.map((c) => c.id) } },
-    transport_providers: { active: true },
-    transport_requests: { status: { in: ['requested', 'coming'] } },
     referrals: needed,
     referral_events: { referralId: { in: neededIds } },
   } satisfies Partial<Record<SyncTable, Where>>
@@ -144,7 +142,7 @@ export async function pull(deps: Deps, device: Device, { since, limit }: PullInp
   const scope: Record<SyncTable, Where> = {
     facilities: district ? { districtId: district } : {},
     devices: district ? { facility: { districtId: district } } : {},
-    households: mine, clients: mine, visits: mine, transport_providers: mine, transport_requests: mine,
+    households: mine, clients: mine, visits: mine,
     referrals: myReferrals,
     referral_events: { referralId: { in: myReferralIds } },
   }
@@ -155,8 +153,6 @@ export async function pull(deps: Deps, device: Device, { since, limit }: PullInp
     households: (where) => prisma.household.findMany({ where, ...page }),
     clients: (where) => prisma.client.findMany({ where, ...page }),
     visits: (where) => prisma.visit.findMany({ where, ...page }),
-    transport_providers: (where) => prisma.transportProvider.findMany({ where, ...page }),
-    transport_requests: (where) => prisma.transportRequest.findMany({ where, ...page }),
     referrals: (where) => prisma.referral.findMany({ where, ...page }),
     referral_events: (where) => prisma.referralEvent.findMany({ where, ...page }),
   }

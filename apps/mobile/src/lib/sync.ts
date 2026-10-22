@@ -31,10 +31,8 @@ const PLAIN: Record<string, { cols: string[]; json?: string[]; bool?: string[] }
     bool: ['nhis_active'],
   },
   visits: { cols: ['id', 'client_id', 'protocol_id', 'visited_at', 'answers', 'outcome', 'rule_id', 'followup_due', 'notes', 'muac_mm'], json: ['answers'] },
-  transport_providers: { cols: ['id', 'name', 'phone', 'vehicle', 'community', 'active'], bool: ['active'] },
-  transport_requests: { cols: ['id', 'referral_id', 'provider_id', 'status', 'scheduled_for'] },
 }
-const PUSH_ORDER = ['households', 'clients', 'visits', 'referrals', 'referral_events', 'transport_providers', 'transport_requests']
+const PUSH_ORDER = ['households', 'clients', 'visits', 'referrals', 'referral_events']
 
 const FULL_TYPE: Record<ClientWireType, string> = { PW: 'pregnant', PP: 'postpartum', NB: 'newborn', CH: 'child' }
 const WIRE_OF: Record<string, ClientWireType> = { pregnant: 'PW', postpartum: 'PP', newborn: 'NB', child: 'CH' }
@@ -51,7 +49,7 @@ function toWire(table: string, local: Row): Row {
   return out
 }
 
-async function referralToWire(env: Env, r: Row, alwaysWire = false): Promise<Row> {
+async function referralToWire(env: Env, r: Row): Promise<Row> {
   const facility = await env.db.get<{ id: string }>('SELECT id FROM facilities WHERE code = ?', [r.destination_code as string])
   const type = r.client_type as ClientWireType
   const out: Row = {
@@ -61,19 +59,19 @@ async function referralToWire(env: Env, r: Row, alwaysWire = false): Promise<Row
     next_of_kin: r.next_of_kin, parent_referral_id: r.parent_referral_id ?? null, updated_at: r.updated_at, device_id: r.device_id, deleted: r.deleted === 1,
   }
   // The server only accepts a referral from a non-origin device with the origin's signed text.
-  if ((alwaysWire || r.origin_device_id !== env.self.device_id) && r.wire) out.lfr = r.wire
+  if (r.origin_device_id !== env.self.device_id && r.wire) out.lfr = r.wire
   return out
 }
 
-/** Every unsynced row in the server's shape, parents before children. Also feeds the QR record share. */
-export async function collectUnsynced(env: Env, max = MAX_PER_RUN, alwaysWire = false): Promise<{ table: string; row: Row }[]> {
+/** Every unsynced row in the server's shape, parents before children. */
+export async function collectUnsynced(env: Env, max = MAX_PER_RUN): Promise<{ table: string; row: Row }[]> {
   const { db } = env
   const records: { table: string; row: Row }[] = []
   for (const table of PUSH_ORDER) {
     if (records.length >= max) break
     const limit = max - records.length
     if (table === 'referrals') {
-      for (const r of await db.all<Row>('SELECT * FROM referrals WHERE synced = 0 LIMIT ?', [limit])) records.push({ table, row: await referralToWire(env, r, alwaysWire) })
+      for (const r of await db.all<Row>('SELECT * FROM referrals WHERE synced = 0 LIMIT ?', [limit])) records.push({ table, row: await referralToWire(env, r) })
     } else if (table === 'referral_events') {
       const rows = await db.all<Row>(
         'SELECT e.*, r.origin_device_id, r.short_id FROM referral_events e JOIN referrals r ON r.id = e.referral_id WHERE e.synced = 0 LIMIT ?', [limit])
@@ -156,7 +154,6 @@ export async function applyPulled(env: Env, table: string, row: Row) {
       // The server knows this referral under the canonical id; move the local row and everything pointing at it.
       await db.run('UPDATE referrals SET id = ? WHERE id = ?', [id, existing.id])
       await db.run('UPDATE referral_events SET referral_id = ? WHERE referral_id = ?', [id, existing.id])
-      await db.run('UPDATE transport_requests SET referral_id = ? WHERE referral_id = ?', [id, existing.id])
       await db.run('UPDATE outbox SET ref_id = ? WHERE ref_id = ?', [id, existing.id])
     }
     if (await localWins(db, 'referrals', id, updatedAt)) return
@@ -188,7 +185,6 @@ export async function applyPulled(env: Env, table: string, row: Row) {
     values[c] = v
   }
   if (table === 'visits') values.protocol_version = (await db.get<{ protocol_version: number }>('SELECT protocol_version FROM visits WHERE id = ?', [id]))?.protocol_version ?? 1
-  if (table === 'transport_requests') values.requested_at = (await db.get<{ requested_at: number }>('SELECT requested_at FROM transport_requests WHERE id = ?', [id]))?.requested_at ?? updatedAt
   await upsert(db, table, values)
 }
 

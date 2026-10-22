@@ -99,7 +99,7 @@ export default function Enrol() {
           <View style={{ gap: space.md }}>
             <Field label="Community" value={community} onChangeText={setCommunity} />
             <Field label="Head of household" value={head} onChangeText={setHead} />
-            <Field label="Landmark (how a driver finds the house)" value={landmark} onChangeText={setLandmark} placeholder="behind the mosque, blue gate" />
+            <Field label="Landmark (how to find the house)" value={landmark} onChangeText={setLandmark} placeholder="behind the mosque, blue gate" />
             <Button tone="plain" label={fix ? 'Capture position again' : 'Capture house position'} onPress={gps} />
             {gpsNote ? <Banner text={gpsNote} /> : null}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>

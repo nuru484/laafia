@@ -27,11 +27,7 @@ export default function More() {
           {sync.last_error ? <Banner tone="followup" text={sync.last_error} /> : null}
           <Button label="Sync now" busy={sync.running} onPress={() => void syncNow()} />
         </Card>
-        {role !== 'facility' ? <Button tone="plain" label="Scan a referral QR" onPress={() => router.push('/scan')} /> : null}
-        {role !== 'facility' ? <Button tone="plain" label="Drivers" onPress={() => router.push('/drivers')} /> : <Button tone="plain" label="Look up a client" onPress={() => router.push('/lookup')} />}
-        <Button tone="plain" label="Share records with another phone" onPress={() => router.push('/share')} />
-        <Button tone="plain" label="Receive records from another phone" onPress={() => router.push('/receive')} />
-        <Button tone="plain" label="Record questions in Dagbani" onPress={() => router.push('/recorder')} />
+        {role === 'facility' ? <Button tone="plain" label="Look up a client" onPress={() => router.push('/lookup')} /> : null}
         <Button tone="plain" label="Phone setup checks" onPress={() => router.push('/checks')} />
         <Button tone="quiet" label="Lock now" onPress={() => setUnlocked(false)} />
       </Screen>

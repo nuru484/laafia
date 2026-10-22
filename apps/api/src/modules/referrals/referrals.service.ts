@@ -18,23 +18,20 @@ export type ReferralEvent = Num<EventRow, 'updatedAt' | 'seq' | 'at'>
 /** A referral_events row on the wire. */
 export type ReferralEventView = {
   id: string; updated_at: number; device_id: string | null; deleted: boolean
-  referral_id: string; status: ReferralStatus; at: number; source_device_id: string; via: 'sms' | 'qr' | 'https' | 'local'
+  referral_id: string; status: ReferralStatus; at: number; source_device_id: string; via: 'sms' | 'https' | 'local'
 }
-
-/** A transport request attached to a referral, with the provider's name and phone. */
-export type TransportView = { id: string; provider_id: string; provider_name: string | null; provider_phone: string | null; status: 'requested' | 'coming' | 'declined' | 'done'; scheduled_for: number | null; updated_at: number }
 
 /** Wire shape of a referral in lists, chains and SSE (docs/API.md, ReferralView). */
 export type ReferralView = {
   id: string; updated_at: number; device_id: string | null; deleted: boolean; facility_id: string | null
   origin_device_id: string; short_id: string; client_id: string | null; visit_id: string | null; client_code: string | null
   client_type: 'pregnant' | 'postpartum' | 'newborn' | 'child' | null; context: string | null; urgency: number | null; danger_signs: string[]
-  destination_facility_id: string | null; next_of_kin: string | null; status: ReferralStatus; delivered_via: 'sms' | 'qr' | 'https' | null
+  destination_facility_id: string | null; next_of_kin: string | null; status: ReferralStatus; delivered_via: 'sms' | 'https' | null
   parent_referral_id: string | null; onward_referral_id: string | null; onward_status: ReferralStatus | null
-  events: ReferralEventView[]; transport: TransportView[]
+  events: ReferralEventView[]
 }
 
-export const viewOf = (r: Referral, events: ReferralEvent[], transport: TransportView[] = []): ReferralView => ({
+export const viewOf = (r: Referral, events: ReferralEvent[]): ReferralView => ({
   id: r.id, updated_at: r.updatedAt, device_id: r.deviceId, deleted: r.deleted, facility_id: r.facilityId,
   origin_device_id: r.originDeviceId, short_id: r.shortId, client_id: r.clientId, visit_id: r.visitId, client_code: r.clientCode,
   client_type: r.clientType as ReferralView['client_type'], context: r.context, urgency: r.urgency, danger_signs: (r.dangerSigns as string[]) ?? [],
@@ -44,29 +41,13 @@ export const viewOf = (r: Referral, events: ReferralEvent[], transport: Transpor
     id: e.id, updated_at: e.updatedAt, device_id: e.deviceId, deleted: e.deleted, referral_id: e.referralId, status: e.status as ReferralStatus,
     at: e.at, source_device_id: e.sourceDeviceId, via: e.via as ReferralEventView['via'],
   })),
-  transport,
 })
-
-/** Transport requests per referral id, with the provider's name and phone (staff call the driver). */
-async function transportFor(db: Tx, referralIds: string[]): Promise<Map<string, TransportView[]>> {
-  const out = new Map<string, TransportView[]>()
-  if (!referralIds.length) return out
-  const reqs = await db.transportRequest.findMany({ where: { referralId: { in: referralIds }, deleted: false }, orderBy: { updatedAt: 'asc' } })
-  const providers = new Map((await db.transportProvider.findMany({ where: { id: { in: reqs.map((r) => r.providerId) } }, select: { id: true, name: true, phone: true } })).map((p) => [p.id, p]))
-  for (const t of reqs) {
-    const p = providers.get(t.providerId)
-    const list = out.get(t.referralId!) ?? []
-    list.push({ id: t.id, provider_id: t.providerId, provider_name: p?.name ?? null, provider_phone: p?.phone ?? null, status: t.status as TransportView['status'], scheduled_for: t.scheduledFor, updated_at: t.updatedAt })
-    out.set(t.referralId!, list)
-  }
-  return out
-}
 
 export async function referralView(deps: Deps, id: string): Promise<ReferralView | null> {
   const r = await deps.prisma.referral.findUnique({ where: { id }, include: { events: { orderBy: { at: 'asc' } } } })
   if (!r) return null
   const { events, ...row } = r
-  return viewOf(row, events, (await transportFor(deps.prisma, [id])).get(id))
+  return viewOf(row, events)
 }
 
 /** Run a write, then publish every referral it touched on the SSE bus. */
@@ -347,8 +328,7 @@ export async function listReferrals(deps: Deps, facilityIds: string[] | null, fi
     take: 200,
     include: { events: { orderBy: { at: 'asc' } } },
   })
-  const transport = await transportFor(deps.prisma, rows.map((r) => r.id))
-  return rows.map(({ events, ...r }) => viewOf(r, events, transport.get(r.id)))
+  return rows.map(({ events, ...r }) => viewOf(r, events))
 }
 
 /** A facility device may only act for its own facility; the admin token may act for any. */

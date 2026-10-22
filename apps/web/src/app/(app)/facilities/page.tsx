@@ -19,10 +19,9 @@ const CAPS: { value: string; label: string }[] = [
   { value: 'theatre', label: 'Theatre' },
   { value: 'nicu', label: 'Newborn intensive care' },
 ]
-const LANGS = [{ value: 'dag', label: 'Dagbani' }, { value: 'kus', label: 'Kusaal' }, { value: 'gur', label: 'Gurune' }, { value: 'twi', label: 'Twi' }]
 
-type Draft = { id?: string; code: string; name: string; level: Facility['level']; phone: string; lat: string; lng: string; capabilities: string[]; languages: string[] }
-const empty: Draft = { code: '', name: '', level: 'chps', phone: '', lat: '', lng: '', capabilities: [], languages: ['dag'] }
+type Draft = { id?: string; code: string; name: string; level: Facility['level']; phone: string; lat: string; lng: string; capabilities: string[] }
+const empty: Draft = { code: '', name: '', level: 'chps', phone: '', lat: '', lng: '', capabilities: [] }
 
 export default function FacilitiesPage() {
   const { data, error, isLoading, refetch } = useFacilitiesQuery()
@@ -45,7 +44,7 @@ export default function FacilitiesPage() {
           </ul>
           <div className="hidden overflow-hidden rounded-lg border md:block">
             <Table>
-              <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Code</TableHead><TableHead>Level</TableHead><TableHead>Referral phone</TableHead><TableHead>Capabilities</TableHead><TableHead>Languages</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Code</TableHead><TableHead>Level</TableHead><TableHead>Referral phone</TableHead><TableHead>Capabilities</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
               <TableBody>
                 {data.facilities.map((f) => (
                   <TableRow key={f.id}>
@@ -54,7 +53,6 @@ export default function FacilitiesPage() {
                     <TableCell>{LEVEL[f.level]}</TableCell>
                     <TableCell className="text-muted-foreground">{f.phone ?? 'Not set'}</TableCell>
                     <TableCell className="text-muted-foreground">{f.capabilities.join(', ') || '-'}</TableCell>
-                    <TableCell className="text-muted-foreground">{f.languages?.join(', ') || '-'}</TableCell>
                     <TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => setDraft(toDraft(f))}>Edit</Button></TableCell>
                   </TableRow>
                 ))}
@@ -68,7 +66,7 @@ export default function FacilitiesPage() {
   )
 }
 
-const toDraft = (f: Facility): Draft => ({ id: f.id, code: f.code, name: f.name, level: f.level, phone: f.phone ?? '', lat: String(f.lat), lng: String(f.lng), capabilities: f.capabilities, languages: f.languages ?? [] })
+const toDraft = (f: Facility): Draft => ({ id: f.id, code: f.code, name: f.name, level: f.level, phone: f.phone ?? '', lat: String(f.lat), lng: String(f.lng), capabilities: f.capabilities })
 
 function FacilityDialog({ draft, onClose }: { draft: Draft; onClose: () => void }) {
   const [v, setV] = useState(draft)
@@ -77,10 +75,10 @@ function FacilityDialog({ draft, onClose }: { draft: Draft; onClose: () => void 
   const lat = Number(v.lat)
   const lng = Number(v.lng)
   const valid = v.name.trim() && (v.id || /^[A-Z0-9-]{3,16}$/.test(v.code)) && v.lat !== '' && v.lng !== '' && Math.abs(lat) <= 90 && Math.abs(lng) <= 180
-  const toggle = (k: 'capabilities' | 'languages', x: string) => setV((s) => ({ ...s, [k]: s[k].includes(x) ? s[k].filter((y) => y !== x) : [...s[k], x] }))
+  const toggle = (k: 'capabilities', x: string) => setV((s) => ({ ...s, [k]: s[k].includes(x) ? s[k].filter((y) => y !== x) : [...s[k], x] }))
 
   async function save() {
-    const body = { name: v.name.trim(), level: v.level, phone: v.phone.trim() || null, lat, lng, capabilities: v.capabilities, languages: v.languages }
+    const body = { name: v.name.trim(), level: v.level, phone: v.phone.trim() || null, lat, lng, capabilities: v.capabilities }
     try {
       if (v.id) await update({ id: v.id, ...body }).unwrap()
       else await create({ code: v.code, ...body }).unwrap()
@@ -111,12 +109,6 @@ function FacilityDialog({ draft, onClose }: { draft: Draft; onClose: () => void 
             <legend className="mb-1 text-sm font-medium">Capabilities</legend>
             {CAPS.map((cap) => (
               <label key={cap.value} className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" className="size-4" checked={v.capabilities.includes(cap.value)} onChange={() => toggle('capabilities', cap.value)} />{cap.label}</label>
-            ))}
-          </fieldset>
-          <fieldset className="flex flex-col gap-2">
-            <legend className="mb-1 text-sm font-medium">Languages spoken in the catchment</legend>
-            {LANGS.map((l) => (
-              <label key={l.value} className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" className="size-4" checked={v.languages.includes(l.value)} onChange={() => toggle('languages', l.value)} />{l.label}</label>
             ))}
           </fieldset>
         </div>

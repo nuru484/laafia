@@ -2,7 +2,6 @@ import {
   PROTOCOLS,
   RISK_MODEL,
   deriveStatus,
-  normalizePhone,
   planRoute,
   rank,
   referralAlert,
@@ -22,7 +21,7 @@ import { TYPE_LABEL, signLabels } from './signs'
 /* Register reads and writes behind the screens: the ranked day, visits, enrolment, referral lists. */
 
 const DAY = 86_400_000
-const OPEN: ReferralStatus[] = ['created', 'carrying', 'sent', 'received', 'arrived', 'treated']
+const OPEN: ReferralStatus[] = ['created', 'sent', 'received', 'arrived', 'treated']
 
 type ClientRow = Omit<Client, 'prior_complications' | 'nhis_active'> & { prior_complications: string; nhis_active: number }
 type VisitRow = Omit<Visit, 'answers'> & { answers: string }
@@ -172,30 +171,13 @@ async function listReferrals(env: Env, where: string, params: (string | number)[
     .sort((a, b) => Number(!OPEN.includes(a.status)) - Number(!OPEN.includes(b.status)) || b.urgency - a.urgency || b.created_at - a.created_at)
 }
 
-/** Referrals this phone made or is carrying. */
+/** Referrals this phone made. */
 export function referralList(env: Env) {
-  return listReferrals(env, '(r.origin_device_id = ? OR r.id IN (SELECT referral_id FROM referral_events WHERE source_device_id = ?))', [env.self.device_id, env.self.device_id])
+  return listReferrals(env, 'r.origin_device_id = ?', [env.self.device_id])
 }
 
 /** Facility mode: everything addressed to this facility. */
 export async function facilityInbox(env: Env) {
   const me = await env.db.get<{ facility_code: string | null }>('SELECT facility_code FROM devices WHERE id = ?', [env.self.device_id])
   return listReferrals(env, 'r.destination_code = ?', [me?.facility_code ?? ''])
-}
-
-export type ProviderInput = { name: string; phone: string; vehicle: string; community: string }
-
-/** Drivers are registered per community by the CHPS committee, on the dashboard or on the CHO's phone (spec 15). */
-export async function addProvider(env: Env, p: ProviderInput): Promise<string> {
-  const phone = normalizePhone(p.phone)
-  if (!/^0\d{9}$/.test(phone)) throw new Error('Enter a Ghana phone number, for example 024 123 4567')
-  if (!p.name.trim()) throw new Error('Enter the driver name')
-  const id = env.uuid()
-  await env.db.run('INSERT INTO transport_providers (id, name, phone, vehicle, community, active, updated_at, device_id) VALUES (?,?,?,?,?,1,?,?)',
-    [id, p.name.trim(), phone, p.vehicle.trim(), p.community.trim(), env.now(), env.self.device_id])
-  return id
-}
-
-export async function setProviderActive(env: Env, id: string, active: boolean): Promise<void> {
-  await env.db.run('UPDATE transport_providers SET active = ?, updated_at = ?, device_id = ?, synced = 0 WHERE id = ?', [active ? 1 : 0, env.now(), env.self.device_id, id])
 }
