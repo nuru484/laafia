@@ -8,6 +8,9 @@
       ],
       "@/assets/*": [
         "./assets/*"
+      ],
+      "laafia-sms": [
+        "./modules/laafia-sms/src"
       ]
     },
     "allowImportingTsExtensions": true,
