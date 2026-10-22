@@ -41,3 +41,13 @@ export type Pack = { id: string; kind: 'audio' | 'tiles'; language: string | nul
 export type Clip = { id: string; prompt_id: string; lang: string; sha256: string; size: number; recorded_at: number; url: string; device_id?: string | null }
 
 export type ApiErrorBody = { status: number; code: string; message: string; details?: { path: string; message: string }[] }
+
+export type ImportTemplate = { id: string; name: string; source: 'tabular' | 'dhis2'; mapping: Record<string, string>; constants: Record<string, string>; created_at: number }
+export type ImportIssue = { row: number; kind: 'error' | 'duplicate'; field?: string; message: string; match_id?: string }
+export type ImportBatch = {
+  id: string; facility_id: string; template_id: string; source: 'csv' | 'xlsx' | 'dhis2'; filename: string | null; status: 'preview' | 'committed' | 'undone'
+  counts: { rows: number; valid: number; errors: number; duplicates: number; households: number; clients_created?: number; households_created?: number; duplicates_at_commit?: number }
+  issues?: ImportIssue[]
+  sample?: { row: number; household: { community: string; head_name: string; landmark: string | null }; client: { name: string; type: string; sex: string | null; dob: number | null; edd: number | null; delivery_date: number | null } }[]
+  created_at: number; committed_at: number | null; undone_at: number | null
+}

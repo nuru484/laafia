@@ -1,4 +1,4 @@
-import type { Clip, Device, Facility, Pack, Provider, Referral, Summary, User } from '@/types/api'
+import type { Clip, Device, Facility, ImportBatch, ImportTemplate, Pack, Provider, Referral, Summary, User } from '@/types/api'
 import { api } from './api'
 
 export const endpoints = api.injectEndpoints({
@@ -47,6 +47,14 @@ export const endpoints = api.injectEndpoints({
     }),
     updateProvider: b.mutation<unknown, Partial<Provider> & { id: string }>({ query: ({ id, ...body }) => ({ url: `/admin/transport/providers/${id}`, method: 'PATCH', body }), invalidatesTags: ['Provider'] }),
 
+    templates: b.query<{ templates: ImportTemplate[] }, void>({ query: () => '/admin/import/templates', providesTags: ['Import'] }),
+    createTemplate: b.mutation<{ template: ImportTemplate }, Omit<ImportTemplate, 'id' | 'created_at'>>({ query: (body) => ({ url: '/admin/import/templates', method: 'POST', body }), invalidatesTags: ['Import'] }),
+    previewUpload: b.mutation<{ batch: ImportBatch }, FormData>({ query: (body) => ({ url: '/admin/import/preview', method: 'POST', body }), invalidatesTags: ['Import'] }),
+    previewDhis2: b.mutation<{ batch: ImportBatch }, { template_id: string; facility_code: string; org_unit: string; program?: string }>({ query: (body) => ({ url: '/admin/import/dhis2/preview', method: 'POST', body }), invalidatesTags: ['Import'] }),
+    batches: b.query<{ batches: ImportBatch[] }, void>({ query: () => '/admin/import/batches', providesTags: ['Import'] }),
+    commitBatch: b.mutation<{ batch: ImportBatch }, string>({ query: (id) => ({ url: `/admin/import/batches/${id}/commit`, method: 'POST' }), invalidatesTags: ['Import'] }),
+    undoBatch: b.mutation<{ batch: ImportBatch; undone: { clients: number; households: number }; kept: { clients: number; households: number } }, string>({ query: (id) => ({ url: `/admin/import/batches/${id}/undo`, method: 'POST' }), invalidatesTags: ['Import'] }),
+
     packs: b.query<{ packs: Pack[] }, void>({ query: () => '/admin/content/packs', providesTags: ['Pack'] }),
     uploadPack: b.mutation<{ pack: Pack }, FormData>({ query: (body) => ({ url: '/admin/content/packs', method: 'POST', body }), invalidatesTags: ['Pack'] }),
     clips: b.query<{ clips: Clip[] }, void>({ query: () => '/admin/content/clips', providesTags: ['Clip'] }),
@@ -59,5 +67,6 @@ export const {
   useSetStatusMutation, useOnwardMutation, useFacilitiesQuery, useCreateFacilityMutation, useUpdateFacilityMutation,
   useUsersQuery, useCreateUserMutation, useSetUserPasswordMutation, useSetUserActiveMutation, useDevicesQuery, useCreateDeviceMutation,
   useReissueCodeMutation, useDeactivateDeviceMutation, useProvidersQuery, useCreateProviderMutation, useUpdateProviderMutation,
-  usePacksQuery, useUploadPackMutation, useClipsQuery, useDeleteClipMutation,
+  usePacksQuery, useUploadPackMutation, useClipsQuery, useDeleteClipMutation, useTemplatesQuery, useCreateTemplateMutation,
+  usePreviewUploadMutation, usePreviewDhis2Mutation, useBatchesQuery, useCommitBatchMutation, useUndoBatchMutation,
 } = endpoints
