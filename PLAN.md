@@ -36,6 +36,11 @@ Inputs only the team can supply: three Android phones with SIMs and airtime; a D
 - MTN may delay multipart SMS; every Laafia message is designed for one segment.
 - HMAC with shared keys means a stolen facility phone could forge CHO messages; Ed25519 is the upgrade path.
 
+## Web dashboard
+
+Roles: district admin (everything for the district), supervisor (reports and referral board, read-only), facility staff (live inbox for their own facility only; health centres and hospitals with a computer, CHPS compounds use the phone).
+Screens: overview, live referral board, users and devices with activation codes, transport providers, facilities, register import (CSV/XLSX templates or DHIMS2, preview, commit, undo), DHIMS2 export with dry run and history, voice recordings per prompt and language, district map packs, checklist review, SMS gateway balance and log, audit log.
+
 ## Domain invariants
 
 1. A referral is identified by (origin device, short id); every copy on any path merges onto one record.
