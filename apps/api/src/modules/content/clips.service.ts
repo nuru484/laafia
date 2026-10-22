@@ -6,7 +6,7 @@ import { HttpError } from '../../platform/http/errors.ts'
 import { audit } from '../../platform/audit.ts'
 import { toM4a } from '../../platform/audio.ts'
 import type { Actor, Device } from '../../platform/middleware/auth.ts'
-import { allPrompts } from './prompts.ts'
+import { allPrompts } from '@laafia/core'
 import type { ClipFields } from './content.schemas.ts'
 import { contentDir } from './content.service.ts'
 
