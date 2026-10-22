@@ -9,7 +9,7 @@ Out (non-goals): diagnosis, a caregiver chatbot, iOS, Play Store distribution (S
 
 ## Decisions (settled)
 
-- Express + Zod + Drizzle + PostgreSQL; Expo SDK 58 development build via EAS cloud (`eas build`), as the wastle apps do.
+- Express + Zod + Prisma + PostgreSQL (owner, 22 Oct: Prisma replaces Drizzle, the house standard); Expo SDK 58 development build via EAS cloud (`eas build`), as the wastle apps do.
 - npm workspaces monorepo; `packages/core` is the single source for codec, signing, rules, scorer, status and seed.
 - Wire format is `packages/core/src/codec.ts`, which supersedes spec 11.3: `LFR` carries the signer device id; keys are looked up by signer, never by sender number; short ids are 8 base32 chars scoped per origin device.
 - Referral status is derived from `referral_events` and only moves forward.

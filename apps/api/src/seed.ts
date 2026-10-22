@@ -1,12 +1,11 @@
 import { generateSeed } from '@laafia/core'
-import { getTableColumns, sql } from 'drizzle-orm'
-import type { PgTable } from 'drizzle-orm/pg-core'
 import { randomBytes } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
-import { pool, write, type Tx } from './db.ts'
-import { activation_codes, clients, devices, districts, facilities, households, transport_providers, visits } from './schema.ts'
+import { write, type Tx } from './platform/db.ts'
+import { buildDeps, type Deps } from './platform/deps.ts'
+import { fromWire } from './platform/http/wire.ts'
+import { GATEWAY_DEVICE } from './modules/referrals/index.ts'
 
-export const GATEWAY_DEVICE = 'GW01'
 const DAY = 86_400_000
 
 const DISTRICTS = [
@@ -17,44 +16,52 @@ const DISTRICTS = [
 /** Fixed demo activation codes so the phones can be activated from the README. Demo only. */
 export const DEMO_CODES: Record<string, string> = { D001: '26100001', V001: '26100002', F001: '26100003', F002: '26100004', F003: '26100005' }
 
-async function upsertAll(tx: Tx, table: PgTable, rows: Record<string, unknown>[]) {
-  if (!rows.length) return
-  const columns = getTableColumns(table)
-  const set = Object.fromEntries(Object.keys(columns).filter((c) => c !== 'id' && c !== 'seq').map((c) => [c, sql.raw(`excluded."${c}"`)]))
-  await tx.insert(table).values(rows).onConflictDoUpdate({ target: columns.id!, set })
+type Upsertable = { upsert(args: { where: { id: string }; create: never; update: never }): Promise<unknown> }
+
+/** Insert or overwrite each row by id (wire-shaped rows from the core seed). */
+async function upsertAll(model: unknown, rows: Record<string, unknown>[]) {
+  for (const wire of rows) {
+    const { id, ...data } = fromWire(wire)
+    await (model as Upsertable).upsert({ where: { id: id as string }, create: { id, ...data } as never, update: data as never })
+  }
 }
 
 /** Load the deterministic demo catchment (core generateSeed). Safe to re-run: it overwrites the seed rows. */
-export async function seedDemo(today = Date.now()) {
+export async function seedDemo(deps: Deps, today = Date.now()) {
   const s = generateSeed(today)
-  const now = Date.now()
+  const now = deps.clock()
   const base = { updated_at: now, device_id: 'seed', deleted: false }
   const facOf = Object.fromEntries(s.facilities.map((f) => [f.code, f.id]))
   const home = facOf['SAV-CHPS-01']!
-  await write(async (tx) => {
-    await upsertAll(tx, districts, DISTRICTS)
-    await upsertAll(tx, facilities, s.facilities.map((f) => ({ ...base, ...f, district_id: f.code.startsWith('TTH') ? 'dist-tml' : 'dist-sav', languages: f.level === 'chps' ? ['dag'] : [] })))
-    await upsertAll(tx, devices, s.devices.map((d) => ({
+  await write(deps.prisma, async (tx: Tx) => {
+    await upsertAll(tx.district, DISTRICTS)
+    await upsertAll(tx.facility, s.facilities.map((f) => ({ ...base, ...f, district_id: f.code.startsWith('TTH') ? 'dist-tml' : 'dist-sav', languages: f.level === 'chps' ? ['dag'] : [] })))
+    await upsertAll(tx.device, s.devices.map((d) => ({
       ...base, id: d.id, role: d.role, user_name: d.user_name, phone_number: d.phone_number,
       facility_id: facOf[d.facility_code] ?? null, key_hex: d.key_hex, active: true, activated_at: null,
     })))
-    await tx.insert(devices).values({ ...base, id: GATEWAY_DEVICE, role: 'gateway', user_name: 'SMS gateway', key_hex: randomBytes(32).toString('hex') }).onConflictDoNothing()
-    await upsertAll(tx, households, s.households.map((h) => ({ ...base, ...h, facility_id: home })))
-    await upsertAll(tx, clients, s.clients.map((c) => ({ ...base, ...c, facility_id: home, risk_flags: [] })))
-    await upsertAll(tx, visits, s.visits.map((v) => ({ ...base, ...v, facility_id: home, notes: null })))
-    await upsertAll(tx, transport_providers, s.transport_providers.map((p) => ({ ...base, ...p, facility_id: home, active: true })))
-    for (const [device_id, code] of Object.entries(DEMO_CODES)) {
-      await tx.insert(activation_codes).values({ code, device_id, expires_at: now + 7 * DAY, used_at: null })
-        .onConflictDoUpdate({ target: activation_codes.code, set: { device_id, expires_at: now + 7 * DAY, used_at: null } })
+    // The gateway keeps its random key across re-seeds.
+    await tx.device.upsert({
+      where: { id: GATEWAY_DEVICE }, update: {},
+      create: { id: GATEWAY_DEVICE, updatedAt: now, deviceId: 'seed', role: 'gateway', userName: 'SMS gateway', keyHex: randomBytes(32).toString('hex') },
+    })
+    await upsertAll(tx.household, s.households.map((h) => ({ ...base, ...h, facility_id: home })))
+    await upsertAll(tx.client, s.clients.map((c) => ({ ...base, ...c, facility_id: home, risk_flags: [] })))
+    await upsertAll(tx.visit, s.visits.map((v) => ({ ...base, ...v, facility_id: home, notes: null })))
+    await upsertAll(tx.transportProvider, s.transport_providers.map((p) => ({ ...base, ...p, facility_id: home, active: true })))
+    for (const [deviceId, code] of Object.entries(DEMO_CODES)) {
+      const data = { deviceId, expiresAt: now + 7 * DAY, usedAt: null }
+      await tx.activationCode.upsert({ where: { code }, create: { code, ...data }, update: data })
     }
   })
   return s
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const s = await seedDemo()
+  const deps = buildDeps()
+  const s = await seedDemo(deps)
   console.log(`seeded ${s.facilities.length} facilities, ${s.households.length} households, ${s.clients.length} clients, ${s.visits.length} visits`)
   console.log('activation codes (valid 7 days, single use; re-run seed to reset):')
   for (const d of s.devices) console.log(`  ${DEMO_CODES[d.id]}  ${d.id}  ${d.role.padEnd(9)} ${d.user_name} (${d.facility_code})`)
-  await pool.end()
+  await deps.prisma.$disconnect()
 }

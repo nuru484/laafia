@@ -1,0 +1,337 @@
+// Laafia server schema (spec section 5). Fields are camelCase in code and
+// snake_case in SQL (@map / @@map); the snake_case column names are also the
+// sync JSON keys (docs/API.md).
+//
+// Every synced table carries `seq`, set from the global `sync_seq` by a
+// trigger on every insert and update (migration 20261022000001_sync_seq);
+// /sync/pull pages on it instead of phone clocks. `facilityId` is the
+// catchment a row belongs to, stamped by the server from the pushing device.
+// Phone-synced tables have no foreign keys between them on purpose: phones
+// push in any order and the server must accept a client before its household.
+//
+// Fixed sets (role, status, type, ...) are text columns validated by Zod at the
+// API boundary, so the SQL schema stays identical to the earlier one.
+// Epoch-millisecond times are BigInt; src/prisma.ts returns them as numbers.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// Districts own the facility directory a phone receives and the languages its content packs cover.
+model District {
+  id           String        @id
+  code         String        @unique(map: "districts_code_unique")
+  name         String
+  languages    Json          @default("[]")
+  facilities   Facility[]
+  contentPacks ContentPack[]
+
+  @@map("districts")
+}
+
+model Facility {
+  id            String        @id
+  updatedAt     BigInt        @map("updated_at")
+  deviceId      String?       @map("device_id")
+  deleted       Boolean       @default(false)
+  seq           BigInt        @default(0)
+  districtId    String?       @map("district_id")
+  district      District?     @relation(fields: [districtId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "facilities_district_id_districts_id_fk")
+  languages     Json          @default("[]")
+  code          String        @unique(map: "facilities_code_unique")
+  name          String
+  level         String
+  phone         String?
+  lat           Float
+  lng           Float
+  capabilities  Json          @default("[]")
+  devices       Device[]
+  importBatches ImportBatch[]
+
+  @@index([seq], map: "facilities_seq")
+  @@index([districtId], map: "facilities_district")
+  @@map("facilities")
+}
+
+/// keyHex is the raw HMAC key: the server must verify inbound SMS and hand keys to facility phones, so a hash would not do.
+model Device {
+  id              String           @id
+  updatedAt       BigInt           @map("updated_at")
+  deviceId        String?          @map("device_id")
+  deleted         Boolean          @default(false)
+  seq             BigInt           @default(0)
+  role            String
+  userName        String           @map("user_name")
+  phoneNumber     String?          @map("phone_number")
+  facilityId      String?          @map("facility_id")
+  facility        Facility?        @relation(fields: [facilityId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "devices_facility_id_facilities_id_fk")
+  keyHex          String?          @map("key_hex")
+  active          Boolean          @default(true)
+  activatedAt     BigInt?          @map("activated_at")
+  activationCodes ActivationCode[]
+
+  @@index([seq], map: "devices_seq")
+  @@map("devices")
+}
+
+model ActivationCode {
+  code      String  @id
+  deviceId  String  @map("device_id")
+  device    Device  @relation(fields: [deviceId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "activation_codes_device_id_devices_id_fk")
+  expiresAt BigInt  @map("expires_at")
+  usedAt    BigInt? @map("used_at")
+
+  @@index([deviceId], map: "activation_codes_device")
+  @@map("activation_codes")
+}
+
+model Household {
+  id         String  @id
+  updatedAt  BigInt  @map("updated_at")
+  deviceId   String? @map("device_id")
+  deleted    Boolean @default(false)
+  seq        BigInt  @default(0)
+  facilityId String? @map("facility_id")
+  community  String
+  headName   String  @map("head_name")
+  landmark   String  @default("")
+  lat        Float?
+  lng        Float?
+  consentAt  BigInt? @map("consent_at")
+
+  @@index([facilityId, seq], map: "households_scope")
+  @@map("households")
+}
+
+model Client {
+  id                 String  @id
+  updatedAt          BigInt  @map("updated_at")
+  deviceId           String? @map("device_id")
+  deleted            Boolean @default(false)
+  seq                BigInt  @default(0)
+  facilityId         String? @map("facility_id")
+  householdId        String  @map("household_id")
+  code               String
+  type               String
+  name               String
+  sex                String?
+  dob                BigInt?
+  edd                BigInt?
+  deliveryDate       BigInt? @map("delivery_date")
+  parity             Int?
+  priorComplications Json    @default("[]") @map("prior_complications")
+  birthWeightG       Int?    @map("birth_weight_g")
+  nhisActive         Boolean @default(false) @map("nhis_active")
+  riskFlags          Json    @default("[]") @map("risk_flags")
+  /// Set by register/DHIS2 import; server-owned, never overwritten by a phone push. Unique allows many NULLs.
+  dhis2Uid           String? @unique(map: "clients_dhis2_uid") @map("dhis2_uid")
+
+  @@index([facilityId, seq], map: "clients_scope")
+  @@index([householdId], map: "clients_household")
+  @@map("clients")
+}
+
+model Visit {
+  id          String  @id
+  updatedAt   BigInt  @map("updated_at")
+  deviceId    String? @map("device_id")
+  deleted     Boolean @default(false)
+  seq         BigInt  @default(0)
+  facilityId  String? @map("facility_id")
+  clientId    String  @map("client_id")
+  protocolId  String  @map("protocol_id")
+  visitedAt   BigInt  @map("visited_at")
+  answers     Json    @default("{}")
+  outcome     String
+  ruleId      String  @map("rule_id")
+  followupDue BigInt? @map("followup_due")
+  notes       String?
+  muacMm      Int?    @map("muac_mm")
+
+  @@index([facilityId, seq], map: "visits_scope")
+  @@index([clientId, visitedAt], map: "visits_client")
+  @@map("visits")
+}
+
+/// Identity is (originDeviceId, shortId). The server may learn of a referral from an SMS before
+/// the phone pushes its UUID; that row is re-keyed to the origin phone's id when the push arrives.
+/// `status` is derived from referral_events, never taken from a push.
+model Referral {
+  id                    String          @id
+  updatedAt             BigInt          @map("updated_at")
+  deviceId              String?         @map("device_id")
+  deleted               Boolean         @default(false)
+  seq                   BigInt          @default(0)
+  facilityId            String?         @map("facility_id")
+  originDeviceId        String          @map("origin_device_id")
+  shortId               String          @map("short_id")
+  clientId              String?         @map("client_id")
+  visitId               String?         @map("visit_id")
+  clientCode            String?         @map("client_code")
+  clientType            String?         @map("client_type")
+  context               String?
+  urgency               Int?
+  dangerSigns           Json            @default("[]") @map("danger_signs")
+  destinationFacilityId String?         @map("destination_facility_id")
+  nextOfKin             String?         @map("next_of_kin")
+  status                String          @default("created")
+  deliveredVia          String?         @map("delivered_via")
+  /// Refer onward: the onward referral (new short id, signed by the facility) names the one it continues.
+  parentReferralId      String?         @map("parent_referral_id")
+  /// Server-maintained from the latest onward child, so the parent shows where the patient went next.
+  onwardReferralId      String?         @map("onward_referral_id")
+  onwardStatus          String?         @map("onward_status")
+  events                ReferralEvent[]
+
+  @@unique([originDeviceId, shortId], map: "referrals_key")
+  @@index([facilityId, seq], map: "referrals_scope")
+  @@index([destinationFacilityId, seq], map: "referrals_dest")
+  @@index([parentReferralId], map: "referrals_parent")
+  @@map("referrals")
+}
+
+model ReferralEvent {
+  id             String   @id
+  updatedAt      BigInt   @map("updated_at")
+  deviceId       String?  @map("device_id")
+  deleted        Boolean  @default(false)
+  seq            BigInt   @default(0)
+  referralId     String   @map("referral_id")
+  referral       Referral @relation(fields: [referralId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "referral_events_referral_id_referrals_id_fk")
+  status         String
+  at             BigInt
+  sourceDeviceId String   @map("source_device_id")
+  via            String
+
+  @@index([referralId], map: "referral_events_referral")
+  @@index([seq], map: "referral_events_seq")
+  @@map("referral_events")
+}
+
+model TransportProvider {
+  id         String  @id
+  updatedAt  BigInt  @map("updated_at")
+  deviceId   String? @map("device_id")
+  deleted    Boolean @default(false)
+  seq        BigInt  @default(0)
+  facilityId String? @map("facility_id")
+  name       String
+  phone      String
+  vehicle    String  @default("")
+  community  String  @default("")
+  active     Boolean @default(true)
+
+  @@index([facilityId, seq], map: "transport_providers_scope")
+  @@index([phone], map: "transport_providers_phone")
+  @@map("transport_providers")
+}
+
+model TransportRequest {
+  id           String  @id
+  updatedAt    BigInt  @map("updated_at")
+  deviceId     String? @map("device_id")
+  deleted      Boolean @default(false)
+  seq          BigInt  @default(0)
+  facilityId   String? @map("facility_id")
+  referralId   String? @map("referral_id")
+  providerId   String  @map("provider_id")
+  status       String
+  scheduledFor BigInt? @map("scheduled_for")
+
+  @@index([facilityId, seq], map: "transport_requests_scope")
+  @@index([providerId, status], map: "transport_requests_provider")
+  @@map("transport_requests")
+}
+
+/// Outgoing gateway SMS with retry and backoff (spec 16.5).
+model Job {
+  id        BigInt  @id @default(autoincrement())
+  kind      String
+  payload   Json
+  status    String  @default("pending")
+  attempts  Int     @default(0)
+  runAt     BigInt  @map("run_at")
+  lastError String? @map("last_error")
+  createdAt BigInt  @map("created_at")
+  /// From Frog's delivery receipt (POST /sms/delivery): delivered | failed | pending, with Frog's reason.
+  deliveryStatus String? @map("delivery_status")
+  deliveryReason String? @map("delivery_reason")
+  deliveredAt    BigInt? @map("delivered_at")
+
+  @@index([status, runAt], map: "jobs_due")
+  @@map("jobs")
+}
+
+/// Saved column mapping for a national register form; one template serves every CHPS using that form.
+model MappingTemplate {
+  id        String        @id
+  name      String        @unique(map: "mapping_templates_name_unique")
+  source    String
+  /// target field -> source column header (tabular) or DHIS2 attribute UID / display name
+  mapping   Json
+  /// target field -> fixed value for every row, e.g. { "type": "pregnant" } for the ANC register
+  constants Json          @default("{}")
+  createdAt BigInt        @map("created_at")
+  batches   ImportBatch[]
+
+  @@map("mapping_templates")
+}
+
+/// One upload or DHIS2 pull: previewed (dry run), then committed in one transaction, and undoable.
+model ImportBatch {
+  id          String           @id
+  facilityId  String           @map("facility_id")
+  facility    Facility         @relation(fields: [facilityId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "import_batches_facility_id_facilities_id_fk")
+  templateId  String?          @map("template_id")
+  template    MappingTemplate? @relation(fields: [templateId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "import_batches_template_id_mapping_templates_id_fk")
+  source      String
+  filename    String?
+  status      String           @default("preview")
+  counts      Json
+  issues      Json             @default("[]")
+  rows        Json             @default("[]")
+  createdIds  Json             @default("{\"households\":[],\"clients\":[]}") @map("created_ids")
+  createdAt   BigInt           @map("created_at")
+  committedAt BigInt?          @map("committed_at")
+  undoneAt    BigInt?          @map("undone_at")
+
+  @@index([facilityId, createdAt], map: "import_batches_facility")
+  @@map("import_batches")
+}
+
+/// Downloadable content (audio per language, PMTiles per district), stored on disk under CONTENT_DIR.
+model ContentPack {
+  id          String    @id
+  kind        String
+  language    String?
+  districtId  String?   @map("district_id")
+  district    District? @relation(fields: [districtId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "content_packs_district_id_districts_id_fk")
+  version     Int
+  size        BigInt
+  sha256      String
+  filename    String
+  contentType String    @map("content_type")
+  createdAt   BigInt    @map("created_at")
+
+  @@unique([kind, language, districtId, version], map: "content_packs_version")
+  @@map("content_packs")
+}
+
+/// One recorded prompt clip per (lang, promptId): a newer recording replaces the older row and file.
+model ContentClip {
+  id         String @id
+  lang       String
+  promptId   String @map("prompt_id")
+  sha256     String
+  size       Int
+  filename   String
+  deviceId   String @map("device_id")
+  recordedAt BigInt @map("recorded_at")
+
+  @@unique([lang, promptId], map: "content_clips_prompt")
+  @@map("content_clips")
+}

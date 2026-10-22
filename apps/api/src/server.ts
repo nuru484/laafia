@@ -1,16 +1,14 @@
 import { createApp } from './app.ts'
-import { env } from './env.ts'
-import { pool } from './db.ts'
-import { log } from './http.ts'
-import { startJobWorker } from './sms.ts'
+import { buildDeps } from './platform/deps.ts'
+import { startJobWorker } from './platform/jobs/worker.ts'
 
-const port = env.PORT
-const server = createApp().listen(port, () => log('info', 'listening', { port }))
-const stopJobs = startJobWorker()
+const deps = buildDeps()
+const server = createApp(deps).listen(deps.env.PORT, () => deps.logger.info('listening', { port: deps.env.PORT }))
+const stopJobs = startJobWorker(deps)
 
 const shutdown = () => {
   stopJobs()
-  server.close(() => void pool.end().then(() => process.exit(0)))
+  server.close(() => void deps.prisma.$disconnect().then(() => process.exit(0)))
   server.closeAllConnections() // SSE streams never end on their own
 }
 process.on('SIGTERM', shutdown)
