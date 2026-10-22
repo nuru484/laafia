@@ -262,9 +262,11 @@ async function handle(env: Env, raw: Incoming): Promise<IncomingResult> {
     const ref = await db.get<{ id: string }>('SELECT id FROM referrals WHERE origin_device_id = ? AND short_id = ?', [m.origin, m.short_id])
     const status = STATUS_FROM_CODE[m.status]
     if (ref) {
-      const isNew = await addEvent(env, ref.id, status, m.signer, raw.via)
-      // Discharge closes the loop: the client comes back on the origin CHO's list (spec 14).
-      if (isNew && status === 'closed' && m.origin === env.self.device_id) await scheduleFollowUpAfterClose(env, ref.id)
+      const before = await referralStatus(env, ref.id)
+      await addEvent(env, ref.id, status, m.signer, raw.via)
+      // Discharge closes the loop: the client comes back on the origin CHO's list (spec 14). The facility
+      // phone and the web dashboard can both report it, so only the first closing schedules the visit.
+      if (status === 'closed' && before !== 'closed' && m.origin === env.self.device_id) await scheduleFollowUpAfterClose(env, ref.id)
     }
     return { kind: 'status', referral_id: ref?.id ?? null, status }
   }
