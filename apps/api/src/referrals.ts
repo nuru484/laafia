@@ -52,8 +52,29 @@ const byKey = async (tx: Tx, origin: string, shortId: string) =>
   (await tx.select().from(referrals).where(and(eq(referrals.origin_device_id, origin), eq(referrals.short_id, shortId))))[0]
 const byId = async (tx: Tx, id: string) => (await tx.select().from(referrals).where(eq(referrals.id, id)))[0]
 
-const canWrite = (d: Device, r: Referral) =>
-  d.id === r.origin_device_id || (d.facility_id !== null && (d.facility_id === r.facility_id || d.facility_id === r.destination_facility_id))
+/**
+ * Who may change a referral or add its events: the origin device, the current
+ * destination facility, or a facility that was an earlier hop (one of its
+ * facility devices already wrote an event). The origin's own catchment is not
+ * enough on its own.
+ */
+async function mayAct(tx: Tx, d: Device, r: Referral) {
+  if (d.id === r.origin_device_id) return true
+  if (!d.facility_id) return false
+  if (d.facility_id === r.destination_facility_id) return true
+  const [hop] = await tx.select({ id: referral_events.id }).from(referral_events)
+    .innerJoin(devices, eq(devices.id, referral_events.source_device_id))
+    .where(and(eq(referral_events.referral_id, r.id), eq(devices.facility_id, d.facility_id), eq(devices.role, 'facility'))).limit(1)
+  return !!hop
+}
+
+/** A carried referral (QR hop) may be created by another device only with the origin's signed LFR for the same key. */
+async function provesOrigin(lfr: string | null | undefined, origin: string, shortId: string) {
+  if (!lfr) return false
+  const keys = await activeKeys()
+  const d = decode(lfr, (id) => keys.get(id))
+  return d.ok && d.message.kind === 'LFR' && d.message.signer === origin && d.message.short_id === shortId
+}
 
 async function facilityOfDevice(tx: Tx, deviceId: string) {
   const [d] = await tx.select({ facility_id: devices.facility_id }).from(devices).where(eq(devices.id, deviceId))
@@ -61,23 +82,25 @@ async function facilityOfDevice(tx: Tx, deviceId: string) {
 }
 
 type RejectReason = string
-export type PushReferral = Omit<typeof referrals.$inferInsert, 'status' | 'seq' | 'facility_id'>
+export type PushReferral = Omit<typeof referrals.$inferInsert, 'status' | 'seq' | 'facility_id'> & { lfr?: string | null }
 
 /**
  * Merge a pushed referral onto the row for (origin_device_id, short_id). If the
  * server learned of it first by SMS it holds a server id; the origin phone's
  * push re-keys that row to the phone's UUID (events follow by ON UPDATE CASCADE).
  */
-export async function pushReferral(tx: Tx, device: Device, row: PushReferral, touched: Set<string>): Promise<RejectReason | null> {
+export async function pushReferral(tx: Tx, device: Device, pushed: PushReferral, touched: Set<string>): Promise<RejectReason | null> {
+  const { lfr, ...row } = pushed
   const [idRow, keyRow] = [await byId(tx, row.id), await byKey(tx, row.origin_device_id, row.short_id)]
   if (idRow && (idRow.origin_device_id !== row.origin_device_id || idRow.short_id !== row.short_id)) return 'key_mismatch'
   let target = idRow ?? keyRow
   if (!target) {
+    if (device.id !== row.origin_device_id && !(await provesOrigin(lfr, row.origin_device_id, row.short_id))) return 'forbidden'
     await tx.insert(referrals).values({ ...row, facility_id: await facilityOfDevice(tx, row.origin_device_id) ?? device.facility_id, status: 'created' })
     touched.add(row.id)
     return null
   }
-  if (!canWrite(device, target)) return 'forbidden'
+  if (!(await mayAct(tx, device, target))) return 'forbidden'
   if (!idRow && device.id === row.origin_device_id) {
     await tx.update(referrals).set({ id: row.id }).where(eq(referrals.id, target.id))
     target = { ...target, id: row.id }
@@ -92,18 +115,24 @@ export async function pushReferral(tx: Tx, device: Device, row: PushReferral, to
 
 export type PushEvent = Omit<typeof referral_events.$inferInsert, 'seq'> & { origin_device_id: string; short_id: string }
 
-/** Append-only. The referral is found by id, else by (origin, short_id); an unknown referral gets a stub row so no ordering is required. */
+/**
+ * Append-only. The referral is found by id, else by (origin, short_id). An
+ * unknown referral gets a stub row only when the origin device (or the server,
+ * device null) writes the event; anyone else gets 'unknown_referral' and retries
+ * after the referral itself has synced.
+ */
 export async function pushEvent(tx: Tx, device: Device | null, ev: PushEvent, touched: Set<string>): Promise<RejectReason | null> {
   const { origin_device_id, short_id, ...row } = ev
   const idRow = await byId(tx, row.referral_id)
   if (idRow && (idRow.origin_device_id !== origin_device_id || idRow.short_id !== short_id)) return 'key_mismatch'
   let target = idRow ?? (await byKey(tx, origin_device_id, short_id))
   if (!target) {
+    if (device && device.id !== origin_device_id) return 'unknown_referral'
     ;[target] = await tx.insert(referrals).values({
       id: row.referral_id, origin_device_id, short_id, updated_at: 0, device_id: row.device_id,
       facility_id: await facilityOfDevice(tx, origin_device_id) ?? device?.facility_id ?? null,
     }).returning()
-  } else if (device && !canWrite(device, target)) return 'forbidden'
+  } else if (device && !(await mayAct(tx, device, target))) return 'forbidden'
   await tx.insert(referral_events).values({ ...row, referral_id: target!.id }).onConflictDoNothing()
   await recomputeStatus(tx, target!.id)
   touched.add(target!.id)
@@ -235,7 +264,7 @@ export const WEB_STATUSES = ['received', 'arrived', 'treated', 'closed', 'cancel
 export async function setStatus(id: string, status: (typeof WEB_STATUSES)[number], device: Device | null) {
   await writeAndPublish(async (tx, touched) => {
     const r = await byId(tx, id)
-    if (!r || (device && !canWrite(device, r))) throw new HttpError(404, 'not_found', 'Referral not found')
+    if (!r || (device && !(await mayAct(tx, device, r)))) throw new HttpError(404, 'not_found', 'Referral not found')
     const now = Date.now()
     const source = device?.id ?? 'WEB'
     await pushEvent(tx, null, {

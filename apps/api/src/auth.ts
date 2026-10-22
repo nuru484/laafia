@@ -5,12 +5,11 @@ import { jwtVerify, SignJWT } from 'jose'
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { z } from 'zod'
 import { db, write } from './db.ts'
+import { env } from './env.ts'
 import { HttpError } from './http.ts'
 import { activation_codes, devices, facilities } from './schema.ts'
 
-const rawSecret = process.env.JWT_SECRET
-if (!rawSecret && process.env.NODE_ENV === 'production') throw new Error('JWT_SECRET is required in production')
-const secret = new TextEncoder().encode(rawSecret ?? 'dev-only-secret-not-for-production')
+const secret = new TextEncoder().encode(env.JWT_SECRET ?? 'dev-only-secret-not-for-production')
 
 export type Device = typeof devices.$inferSelect
 export type Actor = { kind: 'device'; device: Device } | { kind: 'admin' }
@@ -35,23 +34,23 @@ async function deviceFromToken(token: string, clockTolerance = 0): Promise<Devic
   return device
 }
 
-const isAdminToken = (token: string) => {
-  const admin = process.env.ADMIN_TOKEN
-  if (!admin) return false
-  const a = Buffer.from(token)
-  const b = Buffer.from(admin)
+/** Constant-time string compare; false when the expected secret is unset. */
+export function safeEqual(given: string | undefined, expected: string | undefined) {
+  if (!given || !expected) return false
+  const a = Buffer.from(given)
+  const b = Buffer.from(expected)
   return a.length === b.length && timingSafeEqual(a, b)
 }
+const isAdminToken = (token: string) => safeEqual(token, env.ADMIN_TOKEN)
 
 function tokenOf(req: Parameters<RequestHandler>[0]): string | undefined {
   const h = req.headers.authorization
   if (h?.startsWith('Bearer ')) return h.slice(7)
   const admin = req.headers['x-admin-token']
-  if (typeof admin === 'string') return admin
-  return typeof req.query.token === 'string' ? req.query.token : undefined
+  return typeof admin === 'string' ? admin : undefined
 }
 
-/** Bearer device JWT (or ?token= for EventSource). `admin: true` also admits the ADMIN_TOKEN (header x-admin-token, or ?token=). */
+/** Bearer device JWT. `admin: true` also admits the ADMIN_TOKEN (header x-admin-token). Never read from the query string. */
 export function auth(opts: { roles?: Device['role'][]; admin?: boolean } = {}): RequestHandler {
   return async (req, res, next) => {
     const token = tokenOf(req)

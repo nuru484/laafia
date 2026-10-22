@@ -4,10 +4,15 @@ import type { PgTable } from 'drizzle-orm/pg-core'
 import { randomBytes } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { pool, write, type Tx } from './db.ts'
-import { activation_codes, clients, devices, facilities, households, transport_providers, visits } from './schema.ts'
+import { activation_codes, clients, devices, districts, facilities, households, transport_providers, visits } from './schema.ts'
 
 export const GATEWAY_DEVICE = 'GW01'
 const DAY = 86_400_000
+
+const DISTRICTS = [
+  { id: 'dist-sav', code: 'SAV', name: 'Savelugu Municipal', languages: ['dag'] },
+  { id: 'dist-tml', code: 'TML', name: 'Tamale Metropolitan', languages: ['dag'] },
+]
 
 /** Fixed demo activation codes so the phones can be activated from the README. Demo only. */
 export const DEMO_CODES: Record<string, string> = { D001: '26100001', V001: '26100002', F001: '26100003', F002: '26100004', F003: '26100005' }
@@ -27,7 +32,8 @@ export async function seedDemo(today = Date.now()) {
   const facOf = Object.fromEntries(s.facilities.map((f) => [f.code, f.id]))
   const home = facOf['SAV-CHPS-01']!
   await write(async (tx) => {
-    await upsertAll(tx, facilities, s.facilities.map((f) => ({ ...base, ...f })))
+    await upsertAll(tx, districts, DISTRICTS)
+    await upsertAll(tx, facilities, s.facilities.map((f) => ({ ...base, ...f, district_id: f.code.startsWith('TTH') ? 'dist-tml' : 'dist-sav', languages: f.level === 'chps' ? ['dag'] : [] })))
     await upsertAll(tx, devices, s.devices.map((d) => ({
       ...base, id: d.id, role: d.role, user_name: d.user_name, phone_number: d.phone_number,
       facility_id: facOf[d.facility_code] ?? null, key_hex: d.key_hex, active: true, activated_at: null,

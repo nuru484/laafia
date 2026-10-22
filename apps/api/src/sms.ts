@@ -1,5 +1,6 @@
 import { and, asc, eq, inArray, lte } from 'drizzle-orm'
 import { db, type Tx } from './db.ts'
+import { env } from './env.ts'
 import { log } from './http.ts'
 import { jobs } from './schema.ts'
 
@@ -14,6 +15,8 @@ export async function enqueueSms(tx: Tx, to: string, body: string) {
   await tx.insert(jobs).values({ kind: 'sms', payload: { to, body }, run_at: now, created_at: now })
 }
 
+export const maskPhone = (p: string) => (p.length > 3 ? '*'.repeat(p.length - 3) + p.slice(-3) : '***')
+
 /** Ghana local 0XXXXXXXXX to the 233XXXXXXXXX form Arkesel expects. */
 const international = (phone: string) => (phone.startsWith('0') ? '233' + phone.slice(1) : phone.replace(/^\+/, ''))
 
@@ -22,15 +25,16 @@ const international = (phone: string) => (phone.startsWith('0') ? '233' + phone.
  * Without ARKESEL_API_KEY the message is only logged (dev). Wire bodies carry codes, never names.
  */
 export async function sendSms(to: string, body: string): Promise<void> {
-  const key = process.env.ARKESEL_API_KEY
+  const key = env.ARKESEL_API_KEY
   if (!key) {
-    log('info', 'sms_dev_send', { to, body })
+    // Never log bodies or full numbers (spec 18.3).
+    log('info', 'sms_dev_send', { to: maskPhone(to), length: body.length })
     return
   }
   const res = await fetch('https://sms.arkesel.com/api/v2/sms/send', {
     method: 'POST',
     headers: { 'api-key': key, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sender: process.env.ARKESEL_SENDER ?? 'Laafia', message: body, recipients: [international(to)] }),
+    body: JSON.stringify({ sender: env.ARKESEL_SENDER, message: body, recipients: [international(to)] }),
     signal: AbortSignal.timeout(15_000),
   })
   const json = (await res.json().catch(() => null)) as { status?: string; message?: string } | null

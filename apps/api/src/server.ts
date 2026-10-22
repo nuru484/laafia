@@ -1,9 +1,10 @@
 import { createApp } from './app.ts'
+import { env } from './env.ts'
 import { pool } from './db.ts'
 import { log } from './http.ts'
 import { startJobWorker } from './sms.ts'
 
-const port = Number(process.env.PORT ?? 4000)
+const port = env.PORT
 const server = createApp().listen(port, () => log('info', 'listening', { port }))
 const stopJobs = startJobWorker()
 

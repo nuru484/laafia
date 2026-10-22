@@ -1,51 +1,13 @@
-import { decode, encode, generateSeed, shortIdFromBytes, type ReferralMessage } from '@laafia/core'
-import { eq, sql } from 'drizzle-orm'
+import { decode, encode } from '@laafia/core'
+import { eq } from 'drizzle-orm'
 import request from 'supertest'
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { createApp } from '../src/app.ts'
-import { db, pool, runMigrations } from '../src/db.ts'
+import { describe, expect, it } from 'vitest'
+import { db } from '../src/db.ts'
 import { households, jobs, referral_events, referrals } from '../src/schema.ts'
-import { DEMO_CODES, seedDemo } from '../src/seed.ts'
+import { DEMO_CODES } from '../src/seed.ts'
+import { ADMIN, KEYS, SID, TODAY, activate, app, event, household, lfr, pullAs, pushAs, sms, useDb } from './helpers.ts'
 
-const app = createApp()
-const TODAY = Date.UTC(2026, 9, 22)
-const KEYS = Object.fromEntries(generateSeed(TODAY).devices.map((d) => [d.id, d.key_hex]))
-const ADMIN = { 'x-admin-token': 'test-admin-token' }
-
-async function activate(deviceId: string, phone = '0240000001') {
-  const res = await request(app).post('/auth/activate').send({ activation_code: DEMO_CODES[deviceId], phone_number: phone })
-  expect(res.status).toBe(200)
-  return res.body.jwt as string
-}
-const pushAs = (jwt: string, records: { table: string; row: Record<string, unknown> }[]) =>
-  request(app).post('/sync/push').set('Authorization', `Bearer ${jwt}`).send({ records })
-const pullAs = (jwt: string, since = 0, limit = 500) =>
-  request(app).get(`/sync/pull?since=${since}&limit=${limit}`).set('Authorization', `Bearer ${jwt}`)
-
-const household = (over: Record<string, unknown> = {}) => ({
-  id: 'hh-new-1', updated_at: 1_000, community: 'Kanshegu', head_name: 'Mba Test', landmark: 'by the borehole', lat: 9.6, lng: -0.8, consent_at: 1_000, ...over,
-})
-const SID = shortIdFromBytes(new Uint8Array([9, 8, 7, 6, 5]))
-const lfr: ReferralMessage = {
-  kind: 'LFR', signer: 'D001', short_id: SID, client_code: 'CL-0041', urgency: 3, client_type: 'PP', context: 'PP1',
-  sign_codes: ['bl'], destination: 'SAV-HOSP-01', next_of_kin: '0241234567',
-}
-const sms = (body: string, from = '+233240000001') => request(app).post('/sms/inbound').send({ from, text: body })
-const event = (over: Record<string, unknown>) => ({
-  id: crypto.randomUUID(), updated_at: TODAY, referral_id: 'r-uuid-1', origin_device_id: 'D001', short_id: SID,
-  status: 'sent', at: TODAY, source_device_id: 'D001', via: 'local', ...over,
-})
-
-beforeAll(async () => {
-  await runMigrations()
-})
-beforeEach(async () => {
-  await db.execute(sql`truncate facilities, devices, activation_codes, households, clients, visits, referrals, referral_events, transport_providers, transport_requests, jobs cascade`)
-  await seedDemo(TODAY)
-})
-afterAll(async () => {
-  await pool.end()
-})
+useDb()
 
 describe('sync push', () => {
   it('is idempotent: the same batch twice changes nothing the second time', async () => {

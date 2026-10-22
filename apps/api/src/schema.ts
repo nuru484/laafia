@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm'
 import { bigint, bigserial, boolean, doublePrecision, index, integer, jsonb, pgTable, text, uniqueIndex } from 'drizzle-orm/pg-core'
 
 /*
@@ -18,8 +19,18 @@ const sync = {
   seq: ms('seq').notNull().default(0),
 }
 
+/** Districts own the facility directory a phone receives and the languages its content packs cover. */
+export const districts = pgTable('districts', {
+  id: text('id').primaryKey(),
+  code: text('code').notNull().unique(),
+  name: text('name').notNull(),
+  languages: jsonb('languages').$type<string[]>().notNull().default([]),
+})
+
 export const facilities = pgTable('facilities', {
   ...sync,
+  district_id: text('district_id').references(() => districts.id),
+  languages: jsonb('languages').$type<string[]>().notNull().default([]),
   code: text('code').notNull().unique(),
   name: text('name').notNull(),
   level: text('level', { enum: ['chps', 'health_centre', 'hospital'] }).notNull(),
@@ -27,7 +38,7 @@ export const facilities = pgTable('facilities', {
   lat: doublePrecision('lat').notNull(),
   lng: doublePrecision('lng').notNull(),
   capabilities: jsonb('capabilities').$type<string[]>().notNull().default([]),
-}, (t) => [index('facilities_seq').on(t.seq)])
+}, (t) => [index('facilities_seq').on(t.seq), index('facilities_district').on(t.district_id)])
 
 // key_hex is the raw HMAC key: the server must verify inbound SMS and hand keys to facility phones, so a hash would not do.
 export const devices = pgTable('devices', {
@@ -75,7 +86,13 @@ export const clients = pgTable('clients', {
   birth_weight_g: integer('birth_weight_g'),
   nhis_active: boolean('nhis_active').notNull().default(false),
   risk_flags: jsonb('risk_flags').$type<string[]>().notNull().default([]),
-}, (t) => [index('clients_scope').on(t.facility_id, t.seq), index('clients_household').on(t.household_id)])
+  // Set by register/DHIS2 import; server-owned, never overwritten by a phone push.
+  dhis2_uid: text('dhis2_uid'),
+}, (t) => [
+  index('clients_scope').on(t.facility_id, t.seq),
+  index('clients_household').on(t.household_id),
+  uniqueIndex('clients_dhis2_uid').on(t.dhis2_uid).where(sql`dhis2_uid is not null`),
+])
 
 export const visits = pgTable('visits', {
   ...sync,
@@ -158,5 +175,55 @@ export const jobs = pgTable('jobs', {
   last_error: text('last_error'),
   created_at: ms('created_at').notNull(),
 }, (t) => [index('jobs_due').on(t.status, t.run_at)])
+
+/** Saved column mapping for a national register form; one template serves every CHPS using that form. */
+export const mapping_templates = pgTable('mapping_templates', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull().unique(),
+  source: text('source', { enum: ['tabular', 'dhis2'] }).notNull(),
+  // target field -> source column header (tabular) or DHIS2 attribute UID / display name
+  mapping: jsonb('mapping').$type<Record<string, string>>().notNull(),
+  // target field -> fixed value for every row, e.g. { "type": "pregnant" } for the ANC register
+  constants: jsonb('constants').$type<Record<string, string>>().notNull().default({}),
+  created_at: ms('created_at').notNull(),
+})
+
+export type ImportRow = {
+  row: number
+  household: { key: string; community: string; head_name: string; landmark: string; lat: number | null; lng: number | null }
+  client: { name: string; type: string; sex: 'f' | 'm' | null; dob: number | null; edd: number | null; delivery_date: number | null; parity: number | null; nhis_active: boolean; dhis2_uid: string | null }
+}
+export type ImportIssue = { row: number; kind: 'error' | 'duplicate'; field?: string; message: string; match_id?: string }
+
+/** One upload or DHIS2 pull: previewed (dry run), then committed in one transaction, and undoable. */
+export const import_batches = pgTable('import_batches', {
+  id: text('id').primaryKey(),
+  facility_id: text('facility_id').notNull().references(() => facilities.id),
+  template_id: text('template_id').references(() => mapping_templates.id),
+  source: text('source', { enum: ['csv', 'xlsx', 'dhis2'] }).notNull(),
+  filename: text('filename'),
+  status: text('status', { enum: ['preview', 'committed', 'undone'] }).notNull().default('preview'),
+  counts: jsonb('counts').$type<Record<string, number>>().notNull(),
+  issues: jsonb('issues').$type<ImportIssue[]>().notNull().default([]),
+  rows: jsonb('rows').$type<ImportRow[]>().notNull().default([]),
+  created_ids: jsonb('created_ids').$type<{ households: string[]; clients: string[] }>().notNull().default({ households: [], clients: [] }),
+  created_at: ms('created_at').notNull(),
+  committed_at: ms('committed_at'),
+  undone_at: ms('undone_at'),
+}, (t) => [index('import_batches_facility').on(t.facility_id, t.created_at)])
+
+/** Downloadable content (audio per language, PMTiles per district), stored on disk under CONTENT_DIR. */
+export const content_packs = pgTable('content_packs', {
+  id: text('id').primaryKey(),
+  kind: text('kind', { enum: ['audio', 'tiles'] }).notNull(),
+  language: text('language'),
+  district_id: text('district_id').references(() => districts.id),
+  version: integer('version').notNull(),
+  size: ms('size').notNull(),
+  sha256: text('sha256').notNull(),
+  filename: text('filename').notNull(),
+  content_type: text('content_type').notNull(),
+  created_at: ms('created_at').notNull(),
+}, (t) => [uniqueIndex('content_packs_version').on(t.kind, t.language, t.district_id, t.version)])
 
 export const SYNCED = { facilities, devices, households, clients, visits, referrals, referral_events, transport_providers, transport_requests }

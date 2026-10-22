@@ -2,8 +2,9 @@ import { eq, sql } from 'drizzle-orm'
 import express from 'express'
 import { randomBytes, randomInt } from 'node:crypto'
 import { z } from 'zod'
-import { activate, ActivateBody, actorOf, auth, deviceOf, keysFor, refresh } from './auth.ts'
+import { activate, ActivateBody, actorOf, auth, deviceOf, keysFor, refresh, safeEqual } from './auth.ts'
 import { db, write } from './db.ts'
+import { env } from './env.ts'
 import { errorHandler, HttpError } from './http.ts'
 import { bus, facilityByCode, handleInboundSms, listReferrals, setStatus, visibleTo, WEB_STATUSES, type ReferralView } from './referrals.ts'
 import { activation_codes, devices } from './schema.ts'
@@ -23,7 +24,7 @@ export function createApp() {
   const app = express()
   app.disable('x-powered-by')
   app.use((req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', process.env.WEB_ORIGIN ?? '*')
+    res.setHeader('Access-Control-Allow-Origin', env.WEB_ORIGIN ?? '*')
     res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, x-admin-token')
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
     if (req.method === 'OPTIONS') return void res.sendStatus(204)
@@ -69,8 +70,24 @@ export function createApp() {
     res.json({ referral: await setStatus(z.string().max(64).parse(req.params.id), status, actor.kind === 'device' ? actor.device : null) })
   })
 
-  app.get('/events', facilityOrAdmin, async (req, res) => {
-    const f = await facilityFor(res, FacilityQuery.parse(req.query).facility)
+  // EventSource cannot send headers, so SSE takes a single-use ticket bound to one facility, valid 60 s.
+  // ponytail: in-memory tickets, so one API process; move to the database when running several.
+  const tickets = new Map<string, { facility: Awaited<ReturnType<typeof facilityByCode>>; expires: number }>()
+  app.post('/events/ticket', facilityOrAdmin, async (req, res) => {
+    const facility = await facilityFor(res, FacilityQuery.parse(req.body).facility)
+    const now = Date.now()
+    for (const [k, t] of tickets) if (t.expires < now) tickets.delete(k)
+    const ticket = randomBytes(24).toString('base64url')
+    const expires_at = now + 60_000
+    tickets.set(ticket, { facility, expires: expires_at })
+    res.json({ ticket, expires_at })
+  })
+  app.get('/events', async (req, res) => {
+    const ticket = z.object({ ticket: z.string().max(64) }).safeParse(req.query)
+    const entry = ticket.success ? tickets.get(ticket.data.ticket) : undefined
+    if (ticket.success) tickets.delete(ticket.data.ticket)
+    if (!entry || entry.expires < Date.now()) throw new HttpError(401, 'invalid_ticket', 'Missing, used or expired SSE ticket')
+    const f = entry.facility
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' })
     res.write(`event: ready\ndata: ${JSON.stringify({ facility: f.code })}\n\n`)
     const onReferral = (v: ReferralView) => {
@@ -86,8 +103,12 @@ export function createApp() {
 
   // --- SMS gateway webhook (Arkesel inbound). Always 200 so the gateway does not retry a message we already judged.
   app.post('/sms/inbound', async (req, res) => {
-    const token = process.env.SMS_WEBHOOK_TOKEN
-    if (token && req.query.token !== token) throw new HttpError(401, 'unauthenticated', 'Bad webhook token')
+    // Arkesel documents no webhook signature, so a shared token (header x-webhook-token, or ?token= in the configured URL) guards it.
+    // Required at boot in production; open only in development when unset.
+    if (env.SMS_WEBHOOK_TOKEN) {
+      const given = req.headers['x-webhook-token'] ?? req.query.token
+      if (!safeEqual(typeof given === 'string' ? given : undefined, env.SMS_WEBHOOK_TOKEN)) throw new HttpError(401, 'unauthenticated', 'Bad webhook token')
+    }
     const b = z.object({ from: z.string().optional(), sender: z.string().optional(), text: z.string().optional(), message: z.string().optional() }).parse(req.body)
     const from = b.from ?? b.sender
     const text = b.text ?? b.message

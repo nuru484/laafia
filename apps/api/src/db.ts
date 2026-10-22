@@ -3,10 +3,10 @@ import { drizzle } from 'drizzle-orm/node-postgres'
 import { migrate } from 'drizzle-orm/node-postgres/migrator'
 import { fileURLToPath } from 'node:url'
 import pg from 'pg'
+import { env } from './env.ts'
 import * as schema from './schema.ts'
 
-const url = process.env.DATABASE_URL ?? 'postgresql:///laafia?host=/var/run/postgresql'
-export const pool = new pg.Pool({ connectionString: url, max: 10 })
+export const pool = new pg.Pool({ connectionString: env.DATABASE_URL, max: 10 })
 export const db = drizzle(pool, { schema })
 export type Db = typeof db
 export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0]
