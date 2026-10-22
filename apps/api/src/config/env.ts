@@ -13,6 +13,13 @@ const isProd = process.env.NODE_ENV === 'production'
 const requiredInProd = (min = 1) =>
   blank(isProd ? z.string({ error: `required in production` }).min(min, `must be at least ${min} chars`) : z.string().optional())
 
+/** Express reads a string as proxy addresses, so a hop count or a boolean must arrive as its own type. */
+export function trustProxy(v: string): number | boolean | string {
+  if (/^\d+$/.test(v)) return Number(v)
+  if (v === 'true' || v === 'false') return v === 'true'
+  return v
+}
+
 const Env = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(4000),
@@ -22,7 +29,7 @@ const Env = z.object({
   ADMIN_TOKEN: requiredInProd(24),
   SMS_WEBHOOK_TOKEN: requiredInProd(24),
   WEB_ORIGIN: optional,
-  TRUST_PROXY: z.string().default('loopback'),
+  TRUST_PROXY: z.string().default('loopback').transform(trustProxy),
   FROG_API_KEY: optional,
   FROG_USERNAME: optional,
   FROG_SENDER_ID: blank(z.string().max(11).optional()),

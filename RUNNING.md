@@ -106,7 +106,7 @@ The API and the dashboard go online; the phones keep working offline and sync wh
 - Database: a Render or Neon PostgreSQL; set its URL as `DATABASE_URL`.
 - Build command: `npm ci --include=dev && npm run db:migrate -w @laafia/api` (`tsx` and the Prisma CLI are dev dependencies)
 - Start command: `npm start -w @laafia/api`
-- Environment: `NODE_ENV=production`, `DATABASE_URL`, `JWT_SECRET` (32+ characters), `ADMIN_TOKEN` and `SMS_WEBHOOK_TOKEN` (24+ characters), and the Frog variables if the server should send SMS. Render sets `PORT`.
+- Environment: `NODE_ENV=production`, `TRUST_PROXY=1`, `DATABASE_URL`, `JWT_SECRET` (32+ characters), `ADMIN_TOKEN` and `SMS_WEBHOOK_TOKEN` (24+ characters), and the Frog variables if the server should send SMS. Render sets `PORT`.
 - Seed once from a shell with the production `DATABASE_URL`: `npm run seed -w @laafia/api`.
 - Render's free plan sleeps after 15 idle minutes, so the first sync afterwards waits for it to wake.
 
