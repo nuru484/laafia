@@ -13,7 +13,7 @@ export function createReferralsRouter(deps: Deps, auth: Auth) {
   const staff = auth({ admin: true, roles: [], users: ['facility_staff', 'district_admin'] })
   return Router()
     .get('/referrals', read, validate({ query: ListQuery }), c.list)
-    .get('/referrals/:id', auth({ admin: true, users: ['facility_staff', 'district_admin', 'supervisor'] }), validate({ params: IdParams }), c.get)
+    .get('/referrals/:id', auth({ roles: ['cho', 'facility'], admin: true, users: ['facility_staff', 'district_admin', 'supervisor'] }), validate({ params: IdParams }), c.get)
     .post('/referrals/:id/status', act, validate({ params: IdParams, body: StatusBody }), c.status)
     .post('/referrals/:id/onward', staff, validate({ params: IdParams, body: OnwardBody }), c.onward)
     .get('/referrals/:id/client', staff, validate({ params: IdParams }), c.client)

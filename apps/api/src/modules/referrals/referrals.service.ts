@@ -215,9 +215,14 @@ export async function referralChain(deps: Deps, id: string, actor: Actor) {
     chain.push(next)
     r = next
   }
-  const scope = await facilityScope(deps, actor)
-  const sees = (r: Referral) => (actor.kind === 'device' && r.originDeviceId === actor.device.id) || inScope(scope, r.facilityId) || inScope(scope, r.destinationFacilityId)
-  if (!chain.some(sees)) throw new HttpError(404, 'not_found', 'Referral not found')
+  // A CHO phone sees chains it started; facility phones and dashboard users see chains touching their scope.
+  if (actor.kind === 'device' && actor.device.role !== 'facility') {
+    if (!chain.some((r) => r.originDeviceId === actor.device.id)) throw new HttpError(403, 'forbidden', 'Not your referral')
+  } else {
+    const scope = await facilityScope(deps, actor)
+    const sees = (r: Referral) => (actor.kind === 'device' && r.originDeviceId === actor.device.id) || inScope(scope, r.facilityId) || inScope(scope, r.destinationFacilityId)
+    if (!chain.some(sees)) throw new HttpError(404, 'not_found', 'Referral not found')
+  }
   const views = await Promise.all(chain.map((r) => referralView(deps, r.id)))
   return { referral: views[chain.indexOf(start)]!, chain: views.filter((v): v is ReferralView => !!v) }
 }
