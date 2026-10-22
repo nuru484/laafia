@@ -5,6 +5,8 @@ import { write, type Tx } from './platform/db.ts'
 import { buildDeps, type Deps } from './platform/deps.ts'
 import { fromWire } from './platform/http/wire.ts'
 import { GATEWAY_DEVICE } from './modules/referrals/index.ts'
+import { hashPassword } from './platform/passwords.ts'
+import { seedActivity } from './seed-activity.ts'
 
 const DAY = 86_400_000
 
@@ -53,9 +55,26 @@ export async function seedDemo(deps: Deps, today = Date.now()) {
       const data = { deviceId, expiresAt: now + 7 * DAY, usedAt: null }
       await tx.activationCode.upsert({ where: { code }, create: { code, ...data }, update: data })
     }
+    const passwordHash = await demoPasswordHash()
+    for (const u of DEMO_USERS) {
+      const data = { name: u.name, email: u.email, role: u.role, facilityId: u.facilityId, districtId: u.districtId, passwordHash, active: true, passwordChangedAt: now }
+      await tx.user.upsert({ where: { id: u.id }, create: { id: u.id, ...data, createdAt: now }, update: data })
+    }
   })
   return s
 }
+
+/** One dashboard account per role. Demo only: every account shares DEMO_PASSWORD. */
+export const DEMO_PASSWORD = 'Laafia-demo-2026'
+export const DEMO_USERS = [
+  { id: 'usr-0001', name: 'Alhassan Yakubu', email: 'admin@laafia.demo', role: 'district_admin', facilityId: null, districtId: 'dist-sav', scope: 'Savelugu district' },
+  { id: 'usr-0002', name: 'Dr. Fuseini Abdulai', email: 'supervisor@laafia.demo', role: 'supervisor', facilityId: null, districtId: 'dist-sav', scope: 'Savelugu district' },
+  { id: 'usr-0003', name: 'Salamatu Iddrisu', email: 'hospital@laafia.demo', role: 'facility_staff', facilityId: 'fac-0003', districtId: null, scope: 'Savelugu Municipal Hospital' },
+  { id: 'usr-0004', name: 'Rahinatu Mahama', email: 'healthcentre@laafia.demo', role: 'facility_staff', facilityId: 'fac-0002', districtId: null, scope: 'Pong-Tamale Health Centre' },
+]
+// Hashed once per process: the tests re-seed before every case.
+let demoHash: Promise<string> | null = null
+const demoPasswordHash = () => (demoHash ??= hashPassword(DEMO_PASSWORD))
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const deps = buildDeps()
@@ -63,5 +82,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   console.log(`seeded ${s.facilities.length} facilities, ${s.households.length} households, ${s.clients.length} clients, ${s.visits.length} visits`)
   console.log('activation codes (valid 7 days, single use; re-run seed to reset):')
   for (const d of s.devices) console.log(`  ${DEMO_CODES[d.id]}  ${d.id}  ${d.role.padEnd(9)} ${d.user_name} (${d.facility_code})`)
+  console.log(`dashboard users (password for all: ${DEMO_PASSWORD}):`)
+  for (const u of DEMO_USERS) console.log(`  ${u.email.padEnd(26)} ${u.role.padEnd(15)} ${u.name} (${u.scope})`)
+  const a = await seedActivity(deps)
+  console.log(`demo activity: ${a.referrals} referrals with events, transport, device syncs, SMS log, export history, audit`)
   await deps.prisma.$disconnect()
 }

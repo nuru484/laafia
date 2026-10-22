@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import type { Deps } from '../../platform/deps.ts'
 import { HttpError } from '../../platform/http/errors.ts'
-import type { Device } from '../../platform/middleware/auth.ts'
+import type { Actor } from '../../platform/middleware/auth.ts'
 import { facilityFor, visibleTo, type ReferralView } from '../referrals/index.ts'
 
 type Facility = Awaited<ReturnType<typeof facilityFor>>
@@ -13,8 +13,8 @@ type Facility = Awaited<ReturnType<typeof facilityFor>>
 const TICKET_MS = 60_000
 const tickets = new Map<string, { facility: Facility; expires: number }>()
 
-export async function issueTicket(deps: Deps, device: Device | null, facilityCode: string) {
-  const facility = await facilityFor(deps, device, facilityCode)
+export async function issueTicket(deps: Deps, actor: Actor, facilityCode: string) {
+  const facility = await facilityFor(deps, actor, facilityCode)
   const now = deps.clock()
   for (const [k, t] of tickets) if (t.expires < now) tickets.delete(k)
   const ticket = randomBytes(24).toString('base64url')

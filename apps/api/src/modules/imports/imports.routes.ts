@@ -5,10 +5,10 @@ import type { Auth } from '../../platform/middleware/auth.ts'
 import { createImportsController } from './imports.controller.ts'
 import { BatchListQuery, BatchParams, BatchReadParams, Dhis2Body, TemplateBody } from './imports.schemas.ts'
 
-/** Register import pipeline, called by the web dashboard (admin token). */
+/** Register import pipeline, called by the web dashboard (district admins, scoped to their district). */
 export function createImportsRouter(deps: Deps, auth: Auth) {
   const c = createImportsController(deps)
-  const admin = auth({ admin: true, roles: [] })
+  const admin = auth({ admin: true, roles: [], users: ['district_admin'] })
   return Router()
     .get('/admin/import/templates', admin, c.templates)
     .post('/admin/import/templates', admin, validate({ body: TemplateBody }), c.addTemplate)

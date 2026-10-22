@@ -33,6 +33,11 @@ const numbers = {
   importBatch: { ...num('createdAt'), ...numOrNull('committedAt', 'undoneAt') },
   contentPack: num('size', 'createdAt'),
   contentClip: num('recordedAt'),
+  user: { ...num('passwordChangedAt', 'createdAt'), ...numOrNull('lastLoginAt') },
+  webSession: { ...num('expiresAt', 'lastSeenAt', 'createdAt'), ...numOrNull('revokedAt') },
+  deviceStatus: num('lastSyncAt'),
+  exportRun: num('at'),
+  auditEvent: num('at'),
 }
 
 export function createPrisma(connectionString: string) {

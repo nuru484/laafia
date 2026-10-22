@@ -3,7 +3,8 @@ import request from 'supertest'
 import { afterAll, beforeEach, expect } from 'vitest'
 import { createApp } from '../../app.ts'
 import { resetActivationLimits } from '../../modules/auth/index.ts'
-import { DEMO_CODES, seedDemo } from '../../seed.ts'
+import { resetLoginLimits } from '../../modules/users/index.ts'
+import { DEMO_CODES, DEMO_PASSWORD, seedDemo } from '../../seed.ts'
 import { buildDeps } from '../deps.ts'
 import type { Logger } from '../logger.ts'
 
@@ -31,11 +32,17 @@ export function useDb() {
     await prisma.visit.deleteMany()
     await prisma.client.deleteMany()
     await prisma.household.deleteMany()
+    await prisma.webSession.deleteMany()
+    await prisma.deviceStatus.deleteMany()
+    await prisma.exportRun.deleteMany()
+    await prisma.auditEvent.deleteMany()
+    await prisma.user.deleteMany()
     await prisma.device.deleteMany()
     await prisma.facility.deleteMany()
     await prisma.district.deleteMany()
     await seedDemo(deps, TODAY)
     resetActivationLimits()
+    resetLoginLimits()
   })
   afterAll(() => prisma.$disconnect())
 }
@@ -46,6 +53,15 @@ export async function activate(deviceId: string, phone = '0240000001') {
   return res.body.jwt as string
 }
 export const bearer = (jwt: string) => ({ Authorization: `Bearer ${jwt}` })
+
+/** A signed-in dashboard browser: a cookie-keeping agent plus the CSRF header for mutations. */
+export async function signIn(email: string, password = DEMO_PASSWORD) {
+  const agent = request.agent(app)
+  const res = await agent.post('/web/login').send({ login: email, password })
+  expect(res.status).toBe(200)
+  return { agent, csrf: { 'X-CSRF-Token': res.body.csrf_token as string }, user: res.body.user }
+}
+export const USERS = { admin: 'admin@laafia.demo', supervisor: 'supervisor@laafia.demo', hospital: 'hospital@laafia.demo', healthCentre: 'healthcentre@laafia.demo' }
 export const pushAs = (jwt: string, records: { table: string; row: Record<string, unknown> }[]) =>
   request(app).post('/sync/push').set(bearer(jwt)).send({ records })
 export const pullAs = (jwt: string, since = '', limit = 500) =>

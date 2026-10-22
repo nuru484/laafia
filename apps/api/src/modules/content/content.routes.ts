@@ -7,7 +7,7 @@ import { ClipParams, ClipQuery, PackParams } from './content.schemas.ts'
 
 export function createContentRouter(deps: Deps, auth: Auth) {
   const c = createContentController(deps)
-  const admin = auth({ admin: true, roles: [] })
+  const admin = auth({ admin: true, roles: [], users: ['district_admin'] })
   return Router()
     .get('/content/manifest', auth(), c.getManifest)
     .get('/content/packs/:id', auth(), validate({ params: PackParams }), c.download)

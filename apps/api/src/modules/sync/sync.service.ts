@@ -7,6 +7,16 @@ import { keysFor } from '../auth/index.ts'
 import { pushEvent, pushReferral, writeAndPublish, type PushEvent, type PushReferral } from '../referrals/index.ts'
 import { MAX_BATCH, ROW_SCHEMAS, type PullInput, type PushInput, type PushTable } from './sync.schemas.ts'
 
+/** Last sync time and app version (header X-App-Version) per device, for the dashboard. */
+export async function recordContact(deps: Deps, deviceId: string, appVersion: string | null) {
+  const lastSyncAt = deps.clock()
+  await deps.prisma.deviceStatus.upsert({
+    where: { deviceId },
+    create: { deviceId, lastSyncAt, appVersion },
+    update: { lastSyncAt, ...(appVersion ? { appVersion } : {}) },
+  })
+}
+
 // --- Push
 
 type LwwTable = Exclude<PushTable, 'referrals' | 'referral_events'>

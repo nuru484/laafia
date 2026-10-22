@@ -4,8 +4,10 @@ import { write } from '../../platform/db.ts'
 import type { Deps } from '../../platform/deps.ts'
 import { HttpError } from '../../platform/http/errors.ts'
 import { toWire } from '../../platform/http/wire.ts'
-import type { Device } from '../../platform/middleware/auth.ts'
-import { mayAct } from '../referrals/index.ts'
+import { audit, districtOfFacility } from '../../platform/audit.ts'
+import type { Actor, Device } from '../../platform/middleware/auth.ts'
+import { assertFacility, facilityScope, inScope } from '../../platform/scope.ts'
+import { facilityByCode, mayAct } from '../referrals/index.ts'
 import type { ProviderInput, ProviderPatchInput, RequestInput } from './transport.schemas.ts'
 
 /* Transport providers and online pickup requests (spec 15). Rows are the same ones phones sync. */
@@ -37,6 +39,41 @@ export async function updateProvider(deps: Deps, device: Device, id: string, pat
     return res.count ? tx.transportProvider.findUnique({ where: { id } }) : null
   })
   if (!row) throw new HttpError(404, 'not_found', 'Unknown provider')
+  return toWire(row)
+}
+
+// --- Dashboard: district admins manage providers for any facility in their district.
+
+export async function adminListProviders(deps: Deps, actor: Actor) {
+  const scope = await facilityScope(deps, actor)
+  const rows = await deps.prisma.transportProvider.findMany({ where: { deleted: false, ...(scope === null ? {} : { facilityId: { in: scope } }) }, orderBy: [{ community: 'asc' }, { name: 'asc' }] })
+  const codes = new Map((await deps.prisma.facility.findMany({ select: { id: true, code: true } })).map((f) => [f.id, f.code]))
+  return rows.map((r) => ({ ...toWire(r), facility_code: r.facilityId ? (codes.get(r.facilityId) ?? null) : null }))
+}
+
+export async function adminCreateProvider(deps: Deps, actor: Actor, body: ProviderInput & { facility_code: string }) {
+  const f = await facilityByCode(deps, body.facility_code)
+  await assertFacility(deps, actor, f.id)
+  const now = deps.clock()
+  const row = await write(deps.prisma, (tx) =>
+    tx.transportProvider.create({
+      data: { id: body.id ?? randomUUID(), name: body.name, phone: normalizePhone(body.phone), vehicle: body.vehicle, community: body.community, active: body.active, facilityId: f.id, deviceId: 'web', updatedAt: now },
+    }),
+  )
+  await audit(deps, actor, 'provider.create', { type: 'transport_provider', id: row.id, districtId: f.districtId }, { facility: f.code })
+  return toWire(row)
+}
+
+export async function adminUpdateProvider(deps: Deps, actor: Actor, id: string, patch: ProviderPatchInput) {
+  const scope = await facilityScope(deps, actor)
+  const now = deps.clock()
+  const row = await write(deps.prisma, async (tx) => {
+    const current = await tx.transportProvider.findUnique({ where: { id } })
+    if (!current || current.deleted || !inScope(scope, current.facilityId)) return null
+    return tx.transportProvider.update({ where: { id }, data: { ...patch, ...(patch.phone ? { phone: normalizePhone(patch.phone) } : {}), deviceId: 'web', updatedAt: now } })
+  })
+  if (!row) throw new HttpError(404, 'not_found', 'Unknown provider')
+  await audit(deps, actor, patch.active === false ? 'provider.retire' : 'provider.update', { type: 'transport_provider', id, districtId: await districtOfFacility(deps, row.facilityId) }, { fields: Object.keys(patch) })
   return toWire(row)
 }
 

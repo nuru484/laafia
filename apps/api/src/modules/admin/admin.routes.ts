@@ -7,9 +7,10 @@ import { CreateDeviceBody, DeviceParams } from './admin.schemas.ts'
 
 export function createAdminRouter(deps: Deps, auth: Auth) {
   const c = createAdminController(deps)
-  const admin = auth({ admin: true, roles: [] })
+  const admin = auth({ admin: true, roles: [], users: ['district_admin'] })
   return Router()
     .get('/admin/devices', admin, c.list)
     .post('/admin/devices', admin, validate({ body: CreateDeviceBody }), c.create)
     .post('/admin/devices/:id/deactivate', admin, validate({ params: DeviceParams }), c.deactivate)
+    .post('/admin/devices/:id/code', admin, validate({ params: DeviceParams }), c.reissue)
 }

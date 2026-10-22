@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto'
 import { Prisma, write, type Tx } from '../../platform/db.ts'
 import type { Deps } from '../../platform/deps.ts'
 import { HttpError } from '../../platform/http/errors.ts'
+import type { Actor } from '../../platform/middleware/auth.ts'
+import { assertFacility, facilityScope, inScope } from '../../platform/scope.ts'
 import { facilityByCode } from '../referrals/index.ts'
 import type { Dhis2Input, ImportIssue, ImportRow, TemplateInput } from './imports.schemas.ts'
 import { dhis2Records, mapRecords, tabularRecords, type Raw } from './imports.sources.ts'
@@ -99,30 +101,33 @@ async function preview(deps: Deps, o: { facilityId: string; templateId: string; 
   return batchView(b)
 }
 
-export async function previewFile(deps: Deps, o: { templateId: string; facilityCode: string; file: Buffer; filename: string }) {
+export async function previewFile(deps: Deps, actor: Actor, o: { templateId: string; facilityCode: string; file: Buffer; filename: string }) {
   const f = await facilityByCode(deps, o.facilityCode)
+  await assertFacility(deps, actor, f.id)
   const { source, records } = await tabularRecords(o.file, o.filename)
   return preview(deps, { facilityId: f.id, templateId: o.templateId, source, filename: o.filename.slice(0, 200), records })
 }
 
-export async function previewDhis2(deps: Deps, q: Dhis2Input) {
+export async function previewDhis2(deps: Deps, actor: Actor, q: Dhis2Input) {
   const f = await facilityByCode(deps, q.facility_code)
+  await assertFacility(deps, actor, f.id)
   const records = await dhis2Records(deps.env, deps.logger, q)
   return preview(deps, { facilityId: f.id, templateId: q.template_id, source: 'dhis2', filename: null, records })
 }
 
 /** Inside write(): the global write lock serialises commits and undos, so a status read here cannot race. */
-async function batchIn(tx: Tx, id: string, status: string) {
+async function batchIn(tx: Tx, scope: string[] | null, id: string, status: string) {
   const b = await tx.importBatch.findUnique({ where: { id } })
-  if (!b) throw new HttpError(404, 'not_found', 'Unknown import batch')
+  if (!b || !inScope(scope, b.facilityId)) throw new HttpError(404, 'not_found', 'Unknown import batch')
   if (b.status !== status) throw new HttpError(409, 'conflict', `Batch is ${b.status}`)
   return b
 }
 
 /** Writes the previewed rows in one transaction. Dedupe runs again, since the register may have changed since the preview. */
-export async function commit(deps: Deps, id: string) {
+export async function commit(deps: Deps, actor: Actor, id: string) {
+  const scope = await facilityScope(deps, actor)
   return write(deps.prisma, async (tx) => {
-    const b = await batchIn(tx, id, 'preview')
+    const b = await batchIn(tx, scope, id, 'preview')
     const { fresh, issues } = await dedupe(tx, b.facilityId, b.rows as ImportRow[])
     const now = deps.clock()
     const stamp = { updatedAt: now, deviceId: 'import', deleted: false, facilityId: b.facilityId }
@@ -169,9 +174,10 @@ export async function commit(deps: Deps, id: string) {
  * pull). Rows edited since the import, and households that gained other
  * clients, are kept and counted.
  */
-export async function undo(deps: Deps, id: string) {
+export async function undo(deps: Deps, actor: Actor, id: string) {
+  const scope = await facilityScope(deps, actor)
   return write(deps.prisma, async (tx) => {
-    const b = await batchIn(tx, id, 'committed')
+    const b = await batchIn(tx, scope, id, 'committed')
     const created = b.createdIds as { households: string[]; clients: string[] }
     const now = deps.clock()
     const untouched = { deviceId: 'import', updatedAt: b.committedAt!, deleted: false }
@@ -191,14 +197,17 @@ export async function undo(deps: Deps, id: string) {
   })
 }
 
-export async function getBatch(deps: Deps, id: string) {
+export async function getBatch(deps: Deps, actor: Actor, id: string) {
   const b = /^[0-9a-f-]{36}$/i.test(id) ? await deps.prisma.importBatch.findUnique({ where: { id } }) : null
-  if (!b) throw new HttpError(404, 'not_found', 'Unknown import batch')
+  if (!b || !inScope(await facilityScope(deps, actor), b.facilityId)) throw new HttpError(404, 'not_found', 'Unknown import batch')
   return batchView(b)
 }
 
-export async function listBatches(deps: Deps, facilityCode?: string) {
+export async function listBatches(deps: Deps, actor: Actor, facilityCode?: string) {
   const facilityId = facilityCode ? (await facilityByCode(deps, facilityCode)).id : undefined
-  const rows = await deps.prisma.importBatch.findMany({ where: facilityId ? { facilityId } : {}, orderBy: { createdAt: 'desc' }, take: 100 })
+  if (facilityId) await assertFacility(deps, actor, facilityId)
+  const scope = await facilityScope(deps, actor)
+  const where = facilityId ? { facilityId } : scope === null ? {} : { facilityId: { in: scope } }
+  const rows = await deps.prisma.importBatch.findMany({ where, orderBy: { createdAt: 'desc' }, take: 100 })
   return rows.map((b) => ({ ...batchView(b), issues: undefined, sample: undefined }))
 }

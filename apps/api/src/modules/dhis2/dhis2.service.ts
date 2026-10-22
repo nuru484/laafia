@@ -1,11 +1,14 @@
 import type { Deps } from '../../platform/deps.ts'
 import { HttpError } from '../../platform/http/errors.ts'
+import type { Actor } from '../../platform/middleware/auth.ts'
+import { assertFacility } from '../../platform/scope.ts'
 import { facilityByCode } from '../referrals/index.ts'
 import { buildDhis2Export, loadMapping, periodRange, type ExportInput } from './dhis2.export.ts'
 
 /** Loads one facility's records for a month and builds the export. Bad period or unmapped facility is a 400. */
-export async function exportFor(deps: Deps, facilityCode: string, period: string) {
+export async function exportFor(deps: Deps, actor: Actor, facilityCode: string, period: string) {
   const f = await facilityByCode(deps, facilityCode)
+  await assertFacility(deps, actor, f.id)
   let start: number
   let end: number
   try {
@@ -41,10 +44,10 @@ type TrackerReport = { status?: string; stats?: Record<string, number>; validati
 type AggregateReport = { status?: string; importCount?: Record<string, number>; conflicts?: { object?: string; value?: string }[]; response?: AggregateReport }
 
 /** POSTs the export to DHIS2_BASE_URL. dryRun uses DHIS2's own dryRun + importStrategy, so nothing is written there. */
-export async function pushToDhis2(deps: Deps, facilityCode: string, period: string, dryRun: boolean) {
+export async function pushToDhis2(deps: Deps, actor: Actor, facilityCode: string, period: string, dryRun: boolean) {
   const { DHIS2_BASE_URL: base, DHIS2_USERNAME: user, DHIS2_PASSWORD: pass } = deps.env
   if (!base || !user || !pass) throw new HttpError(503, 'dhis2_unconfigured', 'DHIS2 is not configured on this server')
-  const payload = await exportFor(deps, facilityCode, period)
+  const payload = await exportFor(deps, actor, facilityCode, period)
   const headers = { Authorization: 'Basic ' + Buffer.from(`${user}:${pass}`).toString('base64'), 'Content-Type': 'application/json', Accept: 'application/json' }
   const params = new URLSearchParams({ importStrategy: 'CREATE_AND_UPDATE', dryRun: String(dryRun), async: 'false' })
   const post = async <T>(path: string, body: unknown): Promise<T> => {

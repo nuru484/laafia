@@ -16,8 +16,9 @@ export const jobIdOfMsgId = (msgid: string) => {
 }
 
 /** Transactional enqueue: the SMS is sent only if the write that caused it commits. */
-export async function enqueueSms(tx: Tx, now: number, to: string, body: string) {
-  await tx.job.create({ data: { kind: 'sms', payload: { to, body }, runAt: now, createdAt: now } })
+export async function enqueueSms(tx: Tx, now: number, to: string, body: string, dedupeKey?: string) {
+  // skipDuplicates: a second job with the same dedupe key is dropped instead of failing the write.
+  await tx.job.createMany({ data: [{ kind: 'sms', payload: { to, body }, runAt: now, createdAt: now, dedupeKey: dedupeKey ?? null }], skipDuplicates: true })
 }
 
 /**
