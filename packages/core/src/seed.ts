@@ -56,6 +56,8 @@ export function generateSeed(today: number): Seed {
     { id: 'fac-0002', code: 'PTA-HC-01', name: 'Pong-Tamale Health Centre', level: 'health_centre', phone: '0200000002', lat: 9.68, lng: -0.83, capabilities: ['bemonc'] },
     { id: 'fac-0003', code: 'SAV-HOSP-01', name: 'Savelugu Municipal Hospital', level: 'hospital', phone: '0200000003', lat: 9.624, lng: -0.825, capabilities: ['bemonc', 'cemonc'] },
     { id: 'fac-0004', code: 'TTH-HOSP-01', name: 'Tamale Teaching Hospital', level: 'hospital', phone: '0200000004', lat: 9.42, lng: -0.84, capabilities: ['bemonc', 'cemonc', 'theatre', 'nicu'] },
+    // No seeded catchment: the demo imports its register from the dashboard.
+    { id: 'fac-0005', code: 'SAV-CHPS-02', name: 'Nabogu CHPS', level: 'chps', phone: '0200000005', lat: 9.7447, lng: -0.8233, capabilities: [] },
   ]
 
   const devices: SeedDevice[] = [
@@ -64,6 +66,7 @@ export function generateSeed(today: number): Seed {
     { id: 'F001', role: 'facility', user_name: 'Kanshegu CHPS', phone_number: '0200000001', facility_code: 'SAV-CHPS-01', key_hex: demoKey(3) },
     { id: 'F002', role: 'facility', user_name: 'Pong-Tamale HC', phone_number: '0200000002', facility_code: 'PTA-HC-01', key_hex: demoKey(4) },
     { id: 'F003', role: 'facility', user_name: 'Savelugu Hospital', phone_number: '0200000003', facility_code: 'SAV-HOSP-01', key_hex: demoKey(5) },
+    { id: 'D002', role: 'cho', user_name: 'Mariama Abdulai', phone_number: '0240000003', facility_code: 'SAV-CHPS-02', key_hex: demoKey(6) },
   ]
 
   const households: Household[] = []

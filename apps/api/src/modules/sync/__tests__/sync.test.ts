@@ -97,7 +97,7 @@ describe('sync pull', () => {
     expect(ids('visits')).toContain('v-due')
     expect(ids('visits')).not.toContain('v-ancient')
     expect(ids('visits')).not.toContain('v-old-pp')
-    expect(ids('facilities').sort()).toEqual(['fac-0001', 'fac-0002', 'fac-0003']) // Savelugu district only
+    expect(ids('facilities').sort()).toEqual(['fac-0001', 'fac-0002', 'fac-0003', 'fac-0005']) // Savelugu district only
 
     // Resumable: stopping after two pages and continuing yields exactly the same set.
     const part = await pullAll(jwt, 37, 2)

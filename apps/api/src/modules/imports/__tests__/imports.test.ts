@@ -157,7 +157,7 @@ describe('DHIS2 Tracker import', () => {
   })
 
   it.skipIf(!process.env.DHIS2_PLAY)('pulls from the public DHIS2 play demo', async () => {
-    env.DHIS2_BASE_URL = 'https://play.im.dhis2.org/dev'
+    env.DHIS2_BASE_URL = 'https://play.im.dhis2.org/stable-2-43-2'
     env.DHIS2_USERNAME = 'admin'
     env.DHIS2_PASSWORD = 'district'
     const templateId = await createTemplate({ ...DHIS2_TEMPLATE, mapping: { name: 'First name+Last name', sex: 'Gender', dob: '@enrolledAt' }, constants: { type: 'child', community: 'Ngelehun' } })
@@ -167,4 +167,27 @@ describe('DHIS2 Tracker import', () => {
     expect(res.body.batch.counts.rows).toBeGreaterThan(0)
     expect(res.body.batch.sample[0].client.dhis2_uid).toMatch(/^[A-Za-z0-9]{11}$/)
   }, 60_000)
+})
+
+describe('demo register (docs/demo/nabogu-chps-register.csv)', () => {
+  it('imports into Nabogu CHPS with the seeded template, flagging its two slips, and reaches the CHPS phone', async () => {
+    const { readFileSync } = await import('node:fs')
+    const file = readFileSync(new URL('../../../../../../docs/demo/nabogu-chps-register.csv', import.meta.url))
+    const template = await prisma.mappingTemplate.findUniqueOrThrow({ where: { name: 'CHPS client register' } })
+    const prev = await request(app).post('/admin/import/preview').set(ADMIN).field('template_id', template.id).field('facility_code', 'SAV-CHPS-02').attach('file', file, 'Nabogu_CHPS_register.csv')
+    expect(prev.status).toBe(201)
+    expect(prev.body.batch).toMatchObject({ counts: { rows: 30, valid: 28, errors: 1, duplicates: 1, households: 13 } })
+    expect(prev.body.batch.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ row: 29, kind: 'error', field: 'edd' }),
+      expect.objectContaining({ row: 30, kind: 'duplicate' }),
+    ]))
+    expect((await request(app).post(`/admin/import/batches/${prev.body.batch.id}/commit`).set(ADMIN)).status).toBe(200)
+
+    const { body } = await pullAs(await activate('D002', '0240000003'))
+    const rows = (table: string) => body.records.filter((r: { table: string }) => r.table === table).map((r: { row: Record<string, unknown> }) => r.row)
+    expect(rows('clients')).toHaveLength(28)
+    expect(rows('households')).toHaveLength(13)
+    expect(rows('households').filter((h: { lat: number | null }) => h.lat !== null)).toHaveLength(12)
+    expect(new Set(rows('clients').map((c: { type: string }) => c.type))).toEqual(new Set(['pregnant', 'postpartum', 'newborn', 'child']))
+  })
 })

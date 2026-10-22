@@ -1,0 +1,33 @@
+{
+  "dataElements": [
+    { "id": "LfVisitSumm", "name": "Laafia visit summary", "shortName": "Laafia visit summary", "domainType": "TRACKER", "valueType": "LONG_TEXT", "aggregationType": "NONE" },
+    { "id": "LfReferSumm", "name": "Laafia referral summary", "shortName": "Laafia referral summary", "domainType": "TRACKER", "valueType": "LONG_TEXT", "aggregationType": "NONE" }
+  ],
+  "programs": [
+    {
+      "id": "LfChpsProgr", "name": "Laafia CHPS client", "shortName": "Laafia CHPS client", "programType": "WITH_REGISTRATION",
+      "trackedEntityType": { "id": "nEenWmSyUEp" },
+      "organisationUnits": [{ "id": "DiszpKrYNg8" }],
+      "sharing": { "public": "rwrw----" },
+      "programTrackedEntityAttributes": [
+        { "trackedEntityAttribute": { "id": "w75KJ2mc4zz" }, "sortOrder": 1, "displayInList": true },
+        { "trackedEntityAttribute": { "id": "zDhUuAYrxNC" }, "sortOrder": 2, "displayInList": true },
+        { "trackedEntityAttribute": { "id": "cejWyOfXge6" }, "sortOrder": 3 },
+        { "trackedEntityAttribute": { "id": "lZGmxYbs97q" }, "sortOrder": 4, "displayInList": true }
+      ],
+      "programStages": [{ "id": "LfVisitStag" }, { "id": "LfReferStag" }]
+    }
+  ],
+  "programStages": [
+    {
+      "id": "LfVisitStag", "name": "Laafia home visit", "program": { "id": "LfChpsProgr" }, "repeatable": true, "sortOrder": 1,
+      "sharing": { "public": "rwrw----" },
+      "programStageDataElements": [{ "dataElement": { "id": "LfVisitSumm" } }]
+    },
+    {
+      "id": "LfReferStag", "name": "Laafia referral", "program": { "id": "LfChpsProgr" }, "repeatable": true, "sortOrder": 2,
+      "sharing": { "public": "rwrw----" },
+      "programStageDataElements": [{ "dataElement": { "id": "LfReferSumm" } }]
+    }
+  ]
+}

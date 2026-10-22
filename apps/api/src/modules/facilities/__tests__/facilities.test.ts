@@ -10,14 +10,14 @@ describe('facilities, providers and devices from the dashboard', () => {
     const cho = await activate('D001')
     const { body: first } = await pullAs(cho)
     const { agent, csrf } = await signIn(USERS.admin)
-    const created = await agent.post('/admin/facilities').set(csrf).send({ code: 'SAV-CHPS-02', name: 'Moglaa CHPS', level: 'chps', phone: '+233 20 000 0009', lat: 9.655, lng: -0.87, capabilities: [], languages: ['dag'] })
+    const created = await agent.post('/admin/facilities').set(csrf).send({ code: 'SAV-CHPS-09', name: 'Moglaa CHPS', level: 'chps', phone: '+233 20 000 0009', lat: 9.655, lng: -0.87, capabilities: [], languages: ['dag'] })
     expect(created.status).toBe(201)
-    expect(created.body.facility).toMatchObject({ code: 'SAV-CHPS-02', district_id: 'dist-sav', phone: '0200000009' })
+    expect(created.body.facility).toMatchObject({ code: 'SAV-CHPS-09', district_id: 'dist-sav', phone: '0200000009' })
     const id = created.body.facility.id as string
     expect((await agent.patch(`/admin/facilities/${id}`).set(csrf).send({ capabilities: ['bemonc'] })).body.facility.capabilities).toEqual(['bemonc'])
     const pulled = (await pullAs(cho, first.cursor)).body.records
     expect(pulled.find((r: { table: string; row: { id: string } }) => r.table === 'facilities' && r.row.id === id)).toBeTruthy()
-    expect((await agent.post('/admin/facilities').set(csrf).send({ code: 'SAV-CHPS-02', name: 'Dup', level: 'chps', lat: 9, lng: -1 })).status).toBe(409)
+    expect((await agent.post('/admin/facilities').set(csrf).send({ code: 'SAV-CHPS-09', name: 'Dup', level: 'chps', lat: 9, lng: -1 })).status).toBe(409)
     expect((await agent.patch('/admin/facilities/fac-0004').set(csrf).send({ name: 'Not mine' })).status).toBe(404) // Tamale district
 
     const staff = await signIn(USERS.hospital)

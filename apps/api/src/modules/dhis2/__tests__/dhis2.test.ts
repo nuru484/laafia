@@ -65,6 +65,13 @@ describe('buildDhis2Export (pure)', () => {
     expect(buildDhis2Export(fixture, mapping).summary).toEqual({ anc_contacts: 2, pnc_within_48h: 0, referrals_made: 2, referrals_completed: 1, tracked_entities: 3, events: 6 })
   })
 
+  it('gives events new ids when the mapping moves them to another programme', () => {
+    const ids = (m: typeof mapping) => buildDhis2Export(fixture, m).tracker.trackedEntities.flatMap((t) => t.enrollments[0]!.events.map((e) => e.event))
+    const moved = { ...mapping, programs: Object.fromEntries(Object.entries(mapping.programs).map(([k, p]) => [k, { ...p, program: 'Abcdefghijk' }])) }
+    expect(ids(mapping)).toEqual(ids(mapping))
+    expect(ids(moved).filter((id) => ids(mapping).includes(id))).toEqual([])
+  })
+
   it('rejects a bad period and an unmapped facility', () => {
     expect(() => buildDhis2Export({ ...fixture, period: '2026-10' }, mapping)).toThrow(/period/)
     expect(() => buildDhis2Export({ ...fixture, facility: { id: 'x', code: 'NOPE-01' } }, mapping)).toThrow(/orgUnit/)
@@ -152,7 +159,7 @@ describe('/export/dhis2', () => {
   })
 
   it.skipIf(!process.env.DHIS2_PLAY)('dry-runs the export against the public DHIS2 play demo', async () => {
-    env.DHIS2_BASE_URL = 'https://play.im.dhis2.org/dev'
+    env.DHIS2_BASE_URL = 'https://play.im.dhis2.org/stable-2-43-2'
     env.DHIS2_USERNAME = 'admin'
     env.DHIS2_PASSWORD = 'district'
     const period = new Date().toISOString().slice(0, 7).replace('-', '')

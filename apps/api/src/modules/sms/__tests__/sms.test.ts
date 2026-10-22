@@ -19,13 +19,13 @@ describe('inbound SMS verification', () => {
   it('refuses an LFS signed by a device that may not act on the referral, accepts the destination facility', async () => {
     const cho = await activate('D001')
     await pushAs(cho, [{ table: 'referrals', row: { id: 'r-spoof', updated_at: TODAY, origin_device_id: 'D001', short_id: SID, client_code: 'CL-0041', urgency: 3, client_type: 'postpartum', danger_signs: ['bleeding'], destination_facility_id: 'fac-0003' } }])
-    const created = await request(app).post('/admin/devices').set(ADMIN).send({ id: 'D002', role: 'cho', user_name: 'Other CHO', facility_code: 'SAV-CHPS-01' })
+    const created = await request(app).post('/admin/devices').set(ADMIN).send({ id: 'D009', role: 'cho', user_name: 'Other CHO', facility_code: 'SAV-CHPS-01' })
     const other = await request(app).post('/auth/activate').send({ activation_code: created.body.activation_code, phone_number: '0240000009' })
     const otherKey = other.body.device_key as string
 
-    const forged = await sms(encode({ kind: 'LFS', signer: 'D002', origin: 'D001', short_id: SID, status: 'A' }, otherKey))
+    const forged = await sms(encode({ kind: 'LFS', signer: 'D009', origin: 'D001', short_id: SID, status: 'A' }, otherKey))
     expect(forged.body).toEqual({ ok: false, error: 'forbidden' })
-    const unknown = await sms(encode({ kind: 'LFS', signer: 'D002', origin: 'D001', short_id: 'ZZZZZZZZ', status: 'A' }, otherKey))
+    const unknown = await sms(encode({ kind: 'LFS', signer: 'D009', origin: 'D001', short_id: 'ZZZZZZZZ', status: 'A' }, otherKey))
     expect(unknown.body).toEqual({ ok: false, error: 'forbidden' }) // no stub for someone else's referral
     expect(await prisma.referral.findMany()).toHaveLength(1)
     expect((await prisma.referral.findFirst())!.status).toBe('created')

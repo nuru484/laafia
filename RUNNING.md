@@ -82,6 +82,7 @@ Each phone is activated once with internet. Use the codes the seed printed:
 | 26100003 | F001 Kanshegu CHPS | Facility |
 | 26100004 | F002 Pong-Tamale Health Centre | Facility |
 | 26100005 | F003 Savelugu Municipal Hospital | Facility |
+| 26100006 | D002 Mariama Abdulai, Nabogu CHPS (no catchment until the register is imported) | CHO |
 
 Enter the phone's real number at activation; acknowledgements and status SMS go to it. A facility phone becomes the number CHO phones text referrals to.
 
@@ -99,17 +100,36 @@ Two phones: CHO (D001) and hospital (F003).
 
 Offline variants: put the CHO phone in airplane mode with mobile signal only (no data), or with no signal at all; the SMS queues and sends when signal returns. QR hop: on the referral, Show QR code; scan it from the volunteer phone (More, Scan a referral QR), which forwards it by SMS.
 
-## 7. Tests
+## 7. Demo: onboard a CHPS and DHIMS2
+
+DHIMS2 runs here against DHIS2's public demo server (Sierra Leone sample data), set in `apps/api/.env`. The live DHIMS2 needs Ghana Health Service authorisation; only the URL, the login and `docs/dhis2-mapping.json` change.
+
+Before the demo (the demo server resets now and then):
+
+```bash
+scripts/dhis2-demo-setup.sh               # loads the Laafia CHPS programme onto the DHIS2 server; safe to re-run
+```
+
+1. **Import the register.** Dashboard as admin, Import, From a file: template *CHPS client register*, facility *Nabogu CHPS*, file `docs/demo/nabogu-chps-register.csv`. The preview shows 28 people in 13 households ready, row 29 rejected (ANC without an EDD) and row 30 a duplicate. Confirm the import.
+2. **Map the new area.** Maps, Make the map: the suggested area now takes in Nabogu, Gushie and Dipale.
+3. **CHO phone.** Activate with `26100006`. The first sync brings Nabogu's 28 clients, ranked, and the map. A phone already activated as another device needs its app data cleared first (Android Settings, Apps, Laafia, Storage).
+4. **Pull from DHIMS2.** Import, DHIMS2: template *DHIS2 Child Programme*, any facility, org unit `DiszpKrYNg8`, programme `IpHINAT79UW`. The preview lists the server's children; leave it unconfirmed.
+5. **Report to DHIMS2.** DHIMS2 export: *Kanshegu CHPS*, this month, Check with DHIMS2. DHIS2 validates the people, visits, referrals and monthly totals and saves nothing.
+
+To run it again, Undo the Nabogu import on the Import page.
+
+## 8. Tests
 
 ```bash
 npm test    # core, api, mobile and web
 ```
 
-## 8. Standalone APK
+## 9. Standalone APK
 
 For phones that should run without the development machine, set the API URL for the profile in `apps/mobile/eas.json` (`env.EXPO_PUBLIC_API_URL`) and build:
 
 ```bash
 cd apps/mobile
 npx eas-cli build --platform android --profile preview
+cd apps/mobile && npx expo start --dev-client --lan
 ```

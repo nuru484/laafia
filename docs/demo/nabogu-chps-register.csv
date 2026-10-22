@@ -1,0 +1,31 @@
+Register No,Household No,Client Name,Register,Sex,Date of Birth,EDD,Delivery Date,Parity,NHIS,Community,Household Head,Landmark,Latitude,Longitude
+001,NAB-001,Fati Alhassan,ANC,F,,14/11/2026,,3,Yes,Nabogu,Alhassan Iddrisu,Near the central mosque,9.7451,-0.8229
+002,NAB-001,Ramatu Alhassan,CWC,F,02/03/2025,,,,Yes,Nabogu,Alhassan Iddrisu,Near the central mosque,9.7451,-0.8229
+003,NAB-002,Mariama Yakubu,PNC,F,,,21/10/2026,2,Yes,Nabogu,Mahama Yakubu,Behind the borehole,9.744,-0.8247
+004,NAB-002,Baby of Mariama Yakubu,Newborn,M,21/10/2026,,,,Yes,Nabogu,Mahama Yakubu,Behind the borehole,9.744,-0.8247
+005,NAB-002,Abdul-Rahim Yakubu,CWC,M,10/08/2023,,,,Yes,Nabogu,Mahama Yakubu,Behind the borehole,9.744,-0.8247
+006,NAB-003,Hawa Sulemana,ANC,F,,20/01/2027,,0,No,Nabogu,Abdulai Sulemana,Opposite the chief's palace,9.7462,-0.8218
+007,NAB-003,Sanatu Sulemana,ANC,F,,05/03/2027,,1,Yes,Nabogu,Abdulai Sulemana,Opposite the chief's palace,9.7462,-0.8218
+008,NAB-004,Ayishetu Mohammed,PNC,F,,,16/10/2026,4,No,Nabogu,Iddrisu Mohammed,Near Nabogu primary school,9.7429,-0.8221
+009,NAB-004,Baby of Ayishetu Mohammed,Newborn,F,16/10/2026,,,,No,Nabogu,Iddrisu Mohammed,Near Nabogu primary school,9.7429,-0.8221
+010,NAB-004,Zuweira Mohammed,CWC,F,25/06/2024,,,,No,Nabogu,Iddrisu Mohammed,Near Nabogu primary school,9.7429,-0.8221
+011,NAB-005,Asana Alidu,ANC,F,,28/10/2026,,5,Yes,Nabogu,Yahaya Alidu,By the big shea tree,9.7473,-0.8252
+012,NAB-005,Nasiru Alidu,CWC,M,14/09/2025,,,,Yes,Nabogu,Yahaya Alidu,By the big shea tree,9.7473,-0.8252
+013,NAB-006,Memunatu Abukari,ANC,F,,18/12/2026,,2,Yes,Nabogu,Fuseini Abukari,Near the dugout,,
+014,NAB-006,Wumbei Abukari,CWC,M,03/01/2024,,,,Yes,Nabogu,Fuseini Abukari,Near the dugout,,
+015,GUS-001,Salamatu Mahama,PNC,F,,,22/10/2026,1,Yes,Gushie,Sulemana Mahama,Near the market square,9.8081,-0.8601
+016,GUS-001,Baby of Salamatu Mahama,Newborn,M,22/10/2026,,,,Yes,Gushie,Sulemana Mahama,Near the market square,9.8081,-0.8601
+017,GUS-002,Barikisu Issahaku,ANC,F,,10/02/2027,,0,Yes,Gushie,Adam Issahaku,Behind Gushie JHS,9.8069,-0.8614
+018,GUS-002,Fuseina Issahaku,CWC,F,19/11/2022,,,,Yes,Gushie,Adam Issahaku,Behind Gushie JHS,9.8069,-0.8614
+019,GUS-003,Rukaya Abdulai,ANC,F,,06/11/2026,,4,No,Gushie,Iddi Abdulai,Near the mango trees,9.809,-0.8596
+020,GUS-003,Alhassan Abdulai,CWC,M,30/04/2025,,,,No,Gushie,Iddi Abdulai,Near the mango trees,9.809,-0.8596
+021,GUS-004,Lamnatu Alhassan,PNC,F,,,09/10/2026,3,Yes,Gushie,Seidu Alhassan,By the grinding mill,9.8074,-0.8622
+022,GUS-004,Baby of Lamnatu Alhassan,Newborn,F,09/10/2026,,,,Yes,Gushie,Seidu Alhassan,By the grinding mill,9.8074,-0.8622
+023,DIP-001,Habiba Mahamadu,ANC,F,,22/04/2027,,1,Yes,Dipale,Osman Mahamadu,Near the chief's palace,9.8024,-0.9384
+024,DIP-001,Sumaila Mahamadu,CWC,M,12/12/2024,,,,Yes,Dipale,Osman Mahamadu,Near the chief's palace,9.8024,-0.9384
+025,DIP-002,Abiba Yakubu,ANC,F,,30/11/2026,,2,No,Dipale,Abukari Yakubu,Behind the mosque,9.8015,-0.9395
+026,DIP-002,Mohammed Yakubu,CWC,M,07/07/2023,,,,No,Dipale,Abukari Yakubu,Behind the mosque,9.8015,-0.9395
+027,DIP-003,Adisa Iddrisu,PNC,F,,,19/10/2026,0,Yes,Dipale,Mumuni Iddrisu,Near the borehole,9.8031,-0.9379
+028,DIP-003,Baby of Adisa Iddrisu,Newborn,M,19/10/2026,,,,Yes,Dipale,Mumuni Iddrisu,Near the borehole,9.8031,-0.9379
+029,DIP-003,Kande Iddrisu,ANC,F,,,,1,Yes,Dipale,Mumuni Iddrisu,Near the borehole,9.8031,-0.9379
+030,NAB-001,Fati Alhassan,ANC,F,,14/11/2026,,3,Yes,Nabogu,Alhassan Iddrisu,Near the central mosque,9.7451,-0.8229

@@ -76,12 +76,12 @@ export function buildDhis2Export(input: ExportInput, mapping: Mapping) {
     const events = [
       ...vs.map((v) => ({
         at: v.visited_at,
-        event: { event: dhis2Uid(`ev:${v.id}`), program: program.program, programStage: program.visit_stage, orgUnit, occurredAt: day(v.visited_at), status: 'COMPLETED',
+        event: { event: dhis2Uid(`ev:${v.id}:${program.program}`), program: program.program, programStage: program.visit_stage, orgUnit, occurredAt: day(v.visited_at), status: 'COMPLETED',
           dataValues: [{ dataElement: mapping.data_elements.visit.summary, value: `Laafia visit (${v.protocol_id}): outcome ${v.outcome}, rule ${v.rule_id}${v.muac_mm ? `, MUAC ${v.muac_mm} mm` : ''}` }] },
       })),
       ...rs.map((r) => ({
         at: r.made_at,
-        event: { event: dhis2Uid(`ev:${r.id}`), program: program.program, programStage: program.referral_stage, orgUnit, occurredAt: day(r.made_at), status: 'COMPLETED',
+        event: { event: dhis2Uid(`ev:${r.id}:${program.program}`), program: program.program, programStage: program.referral_stage, orgUnit, occurredAt: day(r.made_at), status: 'COMPLETED',
           dataValues: [{ dataElement: mapping.data_elements.referral.summary, value: `Laafia referral: urgency ${r.urgency ?? '-'} to ${r.destination_code ?? '-'} (${r.danger_signs.join(', ') || 'no signs'}); status ${r.status}` }] },
       })),
     ].sort((a, b) => a.at - b.at).map((e) => e.event)

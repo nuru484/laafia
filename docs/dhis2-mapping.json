@@ -1,5 +1,5 @@
 {
-  "_comment": "Laafia to DHIS2 Tracker mapping (spec 17). These UIDs are from the public DHIS2 play demo (Sierra Leone) so the export can be dry-run there; replace them with the district instance's UIDs during integration.",
+  "_comment": "Laafia to DHIS2 Tracker mapping (spec 17). Demo values for the public DHIS2 server (Sierra Leone, stable-2-43-2): attributes and org unit are the server's own; the programme, stages and data elements come from docs/demo/dhis2-laafia-program.json, loaded with scripts/dhis2-demo-setup.sh. Replace them with the district instance's UIDs during integration.",
   "trackedEntityType": "nEenWmSyUEp",
   "attributes": {
     "first_name": "w75KJ2mc4zz",
@@ -7,19 +7,43 @@
     "sex": "cejWyOfXge6",
     "code": "lZGmxYbs97q"
   },
-  "sex_values": { "f": "Female", "m": "Male" },
+  "sex_values": {
+    "f": "Female",
+    "m": "Male"
+  },
   "programs": {
-    "pregnant": { "program": "IpHINAT79UW", "visit_stage": "ZzYYXq4fJie", "referral_stage": "ZzYYXq4fJie" },
-    "postpartum": { "program": "IpHINAT79UW", "visit_stage": "ZzYYXq4fJie", "referral_stage": "ZzYYXq4fJie" },
-    "newborn": { "program": "IpHINAT79UW", "visit_stage": "ZzYYXq4fJie", "referral_stage": "ZzYYXq4fJie" },
-    "child": { "program": "IpHINAT79UW", "visit_stage": "ZzYYXq4fJie", "referral_stage": "ZzYYXq4fJie" }
+    "pregnant": {
+      "program": "LfChpsProgr",
+      "visit_stage": "LfVisitStag",
+      "referral_stage": "LfReferStag"
+    },
+    "postpartum": {
+      "program": "LfChpsProgr",
+      "visit_stage": "LfVisitStag",
+      "referral_stage": "LfReferStag"
+    },
+    "newborn": {
+      "program": "LfChpsProgr",
+      "visit_stage": "LfVisitStag",
+      "referral_stage": "LfReferStag"
+    },
+    "child": {
+      "program": "LfChpsProgr",
+      "visit_stage": "LfVisitStag",
+      "referral_stage": "LfReferStag"
+    }
   },
   "data_elements": {
-    "visit": { "summary": "OuJ6sgPyAbC" },
-    "referral": { "summary": "OuJ6sgPyAbC" }
+    "visit": {
+      "summary": "LfVisitSumm"
+    },
+    "referral": {
+      "summary": "LfReferSumm"
+    }
   },
   "org_units": {
     "SAV-CHPS-01": "DiszpKrYNg8",
+    "SAV-CHPS-02": "DiszpKrYNg8",
     "PTA-HC-01": "DiszpKrYNg8",
     "SAV-HOSP-01": "DiszpKrYNg8",
     "TTH-HOSP-01": "DiszpKrYNg8"

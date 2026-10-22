@@ -16,7 +16,7 @@ const DISTRICTS = [
 ]
 
 /** Fixed demo activation codes so the phones can be activated from the README. Demo only. */
-export const DEMO_CODES: Record<string, string> = { D001: '26100001', V001: '26100002', F001: '26100003', F002: '26100004', F003: '26100005' }
+export const DEMO_CODES: Record<string, string> = { D001: '26100001', V001: '26100002', F001: '26100003', F002: '26100004', F003: '26100005', D002: '26100006' }
 
 type Upsertable = { upsert(args: { where: { id: string }; create: never; update: never }): Promise<unknown> }
 
@@ -55,6 +55,10 @@ export async function seedDemo(deps: Deps, today = Date.now()) {
       const data = { deviceId, expiresAt: now + 7 * DAY, usedAt: null }
       await tx.activationCode.upsert({ where: { code }, create: { code, ...data }, update: data })
     }
+    for (const t of DEMO_TEMPLATES) {
+      const data = { source: t.source, mapping: t.mapping, constants: t.constants }
+      await tx.mappingTemplate.upsert({ where: { name: t.name }, create: { id: t.id, name: t.name, ...data, createdAt: now }, update: data })
+    }
     const passwordHash = await demoPasswordHash()
     for (const u of DEMO_USERS) {
       const data = { name: u.name, email: u.email, role: u.role, facilityId: u.facilityId, districtId: u.districtId, passwordHash, active: true, passwordChangedAt: now }
@@ -63,6 +67,24 @@ export async function seedDemo(deps: Deps, today = Date.now()) {
   })
   return s
 }
+
+/**
+ * Register templates for the demo: the sample CHPS register CSV (docs/demo/nabogu-chps-register.csv), and the
+ * Child Programme on the public DHIS2 demo server, where enrolment date is the birth date.
+ */
+export const DEMO_TEMPLATES = [
+  {
+    id: '00000000-0000-4000-8000-000000000001', name: 'CHPS client register', source: 'tabular', constants: {},
+    mapping: {
+      household_ref: 'Household No', name: 'Client Name', type: 'Register', sex: 'Sex', dob: 'Date of Birth', edd: 'EDD', delivery_date: 'Delivery Date',
+      parity: 'Parity', nhis_active: 'NHIS', community: 'Community', head_name: 'Household Head', landmark: 'Landmark', lat: 'Latitude', lng: 'Longitude',
+    },
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000002', name: 'DHIS2 Child Programme', source: 'dhis2', constants: { type: 'child', community: 'Ngelehun' },
+    mapping: { name: 'First name+Last name', sex: 'Gender', dob: '@enrolledAt' },
+  },
+]
 
 /** One dashboard account per role. Demo only: every account shares DEMO_PASSWORD. */
 export const DEMO_PASSWORD = 'Laafia-demo-2026'
