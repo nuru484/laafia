@@ -2,20 +2,30 @@ import * as Location from 'expo-location'
 
 export type Fix = { lat: number; lng: number; accuracy: number }
 
+/** Enough fixes this good end the capture early. */
+const GOOD_M = 20
+const ENOUGH = 5
+
 /**
- * A doorstep position from several fixes (spec 9): collect for up to `ms`,
- * keep the better half by accuracy, and average them. One fix on a cheap
- * phone is often 30 m off; the average of the good ones is usually under 10 m.
+ * A doorstep position from several fixes (spec 9): collect until five are
+ * within 20 m or `maxMs` passes, keep the better half by accuracy, and average
+ * them. GPS needs no internet, but without data the phone cannot download the
+ * satellite almanac, so the first fix can take a minute outdoors.
  */
-export async function captureHouse(ms = 12_000, onFix?: (n: number, best: number) => void): Promise<Fix | null> {
+export async function captureHouse(maxMs = 90_000, onFix?: (n: number, best: number) => void): Promise<Fix | null> {
   const { granted } = await Location.requestForegroundPermissionsAsync()
   if (!granted) return null
   const fixes: Fix[] = []
+  let done = () => {}
+  const finished = new Promise<void>((resolve) => { done = resolve })
+  const timer = setTimeout(done, maxMs)
   const sub = await Location.watchPositionAsync({ accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 0 }, (p) => {
     fixes.push({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy ?? 99 })
     onFix?.(fixes.length, Math.min(...fixes.map((f) => f.accuracy)))
+    if (fixes.filter((f) => f.accuracy <= GOOD_M).length >= ENOUGH) done()
   })
-  await new Promise((r) => setTimeout(r, ms))
+  await finished
+  clearTimeout(timer)
   sub.remove()
   if (!fixes.length) return null
   const good = [...fixes].sort((a, b) => a.accuracy - b.accuracy).slice(0, Math.max(1, Math.ceil(fixes.length / 2)))

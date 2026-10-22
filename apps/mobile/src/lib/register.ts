@@ -145,6 +145,24 @@ export async function enrol(env: Env, input: EnrolInput): Promise<{ client_id: s
   })
 }
 
+export type ClientEdit = { name: string; phone: string; next_of_kin: string; community: string; head_name: string; landmark: string }
+
+/** Corrects a client's details and her household's; both go to the server on the next sync. */
+export async function updateClient(env: Env, id: string, e: ClientEdit): Promise<void> {
+  const name = e.name.trim()
+  if (!name) throw new Error('Enter her name')
+  const phone = e.phone.trim() ? normalizePhone(e.phone) : null
+  if (phone && !/^0\d{9}$/.test(phone)) throw new Error('Enter a Ghana phone number, for example 024 123 4567')
+  const c = await env.db.get<{ household_id: string }>('SELECT household_id FROM clients WHERE id = ?', [id])
+  if (!c) throw new Error('Unknown client')
+  await env.db.tx(async () => {
+    await env.db.run('UPDATE clients SET name = ?, phone = ?, next_of_kin = ?, updated_at = ?, device_id = ?, synced = 0 WHERE id = ?',
+      [name, phone, e.next_of_kin.trim() || null, env.now(), env.self.device_id, id])
+    await env.db.run('UPDATE households SET community = ?, head_name = ?, landmark = ?, updated_at = ?, device_id = ?, synced = 0 WHERE id = ?',
+      [e.community.trim(), e.head_name.trim(), e.landmark.trim(), env.now(), env.self.device_id, c.household_id])
+  })
+}
+
 export type ReferralListRow = {
   id: string; short_id: string; client_id: string | null; client_code: string; client_name: string | null; client_type: ClientWireType
   type_label: string; context: string; urgency: number; signs: string[]; destination_code: string; destination_name: string

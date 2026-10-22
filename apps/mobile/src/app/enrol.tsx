@@ -44,10 +44,10 @@ export default function Enrol() {
   const canSave = !!houseOk && consent && name.trim().length > 1 && whenOk
 
   async function gps() {
-    setGpsNote('Stand at the door. Reading position.')
-    const f = await captureHouse(12_000, (k, best) => setGpsNote(`Reading ${k}, best ${Math.round(best)} m`))
+    setGpsNote('Stand outside at the door. With no data the first reading can take a minute.')
+    const f = await captureHouse(90_000, (k, best) => setGpsNote(`Reading ${k}, best ${Math.round(best)} m`))
     setFix(f)
-    setGpsNote(f ? `Position saved, about ${f.accuracy} m.` : 'No position. Location may be off; you can save without it.')
+    setGpsNote(f ? `Position saved, about ${f.accuracy} m.` : 'No position yet. Check that location is on and step into the open, or save without it and capture it later.')
   }
 
   async function save() {

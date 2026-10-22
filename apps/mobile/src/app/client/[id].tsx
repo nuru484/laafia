@@ -36,9 +36,9 @@ export default function ClientScreen() {
   const protocol = protocolIdFor(client.type, client.type === 'child' || client.type === 'newborn' ? ageDays : null)
 
   async function fixGps() {
-    setGps('Finding the house position. Stand at the door.')
-    const fix = await captureHouse(12_000, (n, best) => setGps(`Reading ${n}, best accuracy ${Math.round(best)} m`))
-    if (!fix || !household) { setGps('Could not get a position. Location may be off.'); return }
+    setGps('Finding the house position. Stand outside at the door; with no data the first reading can take a minute.')
+    const fix = await captureHouse(90_000, (n, best) => setGps(`Reading ${n}, best accuracy ${Math.round(best)} m`))
+    if (!fix || !household) { setGps('No position yet. Check that location is on, step into the open, and try again.'); return }
     await env().db.run('UPDATE households SET lat = ?, lng = ?, updated_at = ?, device_id = ?, synced = 0 WHERE id = ?', [fix.lat, fix.lng, Date.now(), env().self.device_id, household.id])
     setGps(`Saved, accurate to about ${fix.accuracy} m.`)
     changed()
@@ -71,6 +71,7 @@ export default function ClientScreen() {
   return (
     <Screen title={client.name} subtitle={`${TYPE_NAME[client.type]} · ${client.code}`} right={<Button tone="quiet" label="Back" onPress={() => router.back()} />}>
       <Button label="Start visit checklist" onPress={() => router.push(`/visit/${client.id}?protocol=${protocol}`)} />
+      <Button tone="plain" label="Edit name, phone or house" onPress={() => router.push(`/client/edit/${client.id}`)} />
       <Card>
         <Label>Details</Label>
         {client.type === 'pregnant' && client.edd ? <Body>Due {new Date(client.edd).toLocaleDateString()} · pregnancy {client.parity === 0 ? 'first' : `number ${(client.parity ?? 0) + 1}`}</Body> : null}

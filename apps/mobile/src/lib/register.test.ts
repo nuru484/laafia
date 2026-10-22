@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { FOLLOWUP_FLOOR, PROTOCOLS, evaluate, generateSeed } from '@laafia/core'
 import { testDb } from '../../test/node-db'
 import { createReferral, loadSeed, type Env } from './relay'
-import { enrol, facilityInbox, referralList, saveVisit, todayList } from './register'
+import { enrol, facilityInbox, referralList, saveVisit, todayList, updateClient } from './register'
 
 const DAY = 86_400_000
 const TODAY = Date.UTC(2026, 9, 22, 8)
@@ -54,6 +54,18 @@ describe('scheduled visits', () => {
       [child.id, TODAY - 5 * DAY, TODAY + 6 * 3_600_000, TODAY])
     const list = await todayList(cho, { lat: 9.603, lng: -0.805 }, 1)
     expect(list.find((r) => r.client_id === child.id)).toMatchObject({ pinned: 'scheduled' })
+  })
+})
+
+describe('editing a client', () => {
+  it("saves her name, phone, next of kin and house details for the next sync, and refuses a bad number", async () => {
+    const cho = await phone('D001')
+    const c = seed.clients[0]!
+    await updateClient(cho, c.id, { name: ' Amina Iddrisu ', phone: '+233 24 555 6666', next_of_kin: '', community: 'Moglaa', head_name: 'Naa Iddrisu', landmark: 'blue gate' })
+    expect(await cho.db.get('SELECT name, phone, next_of_kin, synced FROM clients WHERE id = ?', [c.id])).toEqual({ name: 'Amina Iddrisu', phone: '0245556666', next_of_kin: null, synced: 0 })
+    expect(await cho.db.get('SELECT community, head_name, landmark, synced FROM households WHERE id = ?', [c.household_id])).toEqual({ community: 'Moglaa', head_name: 'Naa Iddrisu', landmark: 'blue gate', synced: 0 })
+    await expect(updateClient(cho, c.id, { name: 'X', phone: '12345', next_of_kin: '', community: 'Moglaa', head_name: 'H', landmark: '' })).rejects.toThrow(/phone/)
+    await expect(updateClient(cho, c.id, { name: '  ', phone: '', next_of_kin: '', community: 'Moglaa', head_name: 'H', landmark: '' })).rejects.toThrow(/name/)
   })
 })
 

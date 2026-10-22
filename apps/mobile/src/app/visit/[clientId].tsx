@@ -1,4 +1,4 @@
-import { PROTOCOLS, evaluate, next, resolveDestination, type Facility, type Question } from '@laafia/core'
+import { PROTOCOLS, evaluate, haversineKm, next, resolveDestination, type Facility, type Question } from '@laafia/core'
 import { router, useLocalSearchParams } from 'expo-router'
 import { useMemo, useState } from 'react'
 import { Pressable, View } from 'react-native'
@@ -132,10 +132,11 @@ export default function Visit() {
           {result.outcome === 'refer' ? (
             <>
               <Label>Send to</Label>
-              {data.facilities.filter((f) => f.level !== 'chps' || f.code === suggested?.code).map((f) => (
+              <Body muted>Nearest first, from the house. The checklist suggests the closest one that can treat these signs.</Body>
+              {data.facilities.filter((f) => f.level !== 'chps' || f.code === suggested?.code).sort((a, b) => haversineKm(origin, a) - haversineKm(origin, b)).map((f) => (
                 <Pressable key={f.code} onPress={() => setDestCode(f.code)} accessibilityRole="radio" accessibilityState={{ checked: destination?.code === f.code }}
                   style={{ minHeight: touch, padding: space.md, borderRadius: radius, borderWidth: 2, borderColor: destination?.code === f.code ? color.refer : color.line, justifyContent: 'center' }}>
-                  <Body style={{ fontWeight: destination?.code === f.code ? '700' : '400' }}>{f.name}{f.code === suggested?.code ? ' (suggested by the checklist)' : ''}</Body>
+                  <Body style={{ fontWeight: destination?.code === f.code ? '700' : '400' }}>{f.name} · {haversineKm(origin, f).toFixed(1)} km{f.code === suggested?.code ? ' (suggested)' : ''}</Body>
                 </Pressable>
               ))}
               <Button tone="refer" label="Send referral" onPress={() => finish(true)} busy={saving} disabled={!destination} />
