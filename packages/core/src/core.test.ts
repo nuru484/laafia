@@ -287,3 +287,14 @@ describe('seed', () => {
     expect(top.some((n) => n.startsWith('Baby of Amina'))).toBe(true)
   })
 })
+
+describe('prompt catalogue', () => {
+  it('lists every question, action and sign prompt once, with numbers for spoken values', async () => {
+    const { allPrompts } = await import('./prompts.ts')
+    const prompts = allPrompts()
+    const ids = prompts.map((p) => p.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    for (const p of Object.values(PROTOCOLS)) for (const q of p.questions) expect(ids).toContain(q.prompt)
+    expect(ids).toContain('num_30')
+  })
+})

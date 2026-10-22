@@ -38,7 +38,7 @@ export type Device = {
 export type Provider = { id: string; facility_id: string | null; facility_code: string | null; name: string; phone: string; vehicle: string; community: string; active: boolean }
 
 export type Pack = { id: string; kind: 'audio' | 'tiles'; language: string | null; district_code: string | null; version: number; size: number; sha256: string; content_type: string; url: string; created_at: number }
-export type Clip = { id: string; prompt_id: string; lang: string; sha256: string; size: number; recorded_at: number; url: string; device_id?: string | null }
+export type Clip = { id: string; prompt_id: string; lang: string; sha256: string; size: number; recorded_at: number; url: string; device_id?: string | null; recorded_by?: string | null }
 
 export type ApiErrorBody = { status: number; code: string; message: string; details?: { path: string; message: string }[] }
 
@@ -51,3 +51,15 @@ export type ImportBatch = {
   sample?: { row: number; household: { community: string; head_name: string; landmark: string | null }; client: { name: string; type: string; sex: string | null; dob: number | null; edd: number | null; delivery_date: number | null } }[]
   created_at: number; committed_at: number | null; undone_at: number | null
 }
+
+export type ExportPreview = {
+  tracker: { trackedEntities: unknown[] }
+  dataValueSet: { dataSet: string; period: string; orgUnit: string; dataValues: { dataElement: string; value: string }[] }
+  summary?: { anc_contacts: number; pnc_within_48h: number; referrals_made: number; referrals_completed: number; tracked_entities: number; events: number }
+}
+export type ExportResult = {
+  dry_run: boolean; tracked_entities: number
+  tracker: { status: string; stats: { created: number; updated: number; ignored: number; total: number }; errors: unknown[] }
+  aggregate: { status: string; import_count: { imported: number; updated: number; ignored: number }; conflicts: unknown[] }
+}
+export type ExportRecord = { id: string; facility_code: string; period: string; dry_run: boolean; by: string | null; at: number; tracked_entities: number; status: string }
