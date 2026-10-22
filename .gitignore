@@ -10,3 +10,4 @@ ios/
 .next/
 __pycache__/
 .venv/
+apps/api/content/

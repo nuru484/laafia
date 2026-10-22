@@ -3,6 +3,7 @@ import express from 'express'
 import { randomBytes, randomInt } from 'node:crypto'
 import { z } from 'zod'
 import { activate, ActivateBody, actorOf, auth, deviceOf, keysFor, refresh, safeEqual } from './auth.ts'
+import { listPacks, manifest, packUpload, servePack, uploadPack } from './content.ts'
 import { db, write } from './db.ts'
 import { env } from './env.ts'
 import { errorHandler, HttpError } from './http.ts'
@@ -58,6 +59,12 @@ export function createApp() {
     const device = deviceOf(res)
     res.json({ ...(await pull(device, PullQuery.parse(req.query))), keys: await keysFor(device) })
   })
+
+  // --- Content packs
+  app.get('/content/manifest', auth(), async (_req, res) => {
+    res.json(await manifest(deviceOf(res)))
+  })
+  app.get('/content/packs/:id', auth(), servePack)
 
   // --- Voice: Khaya speech-to-text proxy. Auth first so anonymous uploads are never parsed.
   app.post('/voice/transcribe', auth(), audioUpload.single('audio'), transcribe)
@@ -152,6 +159,11 @@ export function createApp() {
     if (!d) throw new HttpError(404, 'not_found', 'Unknown device')
     res.json({ device: publicDevice(d) })
   })
+
+  app.get('/admin/content/packs', admin, async (_req, res) => {
+    res.json({ packs: await listPacks() })
+  })
+  app.post('/admin/content/packs', admin, packUpload.single('file'), uploadPack)
 
   app.use((_req, _res, next) => next(new HttpError(404, 'not_found', 'No such route')))
   app.use(errorHandler)
