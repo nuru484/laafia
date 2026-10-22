@@ -4,11 +4,18 @@ import { jwtVerify, SignJWT } from 'jose'
 import { timingSafeEqual } from 'node:crypto'
 import type { Deps } from '../deps.ts'
 import { HttpError } from '../http/errors.ts'
+import { readCookie, resolveSession, SESSION_COOKIE, sha256 } from '../sessions.ts'
 
 /** A device row with epoch fields as numbers (see platform/db.ts). */
 export type Device = Omit<DeviceRow, 'updatedAt' | 'seq' | 'activatedAt'> & { updatedAt: number; seq: number; activatedAt: number | null }
 export type Role = 'cho' | 'volunteer' | 'facility' | 'gateway'
-export type Actor = { kind: 'device'; device: Device } | { kind: 'admin' }
+export type UserRole = 'district_admin' | 'facility_staff' | 'supervisor'
+export type WebUser = { id: string; name: string; role: UserRole; facilityId: string | null; districtId: string | null }
+/**
+ * device: a phone (Bearer JWT). user: a dashboard account (session cookie), scoped by role.
+ * admin: the ADMIN_TOKEN, for scripts only; unscoped.
+ */
+export type Actor = { kind: 'device'; device: Device } | { kind: 'user'; user: WebUser } | { kind: 'admin' }
 
 // Phones are offline for weeks, so tokens are long-lived; refresh accepts a token up to 60 days past expiry. Deactivation is the revocation path.
 const TOKEN_TTL = '30d'
@@ -47,11 +54,32 @@ function tokenOf(req: Parameters<RequestHandler>[0]): string | undefined {
   return typeof admin === 'string' ? admin : undefined
 }
 
-/** Bearer device JWT. `admin: true` also admits the ADMIN_TOKEN (header x-admin-token). Never read from the query string. */
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
+
+/**
+ * Who may call a route. Devices: Bearer JWT, filtered by `roles`. Dashboard users: session cookie,
+ * filtered by `users`, with CSRF checked on every unsafe method. `admin: true` also admits the
+ * ADMIN_TOKEN (header x-admin-token, scripts only). Credentials are never read from the query string.
+ * Scope (which facilities) is checked by each service against the actor.
+ */
 export function createAuth(deps: Deps) {
-  return (opts: { roles?: Role[]; admin?: boolean } = {}): RequestHandler =>
+  return (opts: { roles?: Role[]; admin?: boolean; users?: UserRole[] } = {}): RequestHandler =>
     async (req, res, next) => {
       const token = tokenOf(req)
+      if (!token && opts.users) {
+        const session = await resolveSession(deps, readCookie(req, SESSION_COOKIE))
+        if (!session) throw new HttpError(401, 'unauthenticated', 'Sign in again')
+        const role = session.user.role as UserRole
+        if (!opts.users.includes(role)) throw new HttpError(403, 'forbidden', `Role ${role} may not call this`)
+        if (!SAFE_METHODS.has(req.method)) {
+          const csrf = req.headers['x-csrf-token']
+          if (typeof csrf !== 'string' || !safeEqual(sha256(csrf), session.csrfHash)) throw new HttpError(403, 'csrf', 'Missing or wrong CSRF token')
+        }
+        const u = session.user
+        res.locals.actor = { kind: 'user', user: { id: u.id, name: u.name, role, facilityId: u.facilityId, districtId: u.districtId } } satisfies Actor
+        res.locals.sessionId = session.id
+        return next()
+      }
       if (!token) throw new HttpError(401, 'unauthenticated', 'Missing token')
       if (safeEqual(token, deps.env.ADMIN_TOKEN)) {
         if (!opts.admin) throw new HttpError(403, 'forbidden', 'Admin token not accepted here')
@@ -76,4 +104,9 @@ export const deviceOf = (res: Response) => {
 export const deviceOrNull = (res: Response) => {
   const a = actorOf(res)
   return a.kind === 'device' ? a.device : null
+}
+export const userOf = (res: Response) => {
+  const a = actorOf(res)
+  if (a.kind !== 'user') throw new HttpError(403, 'forbidden', 'Sign in to the dashboard')
+  return a.user
 }

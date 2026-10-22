@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import type { Deps } from '../../platform/deps.ts'
 import { HttpError } from '../../platform/http/errors.ts'
 import { input } from '../../platform/http/validate.ts'
-import { deviceOf } from '../../platform/middleware/auth.ts'
+import { actorOf, deviceOf } from '../../platform/middleware/auth.ts'
 import { adminListClips, clipFile, deleteClip, listClips, MAX_CLIP_BYTES, saveClip } from './clips.service.ts'
 import { ClipFields, ClipParams, ClipQuery, PackParams, UploadFields } from './content.schemas.ts'
 import { addPack, contentDir, listPacks, manifest, packFile } from './content.service.ts'
@@ -44,13 +44,13 @@ export function createContentController(deps: Deps) {
     const file = req.file
     try {
       if (!file) throw new HttpError(400, 'invalid_request', 'Expected a multipart file field "file"')
-      res.status(201).json({ pack: await addPack(deps, file, UploadFields.parse(req.body)) })
+      res.status(201).json({ pack: await addPack(deps, actorOf(res), file, UploadFields.parse(req.body)) })
     } finally {
       if (file) await rm(file.path, { force: true })
     }
   }
   const list: RequestHandler = async (_req, res) => {
-    res.json({ packs: await listPacks(deps) })
+    res.json({ packs: await listPacks(deps, actorOf(res)) })
   }
   const getManifest: RequestHandler = async (_req, res) => {
     res.json(await manifest(deps, deviceOf(res)))

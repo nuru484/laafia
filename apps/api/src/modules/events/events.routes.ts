@@ -8,6 +8,6 @@ import { StreamQuery, TicketBody } from './events.schemas.ts'
 export function createEventsRouter(deps: Deps, auth: Auth) {
   const c = createEventsController(deps)
   return Router()
-    .post('/events/ticket', auth({ roles: ['facility'], admin: true }), validate({ body: TicketBody }), c.ticket)
+    .post('/events/ticket', auth({ roles: ['facility'], admin: true, users: ['facility_staff', 'district_admin', 'supervisor'] }), validate({ body: TicketBody }), c.ticket)
     .get('/events', validate({ query: StreamQuery }), c.stream)
 }

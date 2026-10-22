@@ -1,13 +1,13 @@
 import type { RequestHandler } from 'express'
 import type { Deps } from '../../platform/deps.ts'
 import { input } from '../../platform/http/validate.ts'
-import { deviceOrNull } from '../../platform/middleware/auth.ts'
+import { actorOf } from '../../platform/middleware/auth.ts'
 import { StreamQuery, TicketBody } from './events.schemas.ts'
 import { issueTicket, redeemTicket, subscribe } from './events.service.ts'
 
 export function createEventsController(deps: Deps) {
   const ticket: RequestHandler = async (_req, res) => {
-    res.json(await issueTicket(deps, deviceOrNull(res), input(res, 'body', TicketBody).facility))
+    res.json(await issueTicket(deps, actorOf(res), input(res, 'body', TicketBody).facility))
   }
   const stream: RequestHandler = (req, res) => {
     const f = redeemTicket(deps, input(res, 'query', StreamQuery).ticket)

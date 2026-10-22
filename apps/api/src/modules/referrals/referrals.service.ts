@@ -6,7 +6,8 @@ import type { Deps } from '../../platform/deps.ts'
 import { HttpError } from '../../platform/http/errors.ts'
 import { fromWire, toWire } from '../../platform/http/wire.ts'
 import { enqueueSms } from '../../platform/jobs/worker.ts'
-import type { Device } from '../../platform/middleware/auth.ts'
+import type { Actor, Device } from '../../platform/middleware/auth.ts'
+import { facilityScope, inScope } from '../../platform/scope.ts'
 
 export const GATEWAY_DEVICE = 'GW01'
 
@@ -16,14 +17,31 @@ export type ReferralEvent = Num<EventRow, 'updatedAt' | 'seq' | 'at'>
 /** Wire shape (docs/API.md): a referrals row in snake_case plus its events ordered by `at`. */
 export type ReferralView = Record<string, unknown> & { id: string; facility_id: string | null; destination_facility_id: string | null; status: string; events: Record<string, unknown>[] }
 
-export const viewOf = (r: Referral, events: ReferralEvent[]): ReferralView =>
-  ({ ...toWire(r), events: events.map((e) => toWire(e)) }) as ReferralView
+export type TransportView = { id: string; provider_id: string; provider_name: string | null; provider_phone: string | null; status: string; scheduled_for: number | null; updated_at: number }
+
+export const viewOf = (r: Referral, events: ReferralEvent[], transport: TransportView[] = []): ReferralView =>
+  ({ ...toWire(r), events: events.map((e) => toWire(e)), transport }) as unknown as ReferralView
+
+/** Transport requests per referral id, with the provider's name and phone (staff call the driver). */
+async function transportFor(db: Tx, referralIds: string[]): Promise<Map<string, TransportView[]>> {
+  const out = new Map<string, TransportView[]>()
+  if (!referralIds.length) return out
+  const reqs = await db.transportRequest.findMany({ where: { referralId: { in: referralIds }, deleted: false }, orderBy: { updatedAt: 'asc' } })
+  const providers = new Map((await db.transportProvider.findMany({ where: { id: { in: reqs.map((r) => r.providerId) } }, select: { id: true, name: true, phone: true } })).map((p) => [p.id, p]))
+  for (const t of reqs) {
+    const p = providers.get(t.providerId)
+    const list = out.get(t.referralId!) ?? []
+    list.push({ id: t.id, provider_id: t.providerId, provider_name: p?.name ?? null, provider_phone: p?.phone ?? null, status: t.status, scheduled_for: t.scheduledFor, updated_at: t.updatedAt })
+    out.set(t.referralId!, list)
+  }
+  return out
+}
 
 export async function referralView(deps: Deps, id: string): Promise<ReferralView | null> {
   const r = await deps.prisma.referral.findUnique({ where: { id }, include: { events: { orderBy: { at: 'asc' } } } })
   if (!r) return null
   const { events, ...row } = r
-  return viewOf(row, events)
+  return viewOf(row, events, (await transportFor(deps.prisma, [id])).get(id))
 }
 
 /** Run a write, then publish every referral it touched on the SSE bus. */
@@ -165,7 +183,7 @@ export async function pushEvent(tx: Tx, device: Device | null, ev: PushEvent, to
  * Copies an onward referral's id and status onto its parent, so the parent (and the CHO phone that
  * pulls it) shows where the patient went next. Bumps the parent's updated_at so phones apply it under LWW.
  */
-async function syncOnward(tx: Tx, child: Pick<Referral, 'id' | 'status' | 'parentReferralId'>, touched: Set<string>) {
+export async function syncOnward(tx: Tx, child: Pick<Referral, 'id' | 'status' | 'parentReferralId'>, touched: Set<string>) {
   if (!child.parentReferralId) return
   const res = await tx.referral.updateMany({
     // Spelled out with nulls: SQL's NOT (a = x AND b = y) is unknown, not true, while a column is still null.
@@ -181,7 +199,7 @@ async function syncOnward(tx: Tx, child: Pick<Referral, 'id' | 'status' | 'paren
 const MAX_HOPS = 10
 
 /** The referral with every hop before and after it (root first). Visible to the admin and to devices on the chain. */
-export async function referralChain(deps: Deps, id: string, device: Device | null) {
+export async function referralChain(deps: Deps, id: string, actor: Actor) {
   const start = await deps.prisma.referral.findUnique({ where: { id } })
   if (!start) throw new HttpError(404, 'not_found', 'Referral not found')
   const chain: Referral[] = [start]
@@ -197,7 +215,8 @@ export async function referralChain(deps: Deps, id: string, device: Device | nul
     chain.push(next)
     r = next
   }
-  const sees = (r: Referral) => !device || r.originDeviceId === device.id || (!!device.facilityId && (r.facilityId === device.facilityId || r.destinationFacilityId === device.facilityId))
+  const scope = await facilityScope(deps, actor)
+  const sees = (r: Referral) => (actor.kind === 'device' && r.originDeviceId === actor.device.id) || inScope(scope, r.facilityId) || inScope(scope, r.destinationFacilityId)
   if (!chain.some(sees)) throw new HttpError(404, 'not_found', 'Referral not found')
   const views = await Promise.all(chain.map((r) => referralView(deps, r.id)))
   return { referral: views[chain.indexOf(start)]!, chain: views.filter((v): v is ReferralView => !!v) }
@@ -213,12 +232,13 @@ async function signerFor(tx: Tx, destinationFacilityId: string | null) {
   return signer
 }
 
-export async function enqueueStatusSms(tx: Tx, now: number, r: Pick<Referral, 'originDeviceId' | 'shortId' | 'destinationFacilityId'>, status: ReferralStatus, to: string | null) {
+/** `dedupeKey` drops a second LFS for the same (referral, status); acknowledgements of a resent LFR leave it unset on purpose. */
+export async function enqueueStatusSms(tx: Tx, now: number, r: Pick<Referral, 'originDeviceId' | 'shortId' | 'destinationFacilityId'>, status: ReferralStatus, to: string | null, dedupeKey?: string) {
   const code = CODE_FROM_STATUS[status]
   if (!code || !to) return
   const signer = await signerFor(tx, r.destinationFacilityId)
   const msg: StatusMessage = { kind: 'LFS', signer: signer.id, origin: r.originDeviceId, short_id: r.shortId, status: code }
-  await enqueueSms(tx, now, to, encode(msg, signer.keyHex!))
+  await enqueueSms(tx, now, to, encode(msg, signer.keyHex!), dedupeKey)
 }
 
 /** True when the facility has an active device in facility mode, which acknowledges referrals itself. */
@@ -247,18 +267,30 @@ export async function acknowledgeIfNoFacilityPhone(tx: Tx, now: number, r: Pick<
 export const WEB_STATUSES = ['received', 'arrived', 'treated', 'closed', 'cancelled'] as const
 
 /** Status button on the web inbox or a facility device: writes the event and texts LFS to the origin CHO. */
-export async function setStatus(deps: Deps, id: string, status: (typeof WEB_STATUSES)[number], device: Device | null) {
+/** Facility devices act as origin, destination or hop; dashboard users on referrals from or to a facility in their scope. */
+async function actorMayAct(deps: Deps, tx: Tx, actor: Actor, r: Referral) {
+  if (actor.kind === 'device') return mayAct(tx, actor.device, r)
+  const scope = await facilityScope(deps, actor)
+  return inScope(scope, r.facilityId) || inScope(scope, r.destinationFacilityId)
+}
+
+export async function setStatus(deps: Deps, id: string, status: (typeof WEB_STATUSES)[number], actor: Actor) {
   await writeAndPublish(deps, async (tx, touched) => {
     const r = await byId(tx, id)
-    if (!r || (device && !(await mayAct(tx, device, r)))) throw new HttpError(404, 'not_found', 'Referral not found')
+    if (!r || !(await actorMayAct(deps, tx, actor, r))) throw new HttpError(404, 'not_found', 'Referral not found')
     const now = deps.clock()
-    const source = device?.id ?? 'WEB'
+    // Web users are recorded as web:<user id> so the timeline shows who pressed the button.
+    const source = actor.kind === 'device' ? actor.device.id : actor.kind === 'user' ? `web:${actor.user.id}` : 'WEB'
+    // The facility phone may already have recorded (and texted) this status; the CHO gets one LFS per status.
+    const alreadyRecorded = await tx.referralEvent.findFirst({ where: { referralId: r.id, status }, select: { id: true } })
     await pushEvent(tx, null, {
       id: randomUUID(), referral_id: r.id, origin_device_id: r.originDeviceId, short_id: r.shortId,
       status, at: now, updated_at: now, source_device_id: source, via: 'https', device_id: source,
     }, touched)
-    const origin = await tx.device.findUnique({ where: { id: r.originDeviceId }, select: { phoneNumber: true } })
-    await enqueueStatusSms(tx, now, r, status, origin?.phoneNumber ?? null)
+    if (!alreadyRecorded) {
+      const origin = await tx.device.findUnique({ where: { id: r.originDeviceId }, select: { phoneNumber: true } })
+      await enqueueStatusSms(tx, now, r, status, origin?.phoneNumber ?? null, `lfs:${r.id}:${status}`)
+    }
   })
   return (await referralView(deps, id))!
 }
@@ -270,20 +302,30 @@ export async function facilityByCode(deps: Deps, code: string) {
 }
 
 /** Inbox listing for a facility: referrals to it or from its catchment, open ones first. */
-export async function listReferrals(deps: Deps, facilityId: string) {
+export type ListFilter = { status?: string; urgency?: number }
+
+/** Inbox or board listing for some facilities: referrals to them or from their catchments, open ones first. */
+export async function listReferrals(deps: Deps, facilityIds: string[] | null, filter: ListFilter = {}) {
   const rows = await deps.prisma.referral.findMany({
-    where: { deleted: false, OR: [{ destinationFacilityId: facilityId }, { facilityId }] },
+    where: {
+      deleted: false,
+      ...(facilityIds === null ? {} : { OR: [{ destinationFacilityId: { in: facilityIds } }, { facilityId: { in: facilityIds } }] }),
+      ...(filter.status ? { status: filter.status } : {}),
+      ...(filter.urgency ? { urgency: filter.urgency } : {}),
+    },
     orderBy: [{ urgency: { sort: 'desc', nulls: 'first' } }, { seq: 'desc' }], // Postgres default for DESC: NULLs first
     take: 200,
     include: { events: { orderBy: { at: 'asc' } } },
   })
-  return rows.map(({ events, ...r }) => viewOf(r, events))
+  const transport = await transportFor(deps.prisma, rows.map((r) => r.id))
+  return rows.map(({ events, ...r }) => viewOf(r, events, transport.get(r.id)))
 }
 
 /** A facility device may only act for its own facility; the admin token may act for any. */
-export async function facilityFor(deps: Deps, device: Device | null, code: string) {
+/** The facility for a code, if the actor may act for it (a device: its own; a user: within their scope). */
+export async function facilityFor(deps: Deps, actor: Actor, code: string) {
   const f = await facilityByCode(deps, code)
-  if (device && device.facilityId !== f.id) throw new HttpError(403, 'forbidden', 'Not your facility')
+  if (!inScope(await facilityScope(deps, actor), f.id)) throw new HttpError(403, 'forbidden', 'Not your facility')
   return f
 }
 

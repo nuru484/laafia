@@ -4,7 +4,8 @@ import { rename, rm } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import type { Deps } from '../../platform/deps.ts'
 import { HttpError } from '../../platform/http/errors.ts'
-import type { Device } from '../../platform/middleware/auth.ts'
+import type { Actor, Device } from '../../platform/middleware/auth.ts'
+import { districtOf } from '../../platform/scope.ts'
 import type { UploadFields } from './content.schemas.ts'
 
 /*
@@ -30,9 +31,10 @@ const view = (p: Pack, districtCode: string | null) => ({
 })
 
 /** Stores an uploaded file (already on disk at `file.path`) as a new pack version; computes size and sha256. */
-export async function addPack(deps: Deps, file: { path: string; size: number }, f: UploadFields) {
+export async function addPack(deps: Deps, actor: Actor, file: { path: string; size: number }, f: UploadFields) {
   const district = await deps.prisma.district.findUnique({ where: { code: f.district_code } })
   if (!district) throw new HttpError(404, 'not_found', 'Unknown district')
+  if (actor.kind === 'user' && districtOf(actor) !== district.id) throw new HttpError(403, 'forbidden', 'Outside your district')
   const language = null
   const districtId = district.id
   const latest = await deps.prisma.contentPack.aggregate({ where: { kind: f.kind, language, districtId }, _max: { version: true } })
@@ -56,8 +58,9 @@ export async function addPack(deps: Deps, file: { path: string; size: number }, 
   }
 }
 
-export async function listPacks(deps: Deps) {
-  const rows = await deps.prisma.contentPack.findMany({ include: { district: { select: { code: true } } }, orderBy: { createdAt: 'desc' } })
+export async function listPacks(deps: Deps, actor: Actor) {
+  const where = actor.kind === 'user' ? { districtId: districtOf(actor) ?? '' } : {}
+  const rows = await deps.prisma.contentPack.findMany({ where, include: { district: { select: { code: true } } }, orderBy: { createdAt: 'desc' } })
   return rows.map((r) => view(r, r.district?.code ?? null))
 }
 

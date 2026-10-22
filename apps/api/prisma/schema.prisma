@@ -29,8 +29,49 @@ model District {
   languages    Json          @default("[]")
   facilities   Facility[]
   contentPacks ContentPack[]
+  users        User[]
 
   @@map("districts")
+}
+
+/// A web dashboard account. Scope: district_admin and supervisor have a district; facility_staff a facility.
+model User {
+  id                String       @id
+  name              String
+  email             String?      @unique(map: "users_email_unique")
+  phone             String?      @unique(map: "users_phone_unique")
+  /// argon2id in PHC string form ($argon2id$v=19$m=...,t=...,p=...$salt$hash)
+  passwordHash      String       @map("password_hash")
+  role              String
+  facilityId        String?      @map("facility_id")
+  facility          Facility?    @relation(fields: [facilityId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "users_facility_id_facilities_id_fk")
+  districtId        String?      @map("district_id")
+  district          District?    @relation(fields: [districtId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "users_district_id_districts_id_fk")
+  active            Boolean      @default(true)
+  lastLoginAt       BigInt?      @map("last_login_at")
+  passwordChangedAt BigInt       @map("password_changed_at")
+  createdAt         BigInt       @map("created_at")
+  sessions          WebSession[]
+
+  @@index([facilityId], map: "users_facility")
+  @@index([districtId], map: "users_district")
+  @@map("users")
+}
+
+/// Server-side web session. Only SHA-256 hashes of the session and CSRF tokens are stored.
+model WebSession {
+  id         String  @id
+  userId     String  @map("user_id")
+  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "web_sessions_user_id_users_id_fk")
+  tokenHash  String  @unique(map: "web_sessions_token_unique") @map("token_hash")
+  csrfHash   String  @map("csrf_hash")
+  expiresAt  BigInt  @map("expires_at")
+  lastSeenAt BigInt  @map("last_seen_at")
+  createdAt  BigInt  @map("created_at")
+  revokedAt  BigInt? @map("revoked_at")
+
+  @@index([userId], map: "web_sessions_user")
+  @@map("web_sessions")
 }
 
 model Facility {
@@ -51,6 +92,7 @@ model Facility {
   capabilities  Json          @default("[]")
   devices       Device[]
   importBatches ImportBatch[]
+  users         User[]
 
   @@index([seq], map: "facilities_seq")
   @@index([districtId], map: "facilities_district")
@@ -261,6 +303,8 @@ model Job {
   deliveryStatus String? @map("delivery_status")
   deliveryReason String? @map("delivery_reason")
   deliveredAt    BigInt? @map("delivered_at")
+  /// e.g. lfs:<referral id>:<status>; a second enqueue with the same key is dropped. Unique allows many NULLs.
+  dedupeKey      String? @unique(map: "jobs_dedupe_key") @map("dedupe_key")
 
   @@index([status, runAt], map: "jobs_due")
   @@map("jobs")
@@ -334,4 +378,48 @@ model ContentClip {
 
   @@unique([lang, promptId], map: "content_clips_prompt")
   @@map("content_clips")
+}
+
+/// Last contact per device. Kept apart from `devices` so a sync does not bump the synced devices row.
+model DeviceStatus {
+  deviceId   String  @id @map("device_id")
+  lastSyncAt BigInt  @map("last_sync_at")
+  appVersion String? @map("app_version")
+
+  @@map("device_status")
+}
+
+/// One DHIS2 export push (dry run or real), for the export history and the "not exported yet" view.
+model ExportRun {
+  id              String  @id
+  facilityId      String  @map("facility_id")
+  period          String
+  dryRun          Boolean @map("dry_run")
+  actor           String
+  at              BigInt
+  trackedEntities Int     @map("tracked_entities")
+  status          String
+  /// The report returned to the caller (statuses, stats, first errors).
+  result          Json
+
+  @@index([facilityId, period], map: "export_runs_facility_period")
+  @@map("export_runs")
+}
+
+/// Append-only record of dashboard and admin actions.
+model AuditEvent {
+  id         String  @id
+  at         BigInt
+  actorKind  String  @map("actor_kind")
+  actorId    String? @map("actor_id")
+  actorName  String  @map("actor_name")
+  action     String
+  targetType String  @map("target_type")
+  targetId   String? @map("target_id")
+  districtId String? @map("district_id")
+  details    Json    @default("{}")
+
+  @@index([at], map: "audit_events_at")
+  @@index([districtId, at], map: "audit_events_district")
+  @@map("audit_events")
 }
