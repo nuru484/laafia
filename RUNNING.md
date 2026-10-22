@@ -19,10 +19,10 @@ npm install
 cp apps/api/.env.example apps/api/.env   # fill in the database URL, JWT_SECRET, ADMIN_TOKEN, SMS_WEBHOOK_TOKEN, SMS_CALLBACK_SECRET
 npm run db:migrate -w @laafia/api        # creates the database if it does not exist
 npm run seed -w @laafia/api              # prints one activation code per demo device
-npm run api                             # http://<machine LAN IP>:4000
+npm run api                             # prints its URLs: localhost for this machine, the LAN one for phones
 ```
 
-Check it from a phone's browser: `http://<machine LAN IP>:4000/health` returns `{"ok":true}`.
+Check it from a phone's browser: `<LAN URL>/health` returns `{"ok":true}`.
 
 Re-running the seed resets the demo data and the activation codes.
 
@@ -38,7 +38,7 @@ Then make each district's offline map from the dashboard: **Maps → Make the ma
 
 ```bash
 cp apps/web/.env.example apps/web/.env   # API_URL, the API the dashboard proxies to under /api
-npm run web                              # http://<machine LAN IP>:3000
+npm run web                              # prints Local and Network URLs
 ```
 
 Demo accounts (password `Laafia-demo-2026` for all), created by the seed:
@@ -54,15 +54,14 @@ Demo accounts (password `Laafia-demo-2026` for all), created by the seed:
 
 The phone runs a development build (the app with the native SMS module) that loads JavaScript from the machine.
 
-1. Point the app at the API: in `apps/mobile/.env` set `EXPO_PUBLIC_API_URL=http://<machine LAN IP>:4000`.
-2. Start the bundler:
+1. Start the bundler (leave `EXPO_PUBLIC_API_URL` in `apps/mobile/.env` empty: the app then uses the API on the same machine):
 
    ```bash
    cd apps/mobile
    npx expo start --dev-client --lan
    ```
 
-3. Install the development build on each phone. Build it once, or again after any native change:
+2. Install the development build on each phone. Build it once, or again after any native change:
 
    ```bash
    cd apps/mobile
@@ -70,7 +69,7 @@ The phone runs a development build (the app with the native SMS module) that loa
    ```
 
    Open the APK link from the build page on the phone and allow installing unknown apps.
-4. Open Laafia on the phone, choose Enter URL manually, and enter `http://<machine LAN IP>:8081`.
+3. Open Laafia on the phone, choose Enter URL manually, and enter `http://<machine LAN IP>:8081` (the IP from the API's Network URL). If the laptop changes Wi-Fi, restart the three servers and enter the new IP.
 
 ## 5. Activate the phones
 

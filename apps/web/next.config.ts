@@ -1,11 +1,12 @@
 import type { NextConfig } from 'next'
+import { networkInterfaces } from 'node:os'
 
 const config: NextConfig = {
   transpilePackages: ['@laafia/core'],
   poweredByHeader: false,
   agentRules: false,
   // Phones and other machines on the LAN open the dev server by IP.
-  allowedDevOrigins: ['127.0.0.1', '192.168.1.245'],
+  allowedDevOrigins: ['127.0.0.1', ...Object.values(networkInterfaces()).flat().filter((a) => a?.family === 'IPv4' && !a.internal).map((a) => a!.address)],
   async headers() {
     return [
       {

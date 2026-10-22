@@ -1,6 +1,9 @@
+import Constants from 'expo-constants'
 import type { Api } from './sync'
 
-export const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '')
+/** A development build loads its JS from the laptop's bundler, so the API is on that machine unless EXPO_PUBLIC_API_URL names another. */
+const bundlerHost = Constants.expoConfig?.hostUri?.split(':')[0]
+export const API_URL = (process.env.EXPO_PUBLIC_API_URL || (bundlerHost ? `http://${bundlerHost}:4000` : '')).replace(/\/$/, '')
 
 /** The API's error envelope (docs/API.md Conventions); `code` is what callers branch on. */
 export class ApiError extends Error {
