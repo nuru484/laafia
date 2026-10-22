@@ -1,11 +1,11 @@
-import { and, asc, eq, getTableColumns, gt, inArray, or, sql, type SQL } from 'drizzle-orm'
+import { and, asc, eq, getTableColumns, gt, gte, inArray, or, sql, type SQL } from 'drizzle-orm'
 import type { PgTable } from 'drizzle-orm/pg-core'
 import { z } from 'zod'
 import type { Device } from './auth.ts'
 import { db, type Tx } from './db.ts'
 import { HttpError, log } from './http.ts'
 import { pushEvent, pushReferral, writeAndPublish } from './referrals.ts'
-import { SYNCED, devices, referral_events, referrals } from './schema.ts'
+import { SYNCED, clients, devices, facilities, households, referral_events, referrals, transport_providers, transport_requests, visits } from './schema.ts'
 
 // --- Row contracts (docs/API.md). Unknown keys (e.g. the phone's `synced`) are stripped.
 
@@ -115,36 +115,72 @@ export async function push(device: Device, body: z.infer<typeof PushBody>) {
 
 // --- Pull
 
+/*
+ * Cursor: opaque string "<seq>.<base>". `seq` is the last row sent; `base` is the
+ * sync_seq value when the first sync started. Rows at or below `base` form the
+ * first-sync snapshot and are filtered to what the phone needs (active clients,
+ * recent visits, open referrals). Rows above it are changes since and are all
+ * sent. So a first sync on a poor network can stop at any page and resume.
+ */
 export const PullQuery = z.object({
-  since: z.coerce.number().int().nonnegative().default(0),
+  since: z.string().regex(/^(\d+\.\d+)?$/, 'expected the cursor from a previous pull').default(''),
   limit: z.coerce.number().int().min(1).max(1000).default(500),
 })
 
+const DAY = 86_400_000
+const ACTIVE = { postpartumDays: 42, childMonths: 60, visitDays: 365, closedReferralDays: 30 }
+
+/** Clients a CHO needs on the phone: pregnant, postpartum up to 42 days, under-fives, or an open referral / due follow-up. */
+function activeClient(now: number): SQL {
+  return sql`(${clients.type} = 'pregnant'
+    or (${clients.type} = 'postpartum' and ${clients.delivery_date} >= ${now - ACTIVE.postpartumDays * DAY})
+    or (${clients.type} in ('newborn', 'child') and ${clients.dob} >= ${now - Math.round(ACTIVE.childMonths * 30.44) * DAY})
+    or exists (select 1 from referrals r where r.client_id = ${clients.id} and r.status not in ('closed', 'cancelled') and not r.deleted)
+    or exists (select 1 from visits v where v.client_id = ${clients.id} and v.followup_due is not null
+      and v.visited_at = (select max(v2.visited_at) from visits v2 where v2.client_id = ${clients.id})))`
+}
+
 export async function pull(device: Device, { since, limit }: z.infer<typeof PullQuery>) {
+  const now = Date.now()
+  let [seq, base] = since ? (since.split('.').map(Number) as [number, number]) : [0, -1]
+  if (base < 0) base = Number((await db.execute<{ v: string }>(sql`select last_value as v from sync_seq`)).rows[0]!.v)
+
   const f = device.facility_id
+  const [home] = f ? await db.select({ district_id: facilities.district_id }).from(facilities).where(eq(facilities.id, f)) : []
+  const district = home?.district_id ?? null
   const mine = (t: { facility_id: any }) => (f ? eq(t.facility_id, f) : sql`false`)
   const myReferrals = f ? or(eq(referrals.facility_id, f), eq(referrals.destination_facility_id, f))! : sql`false`
+  const activeIds = db.select({ id: clients.id }).from(clients).where(and(mine(clients), activeClient(now)))
+  const neededReferrals = and(myReferrals, sql`(${referrals.status} not in ('closed', 'cancelled')
+    or exists (select 1 from referral_events e where e.referral_id = ${referrals.id} and e.at >= ${now - ACTIVE.closedReferralDays * DAY}))`)!
+  const inDistrict = district ? eq(facilities.district_id, district) : undefined
   const { key_hex: _k, ...deviceCols } = getTableColumns(devices)
 
-  const scoped: { table: keyof typeof SYNCED; rows: Promise<{ seq: number }[]> }[] = []
-  const add = (table: keyof typeof SYNCED, q: (where: (scope: SQL | undefined) => SQL) => Promise<{ seq: number }[]>) => {
-    const t = SYNCED[table]
-    scoped.push({ table, rows: q((scope) => and(gt(t.seq, since), scope)!) })
-  }
-  const page = <T extends PgTable & { seq: any }>(t: T, scope?: SQL) => (w: (s: SQL | undefined) => SQL) =>
-    db.select().from(t as PgTable).where(w(scope)).orderBy(asc(t.seq)).limit(limit) as unknown as Promise<{ seq: number }[]>
-
-  add('facilities', page(SYNCED.facilities))
-  add('devices', (w) => db.select(deviceCols).from(devices).where(w(undefined)).orderBy(asc(devices.seq)).limit(limit))
-  for (const t of ['households', 'clients', 'visits', 'transport_providers', 'transport_requests'] as const) add(t, page(SYNCED[t], mine(SYNCED[t])))
-  add('referrals', page(referrals, myReferrals))
-  add('referral_events', page(referral_events, inArray(referral_events.referral_id, db.select({ id: referrals.id }).from(referrals).where(myReferrals))))
-
-  const results = await Promise.all(scoped.map(async (s) => ({ table: s.table, rows: await s.rows })))
+  type Spec = { table: keyof typeof SYNCED; scope?: SQL; snapshot?: SQL }
+  const specs: Spec[] = [
+    { table: 'facilities', scope: inDistrict },
+    { table: 'devices', scope: district ? inArray(devices.facility_id, db.select({ id: facilities.id }).from(facilities).where(inDistrict)) : undefined },
+    { table: 'households', scope: mine(households), snapshot: sql`(exists (select 1 from clients c where c.household_id = ${households.id} and c.id in (${activeIds}))
+      or not exists (select 1 from clients c where c.household_id = ${households.id}))` },
+    { table: 'clients', scope: mine(clients), snapshot: activeClient(now) },
+    { table: 'visits', scope: mine(visits), snapshot: and(gte(visits.visited_at, now - ACTIVE.visitDays * DAY), inArray(visits.client_id, activeIds)) },
+    { table: 'transport_providers', scope: mine(transport_providers), snapshot: eq(transport_providers.active, true) },
+    { table: 'transport_requests', scope: mine(transport_requests), snapshot: inArray(transport_requests.status, ['requested', 'coming']) },
+    { table: 'referrals', scope: myReferrals, snapshot: neededReferrals },
+    { table: 'referral_events', scope: inArray(referral_events.referral_id, db.select({ id: referrals.id }).from(referrals).where(myReferrals)),
+      snapshot: inArray(referral_events.referral_id, db.select({ id: referrals.id }).from(referrals).where(neededReferrals)) },
+  ]
+  const results = await Promise.all(specs.map(async ({ table, scope, snapshot }) => {
+    const t = SYNCED[table] as PgTable & { seq: any }
+    const where = and(gt(t.seq, seq), scope, snapshot ? or(gt(t.seq, base), snapshot) : undefined)
+    const q = table === 'devices' ? db.select(deviceCols).from(devices) : db.select().from(t)
+    const rows = (await q.where(where).orderBy(asc(t.seq)).limit(limit)) as unknown as { seq: number }[]
+    return { table, rows }
+  }))
   // Merge by seq and cut at `limit`. Every table that hit its limit has all its rows up to the cut, so the cursor never skips a row.
   const all = results.flatMap((r) => r.rows.map((row) => ({ table: r.table, row }))).sort((a, b) => a.row.seq - b.row.seq)
   const merged = all.slice(0, limit)
-  const cursor = merged.length ? merged[merged.length - 1]!.row.seq : since
+  const last = merged.length ? merged[merged.length - 1]!.row.seq : Math.max(seq, base)
   const records = merged.map(({ table, row: { seq: _seq, ...row } }) => ({ table, row }))
-  return { records, cursor, more: all.length > limit || results.some((r) => r.rows.length === limit) }
+  return { records, cursor: `${last}.${base}`, more: all.length > limit || results.some((r) => r.rows.length === limit) }
 }

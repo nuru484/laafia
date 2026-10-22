@@ -2,8 +2,8 @@ import { decode, encode } from '@laafia/core'
 import { eq } from 'drizzle-orm'
 import request from 'supertest'
 import { describe, expect, it } from 'vitest'
-import { db } from '../src/db.ts'
-import { households, jobs, referral_events, referrals } from '../src/schema.ts'
+import { db, write } from '../src/db.ts'
+import { clients, households, jobs, referral_events, referrals, visits } from '../src/schema.ts'
 import { DEMO_CODES } from '../src/seed.ts'
 import { ADMIN, KEYS, SID, TODAY, activate, app, event, household, lfr, pullAs, pushAs, sms, useDb } from './helpers.ts'
 
@@ -50,29 +50,76 @@ describe('sync push', () => {
 })
 
 describe('sync pull', () => {
-  it('pages by server cursor without gaps or repeats, scoped to the catchment', async () => {
-    const jwt = await activate('D001')
+  const DAY = 86_400_000
+  const now = Date.now()
+  type Rec = { table: string; row: { id: string } }
+  async function pullAll(jwt: string, limit = 37, stopAfter = Infinity) {
     const seen: string[] = []
-    let cursor = 0
-    for (let more = true; more; ) {
-      const res = await pullAs(jwt, cursor, 37)
+    let cursor = ''
+    let pages = 0
+    for (let more = true; more && pages < stopAfter; pages++) {
+      const res = await pullAs(jwt, cursor, limit)
       expect(res.status).toBe(200)
-      seen.push(...res.body.records.map((r: { table: string; row: { id: string } }) => `${r.table}/${r.row.id}`))
-      expect(res.body.cursor).toBeGreaterThanOrEqual(cursor)
+      expect(typeof res.body.cursor).toBe('string')
+      seen.push(...res.body.records.map((r: Rec) => `${r.table}/${r.row.id}`))
       cursor = res.body.cursor
       more = res.body.more
     }
-    expect(new Set(seen).size).toBe(seen.length)
-    expect(seen.filter((s) => s.startsWith('households/'))).toHaveLength(40)
-    expect(seen.filter((s) => s.startsWith('clients/'))).toHaveLength(50)
-    expect(seen.filter((s) => s.startsWith('devices/'))).toHaveLength(6)
+    return { seen, cursor }
+  }
+  const base = { updated_at: now, device_id: 'seed', deleted: false, facility_id: 'fac-0001', household_id: 'hh-0001', prior_complications: [], risk_flags: [], nhis_active: false }
 
+  it('sends a lean, resumable first sync: active clients, recent visits, district facilities', async () => {
+    await write(async (tx) => {
+      await tx.insert(clients).values([
+        { ...base, id: 'old-pp', code: 'CL-0901', type: 'postpartum', name: 'Old PP', delivery_date: now - 100 * DAY },
+        { ...base, id: 'old-child', code: 'CL-0902', type: 'child', name: 'Old Child', dob: now - 70 * 30 * DAY },
+        { ...base, id: 'old-referred', code: 'CL-0903', type: 'child', name: 'Referred', dob: now - 70 * 30 * DAY },
+        { ...base, id: 'old-followup', code: 'CL-0904', type: 'postpartum', name: 'Follow-up', delivery_date: now - 100 * DAY },
+      ])
+      await tx.insert(referrals).values({ id: 'r-open', updated_at: now, origin_device_id: 'D001', short_id: 'AAAAAAAA', client_id: 'old-referred', facility_id: 'fac-0001', status: 'sent' })
+      const v = { updated_at: now, facility_id: 'fac-0001', protocol_id: 'maternal', rule_id: 'X', outcome: 'routine' as const }
+      await tx.insert(visits).values([
+        { ...v, id: 'v-due', client_id: 'old-followup', visited_at: now - 10 * DAY, outcome: 'followup', followup_due: now - DAY },
+        { ...v, id: 'v-ancient', client_id: 'cl-0001', visited_at: now - 400 * DAY },
+        { ...v, id: 'v-old-pp', client_id: 'old-pp', visited_at: now - 90 * DAY },
+      ])
+    })
+    const jwt = await activate('D001')
+    const { seen, cursor } = await pullAll(jwt)
+    expect(new Set(seen).size).toBe(seen.length)
+    const ids = (t: string) => seen.filter((s) => s.startsWith(t + '/')).map((s) => s.slice(t.length + 1))
+    expect(ids('clients')).toHaveLength(50 + 2)
+    expect(ids('clients')).toEqual(expect.arrayContaining(['old-referred', 'old-followup']))
+    expect(ids('clients')).not.toEqual(expect.arrayContaining(['old-pp']))
+    expect(ids('clients')).not.toEqual(expect.arrayContaining(['old-child']))
+    expect(ids('visits')).toContain('v-due')
+    expect(ids('visits')).not.toContain('v-ancient')
+    expect(ids('visits')).not.toContain('v-old-pp')
+    expect(ids('facilities').sort()).toEqual(['fac-0001', 'fac-0002', 'fac-0003']) // Savelugu district only
+
+    // Resumable: stopping after two pages and continuing yields exactly the same set.
+    const part = await pullAll(jwt, 37, 2)
+    const rest: string[] = []
+    let c = part.cursor
+    for (let more = true; more; ) {
+      const res = await pullAs(jwt, c, 37)
+      rest.push(...res.body.records.map((r: Rec) => `${r.table}/${r.row.id}`))
+      c = res.body.cursor
+      more = res.body.more
+    }
+    expect([...part.seen, ...rest].sort()).toEqual([...seen].sort())
+
+    // After the first sync, every change in the catchment is sent, active or not.
     await pushAs(jwt, [{ table: 'households', row: household() }])
+    await write((tx) => tx.update(clients).set({ name: 'Old Child renamed', updated_at: now + 1 }).where(eq(clients.id, 'old-child')))
     const next = await pullAs(jwt, cursor)
-    expect(next.body.records).toEqual([expect.objectContaining({ table: 'households', row: expect.objectContaining({ id: 'hh-new-1' }) })])
+    expect(next.body.records.map((r: Rec) => `${r.table}/${r.row.id}`).sort()).toEqual(['clients/old-child', 'households/hh-new-1'])
     expect(next.body.records[0].row).not.toHaveProperty('seq')
     expect(next.body.keys).toBeUndefined() // CHO devices never receive other keys
+  })
 
+  it('scopes rows to the catchment and gives keys only to facility devices', async () => {
     const facility = await activate('F002', '0200000002')
     const theirs = await pullAs(facility)
     expect(theirs.body.records.some((r: { table: string }) => r.table === 'households')).toBe(false)
