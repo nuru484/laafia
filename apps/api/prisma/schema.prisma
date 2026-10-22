@@ -251,6 +251,10 @@ model Job {
   runAt     BigInt  @map("run_at")
   lastError String? @map("last_error")
   createdAt BigInt  @map("created_at")
+  /// From Frog's delivery receipt (POST /sms/delivery): delivered | failed | pending, with Frog's reason.
+  deliveryStatus String? @map("delivery_status")
+  deliveryReason String? @map("delivery_reason")
+  deliveredAt    BigInt? @map("delivered_at")
 
   @@index([status, runAt], map: "jobs_due")
   @@map("jobs")

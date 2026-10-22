@@ -8,7 +8,7 @@ import { deviceFromToken, issueToken, REFRESH_GRACE_S, type Device } from '../..
 import type { ActivateInput } from './auth.schemas.ts'
 
 /**
- * Key directory (lead's policy): facility phones verify LFR from field devices,
+ * Key directory: facility phones verify LFR from field devices,
  * so they get every active device's key (demo: no district scoping). CHO phones
  * verify LFS, so they get their district's facility device keys plus the SMS
  * gateway's. Volunteers get none: they carry scanned referrals unverified and

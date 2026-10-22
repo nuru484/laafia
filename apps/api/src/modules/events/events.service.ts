@@ -8,7 +8,7 @@ type Facility = Awaited<ReturnType<typeof facilityFor>>
 
 /*
  * EventSource cannot send headers, so SSE takes a single-use ticket bound to one facility, valid 60 s.
- * ponytail: in-memory tickets, so one API process; move to the database when running several.
+ * Limit: tickets live in memory, so they assume one API process.
  */
 const TICKET_MS = 60_000
 const tickets = new Map<string, { facility: Facility; expires: number }>()

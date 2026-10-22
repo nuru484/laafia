@@ -6,5 +6,7 @@ import { InboundBody } from './sms.schemas.ts'
 
 export function createSmsRouter(deps: Deps) {
   const c = createSmsController(deps)
-  return Router().post('/sms/inbound', c.requireWebhookToken, validate({ body: InboundBody }), c.inbound)
+  return Router()
+    .post('/sms/inbound', c.requireWebhookToken, validate({ body: InboundBody }), c.inbound)
+    .post('/sms/delivery', c.requireCallbackSecret, c.delivery)
 }

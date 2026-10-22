@@ -453,7 +453,7 @@ created -> sent -> received -> arrived -> treated -> closed
 
 ### 16.4 SMS gateway (facilities without an Android phone)
 
-- An Arkesel virtual number receives SMS and posts `{from, text}` to `/sms/inbound`. The backend verifies and processes exactly as the phone does (same `packages/core` code), publishes to the web inbox, and replies through the Arkesel send API with `LFS` to the CHO's number.
+- Frog by Wigal sends the server's SMS (fallback path only; phones text each other directly) and posts delivery receipts to `/sms/delivery`. Any forwarder of received SMS can post `{from, text}` to `/sms/inbound`; the backend verifies and processes it exactly as the phone does (same `packages/core` code) and publishes to the web inbox.
 - The backend also uses the gateway to send `LFS` status messages originating from the web inbox.
 
 ### 16.5 Backend layout

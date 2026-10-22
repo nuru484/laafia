@@ -28,7 +28,7 @@ const numbers = {
   referralEvent: { ...sync, ...num('at') },
   transportProvider: sync,
   transportRequest: { ...sync, ...numOrNull('scheduledFor') },
-  job: num('id', 'runAt', 'createdAt'),
+  job: { ...num('id', 'runAt', 'createdAt'), ...numOrNull('deliveredAt') },
   mappingTemplate: num('createdAt'),
   importBatch: { ...num('createdAt'), ...numOrNull('committedAt', 'undoneAt') },
   contentPack: num('size', 'createdAt'),
@@ -47,7 +47,7 @@ export { Prisma }
  * Every write to a synced table goes through here. The advisory lock makes
  * commit order equal `seq` order, so a pull can never skip a row whose seq is
  * below its cursor but which committed after the pull read.
- * ponytail: one global write lock; fine for a district, shard the lock per facility if pushes queue up.
+ * Limit: one global write lock serialises all writes; enough for a district, shard it per facility if pushes queue.
  */
 export function write<T>(db: Db, fn: (tx: Tx) => Promise<T>): Promise<T> {
   return db.$transaction(async (tx) => {

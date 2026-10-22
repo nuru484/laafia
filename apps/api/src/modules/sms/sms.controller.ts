@@ -1,21 +1,35 @@
-import type { RequestHandler } from 'express'
+import type { Request, RequestHandler } from 'express'
 import type { Deps } from '../../platform/deps.ts'
 import { HttpError } from '../../platform/http/errors.ts'
 import { input } from '../../platform/http/validate.ts'
 import { safeEqual } from '../../platform/middleware/auth.ts'
-import { InboundBody } from './sms.schemas.ts'
-import { handleInboundSms } from './sms.service.ts'
+import { InboundBody, receiptItems } from './sms.schemas.ts'
+import { applyDeliveryReceipts, handleInboundSms } from './sms.service.ts'
+
+/** A shared token from a header or, because a gateway dashboard can only carry a URL, ?token=. */
+const tokenFrom = (req: Request, header: string) => {
+  const given = req.headers[header] ?? req.query.token
+  return typeof given === 'string' ? given : undefined
+}
 
 export function createSmsController(deps: Deps) {
   /**
-   * Arkesel documents no webhook signature, so a shared token (header x-webhook-token, or ?token= in the
-   * configured URL) guards the webhook. Required at boot in production; open only in development when unset.
+   * Generic inbound SMS forwarder: guarded by SMS_WEBHOOK_TOKEN (header x-webhook-token or ?token=).
+   * Required at boot in production; open only in development when unset.
    */
   const requireWebhookToken: RequestHandler = (req, _res, next) => {
-    if (deps.env.SMS_WEBHOOK_TOKEN) {
-      const given = req.headers['x-webhook-token'] ?? req.query.token
-      if (!safeEqual(typeof given === 'string' ? given : undefined, deps.env.SMS_WEBHOOK_TOKEN)) throw new HttpError(401, 'unauthenticated', 'Bad webhook token')
+    if (deps.env.SMS_WEBHOOK_TOKEN && !safeEqual(tokenFrom(req, 'x-webhook-token'), deps.env.SMS_WEBHOOK_TOKEN)) {
+      throw new HttpError(401, 'unauthenticated', 'Bad webhook token')
     }
+    next()
+  }
+  /**
+   * Frog delivery receipts, verified as in dms-backend: SMS_CALLBACK_SECRET from header
+   * x-callback-token or ?token=, constant-time. Fails closed when the secret is unset.
+   */
+  const requireCallbackSecret: RequestHandler = (req, _res, next) => {
+    if (!deps.env.SMS_CALLBACK_SECRET) throw new HttpError(401, 'unauthenticated', 'SMS callback secret is not configured')
+    if (!safeEqual(tokenFrom(req, 'x-callback-token'), deps.env.SMS_CALLBACK_SECRET)) throw new HttpError(401, 'unauthenticated', 'Invalid SMS callback token')
     next()
   }
   /** Always 200 so the gateway does not retry a message already judged. */
@@ -24,5 +38,9 @@ export function createSmsController(deps: Deps) {
     if (!from || text === undefined) throw new HttpError(400, 'invalid_request', 'Expected { from, text }')
     res.json(await handleInboundSms(deps, from, text.slice(0, 1600)))
   }
-  return { requireWebhookToken, inbound }
+  /** Always 200: each receipt is validated alone, so one bad receipt never drops the batch. */
+  const delivery: RequestHandler = async (req, res) => {
+    res.json(await applyDeliveryReceipts(deps, receiptItems(req.body)))
+  }
+  return { requireWebhookToken, requireCallbackSecret, inbound, delivery }
 }

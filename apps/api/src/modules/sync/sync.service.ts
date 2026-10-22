@@ -82,10 +82,10 @@ type Where = Record<string, unknown>
 const NOTHING: Where = { id: { in: [] } }
 
 /**
- * First-sync filters (lead's rule). Prisma cannot express "the latest visit has a follow-up" or "has an open
+ * First-sync filters. Prisma cannot express "the latest visit has a follow-up" or "has an open
  * referral" without relations between phone-synced tables (they have no foreign keys on purpose), so the
  * qualifying ids are computed first.
- * ponytail: id lists sized by one catchment; move to SQL views if a catchment reaches tens of thousands.
+ * Limit: the id lists are sized by one catchment; a catchment of tens of thousands would need SQL views.
  */
 async function snapshotFilters(deps: Deps, facilityId: string, myReferrals: Where, now: number) {
   const { prisma } = deps

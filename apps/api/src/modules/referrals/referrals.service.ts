@@ -99,8 +99,11 @@ export async function pushReferral(tx: Tx, device: Device, pushed: PushReferral,
   let target = idRow ?? keyRow
   if (!target) {
     if (device.id !== row.originDeviceId && !(await provesOrigin(tx, lfr, row.originDeviceId, row.shortId))) return 'forbidden'
-    await tx.referral.create({ data: { ...row, dangerSigns: row.dangerSigns ?? [], facilityId: (await facilityOfDevice(tx, row.originDeviceId)) ?? device.facilityId, status: 'created' } })
+    const created = await tx.referral.create({ data: { ...row, dangerSigns: row.dangerSigns ?? [], facilityId: (await facilityOfDevice(tx, row.originDeviceId)) ?? device.facilityId, status: 'created' } })
     touched.add(row.id)
+    // Reached the facility by HTTPS: if no phone there is in facility mode, the server acknowledges for it.
+    const origin = await tx.device.findUnique({ where: { id: created.originDeviceId }, select: { phoneNumber: true } })
+    await acknowledgeIfNoFacilityPhone(tx, Date.now(), created, origin?.phoneNumber ?? null, touched, 'https')
     return null
   }
   if (!(await mayAct(tx, device, target))) return 'forbidden'
@@ -165,6 +168,27 @@ export async function enqueueStatusSms(tx: Tx, now: number, r: Pick<Referral, 'o
   const signer = await signerFor(tx, r.destinationFacilityId)
   const msg: StatusMessage = { kind: 'LFS', signer: signer.id, origin: r.originDeviceId, short_id: r.shortId, status: code }
   await enqueueSms(tx, now, to, encode(msg, signer.keyHex!))
+}
+
+/** True when the facility has an active device in facility mode, which acknowledges referrals itself. */
+export async function hasFacilityPhone(tx: Tx, facilityId: string | null) {
+  if (!facilityId) return false
+  return !!(await tx.device.findFirst({ where: { facilityId, role: 'facility', active: true }, select: { id: true } }))
+}
+
+/**
+ * The server SMS gateway is the fallback path: it acknowledges a referral (received event plus
+ * LFS R to the sender) only when the destination has no phone in facility mode to do it.
+ * Returns whether it acknowledged.
+ */
+export async function acknowledgeIfNoFacilityPhone(tx: Tx, now: number, r: Pick<Referral, 'id' | 'originDeviceId' | 'shortId' | 'destinationFacilityId'>, to: string | null, touched: Set<string>, via: 'sms' | 'https') {
+  if (!r.destinationFacilityId || (await hasFacilityPhone(tx, r.destinationFacilityId))) return false
+  await pushEvent(tx, null, {
+    id: `gw-${r.originDeviceId}-${r.shortId}-received`, referral_id: r.id, origin_device_id: r.originDeviceId, short_id: r.shortId,
+    status: 'received', at: now, updated_at: now, source_device_id: GATEWAY_DEVICE, via, device_id: GATEWAY_DEVICE,
+  }, touched)
+  await enqueueStatusSms(tx, now, r, 'received', to)
+  return true
 }
 
 // --- Web inbox and facility devices

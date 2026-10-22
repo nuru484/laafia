@@ -227,9 +227,27 @@ data: <ReferralView JSON>
 
 ## SMS gateway
 
+The server gateway is Frog by Wigal, and it is the fallback path: phones text each other from their own SIMs. The server sends SMS only for:
+
+- `LFS` status from the web inbox (`POST /referrals/:id/status`);
+- the `LFS ... R` acknowledgement for a referral that reaches a facility by HTTPS push or inbound SMS while that facility has no active device in facility mode (the server records the `received` event for it);
+- driver messages when a CHO requests transport online (`POST /transport/requests`).
+
+Outgoing SMS go through a `jobs` table (retry at 30 s, 2 min, 10 min, then hourly; failed after 8 attempts) to Frog `POST https://frogapi.wigal.com.gh/api/v3/sms/send` with `API-KEY` / `USERNAME` headers. Each send carries `msgid` `LF_<job id>_<ms>`. Without `FROG_API_KEY`, `FROG_USERNAME` and `FROG_SENDER_ID` the message is only logged (masked number and length, never the body).
+
+### POST /sms/delivery
+
+Frog delivery receipts. Guarded by `SMS_CALLBACK_SECRET` (header `x-callback-token`, or `?token=` in the callback URL configured at Frog), compared in constant time; fails closed (`401`) when the secret is unset. Body: a JSON array of receipts, or an object keyed by index:
+
+```json
+[{ "msgid": "LF_42_1792628325516", "status": "DELIVRD", "reason": "Delivered", "destination": "233240000001", "statusdate": "2026-10-22 10:00:00" }]
+```
+
+Each receipt is validated on its own; malformed or unknown ones are skipped. Always `200 { "received": 3, "applied": 1 }`. `DELIVRD`/`ANSWERED` mark the job delivered; `UNDELIV`, `REJECTD`, `FAILED`, `EXPIRED`, `DELETED`, `UNKNOWN` failed; `ACCEPTD`, `WAITING`, `BUSY` pending.
+
 ### POST /sms/inbound
 
-Arkesel inbound webhook. Arkesel documents no webhook signature, so the endpoint is guarded by `SMS_WEBHOOK_TOKEN`, sent as header `x-webhook-token` or, since the gateway only lets you set a URL, as `?token=` in the configured callback URL (compared in constant time). Required in production; open only in development when unset.
+Frog has no inbound (mobile-originated) SMS in the house integration, so this endpoint is provider-neutral: anything that forwards a received SMS can post to it. Guarded by `SMS_WEBHOOK_TOKEN` (header `x-webhook-token` or `?token=`), compared in constant time. Required in production; open only in development when unset.
 
 Body `{ "from": "+233240000001", "text": "LFR|1|..." }` (also accepts `sender` / `message`, JSON or form-encoded). Always `200` unless the token is wrong (`401`):
 
@@ -237,15 +255,13 @@ Body `{ "from": "+233240000001", "text": "LFR|1|..." }` (also accepts `sender` /
 { "ok": true, "kind": "referral", "referral_id": "uuid", "duplicate": false }
 { "ok": true, "kind": "status", "referral_id": "uuid", "status": "arrived" }
 { "ok": true, "kind": "driver_reply", "transport_request_id": "...", "status": "coming" }
-{ "ok": false, "error": "not_laafia" | "unknown_signer" | "bad_signature" | "conflict" }
+{ "ok": false, "error": "not_laafia" | "unknown_signer" | "bad_signature" | "conflict" | "forbidden" }
 ```
 
 - Verified with `packages/core` `decode`, key looked up by the `signer` device id (never the sender number). Deactivated devices are `unknown_signer`.
-- `LFR`: upserts the referral by `(signer, short_id)`, adds a `received` event, and replies `LFS ... R` to the sender, signed by the destination facility's phone key (else the gateway device `GW01`). A repeat of the same content is a confirmation (`duplicate: true`, ack resent); different content for the same key is `conflict`.
-- `LFS`: adds the event for `(origin, short_id)`. An LFS for an unknown referral creates a stub row that the later push fills in.
+- `LFR`: upserts the referral by `(signer, short_id)`. If the destination has no phone in facility mode, the server adds the `received` event and replies `LFS ... R` to the sender, signed by the gateway device `GW01`. A repeat of the same content is a confirmation (`duplicate: true`, ack resent); different content for the same key is `conflict`.
+- `LFS`: applied with the signer's authority: the signer must be an active device that may act on the referral (its origin, the current destination facility, or an earlier hop), else `forbidden`. An LFS for a referral the server has not seen is `forbidden` (no stub).
 - Anything else from a number with a `requested` transport request: a leading `1`/`2` sets it to `coming`/`declined`.
-
-Outgoing SMS go through a `jobs` table (retry at 30 s, 2 min, 10 min, then hourly; failed after 8 attempts) and Arkesel's `POST /api/v2/sms/send`; without `ARKESEL_API_KEY` they are only logged.
 
 ## Admin (header `x-admin-token`)
 

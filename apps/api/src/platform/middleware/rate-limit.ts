@@ -2,7 +2,7 @@ import { HttpError } from '../http/errors.ts'
 
 /**
  * Fixed-window counter. `hit` throws 429 rate_limited (with Retry-After) once a key passes `max` in the window.
- * ponytail: in memory, so per process; move to the database when running several API processes.
+ * Limit: counters live in memory, so they are per process. Several API processes need a shared store.
  */
 export function fixedWindow(max: number, windowMs: number, message: string, clock: () => number = Date.now) {
   const windows = new Map<string, { start: number; count: number }>()

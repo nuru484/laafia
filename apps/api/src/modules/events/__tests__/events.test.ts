@@ -54,7 +54,8 @@ describe('SSE inbox', () => {
       const text = await frames
       ctl.abort()
       const data = JSON.parse(text.split('event: referral\ndata: ')[1]!.split('\n')[0]!)
-      expect(data).toMatchObject({ origin_device_id: 'D001', destination_facility_id: 'fac-0003', status: 'received', events: [expect.objectContaining({ status: 'received' })] })
+      // Savelugu Hospital has a phone in facility mode, so the server does not acknowledge for it.
+      expect(data).toMatchObject({ origin_device_id: 'D001', destination_facility_id: 'fac-0003', status: 'created', delivered_via: 'sms', events: [] })
     } finally {
       server.closeAllConnections()
       server.close()

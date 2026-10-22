@@ -4,9 +4,11 @@ import {
 } from '@laafia/core'
 import { randomUUID } from 'node:crypto'
 import { write } from '../../platform/db.ts'
+import { jobIdOfMsgId } from '../../platform/jobs/worker.ts'
+import { FrogReceipt } from './sms.schemas.ts'
 import type { Deps } from '../../platform/deps.ts'
 import {
-  GATEWAY_DEVICE, activeKeys, byKey, enqueueStatusSms, facilityOfDevice, mayAct, pushEvent, writeAndPublish, type Referral,
+  GATEWAY_DEVICE, acknowledgeIfNoFacilityPhone, activeKeys, byKey, facilityOfDevice, mayAct, pushEvent, writeAndPublish, type Referral,
 } from '../referrals/index.ts'
 
 /* Gateway SMS: LFR / LFS processed exactly like a facility phone would (spec 11.5). */
@@ -51,12 +53,9 @@ async function onReferral(deps: Deps, m: ReferralMessage, from: string): Promise
     } else if (!duplicate) {
       r = await tx.referral.update({ where: { id: r.id }, data: { ...fields, deliveredVia: r.deliveredVia ?? 'sms' } })
     }
-    await pushEvent(tx, null, {
-      id: `gw-${m.signer}-${m.short_id}-received`, referral_id: r.id, origin_device_id: m.signer, short_id: m.short_id,
-      status: 'received', at: now, updated_at: now, source_device_id: GATEWAY_DEVICE, via: 'sms', device_id: GATEWAY_DEVICE,
-    }, touched)
-    // Acknowledge to the sender every time: a resend usually means the first ack was lost.
-    await enqueueStatusSms(tx, now, r, 'received', from)
+    touched.add(r.id)
+    // Acknowledge for a facility with no phone in facility mode, every time: a resend usually means the first ack was lost.
+    await acknowledgeIfNoFacilityPhone(tx, now, r, from, touched, 'sms')
     return { ok: true, kind: 'referral', referral_id: r.id, duplicate } as const
   })
 }
@@ -98,6 +97,32 @@ async function onDriverReply(deps: Deps, from: string, body: string): Promise<In
     await tx.transportRequest.update({ where: { id: req.id }, data: { status: reply, updatedAt: deps.clock(), deviceId: GATEWAY_DEVICE } })
     return { ok: true, kind: 'driver_reply', transport_request_id: req.id, status: reply } as const
   })
+}
+
+const DELIVERY: Record<string, 'delivered' | 'failed' | 'pending'> = {
+  DELIVRD: 'delivered', ANSWERED: 'delivered', ACCEPTD: 'pending', WAITING: 'pending', BUSY: 'pending',
+  UNDELIV: 'failed', REJECTD: 'failed', FAILED: 'failed', EXPIRED: 'failed', DELETED: 'failed', UNKNOWN: 'failed',
+}
+
+/** Apply Frog delivery receipts to their jobs. Malformed or unknown receipts are skipped, never fatal. */
+export async function applyDeliveryReceipts(deps: Deps, items: unknown[]) {
+  let applied = 0
+  for (const raw of items) {
+    const parsed = FrogReceipt.safeParse(raw)
+    const jobId = parsed.success ? jobIdOfMsgId(parsed.data.msgid) : null
+    if (!parsed.success || jobId === null) {
+      deps.logger.warn('sms_receipt_skipped', { reason: parsed.success ? 'unknown_msgid' : 'invalid' })
+      continue
+    }
+    const status = DELIVERY[parsed.data.status]!
+    const res = await deps.prisma.job.updateMany({
+      where: { id: jobId },
+      data: { deliveryStatus: status, deliveryReason: parsed.data.reason ?? null, deliveredAt: status === 'delivered' ? deps.clock() : null },
+    })
+    applied += res.count
+  }
+  if (items.length) deps.logger.info('sms_receipts', { received: items.length, applied })
+  return { received: items.length, applied }
 }
 
 export async function handleInboundSms(deps: Deps, from: string, body: string): Promise<InboundResult> {

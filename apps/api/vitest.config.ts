@@ -10,7 +10,7 @@ export default defineConfig({
       NODE_ENV: 'test',
       DATABASE_URL: TEST_DATABASE_URL,
       ADMIN_TOKEN: 'test-admin-token',
-      ARKESEL_API_KEY: '',
+      FROG_API_KEY: '',
     },
   },
 })

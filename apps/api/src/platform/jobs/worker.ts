@@ -8,6 +8,13 @@ const LEASE_MS = 5 * 60_000
 
 export const backoff = (attempts: number) => BACKOFF_MS[Math.min(attempts - 1, BACKOFF_MS.length - 1)]!
 
+/** The msgid handed to Frog embeds the job id, so a delivery receipt maps straight back to its job. */
+export const frogMsgId = (jobId: number, at: number) => `LF_${jobId}_${at}`
+export const jobIdOfMsgId = (msgid: string) => {
+  const m = /^LF_(\d{1,15})_\d+$/.exec(msgid)
+  return m ? Number(m[1]) : null
+}
+
 /** Transactional enqueue: the SMS is sent only if the write that caused it commits. */
 export async function enqueueSms(tx: Tx, now: number, to: string, body: string) {
   await tx.job.create({ data: { kind: 'sms', payload: { to, body }, runAt: now, createdAt: now } })
@@ -28,7 +35,7 @@ export async function runJobs(deps: Deps, limit = 20): Promise<number> {
     if (!claimed.count) continue
     const { to, body } = job.payload as { to: string; body: string }
     try {
-      await deps.sms.send(to, body)
+      await deps.sms.send(to, body, frogMsgId(job.id, now))
       await prisma.job.update({ where: { id: job.id }, data: { status: 'sent', attempts: job.attempts + 1, lastError: null } })
       sent += 1
     } catch (e) {

@@ -13,23 +13,25 @@ const reasons = (res: { body: { rejected: { reason: string }[] } }) => res.body.
 
 describe('referral merge and status', () => {
   it('merges an SMS-first referral with the later phone push onto one row', async () => {
-    const res = await sms(encode(lfr, KEYS.D001!))
+    // Tamale Teaching Hospital has no phone in facility mode, so the server gateway acknowledges for it.
+    const toTth = { ...lfr, destination: 'TTH-HOSP-01' }
+    const res = await sms(encode(toTth, KEYS.D001!))
     expect(res.body).toMatchObject({ ok: true, kind: 'referral', duplicate: false })
     const [fromSms] = await prisma.referral.findMany()
-    expect(fromSms).toMatchObject({ originDeviceId: 'D001', shortId: SID, status: 'received', destinationFacilityId: 'fac-0003', dangerSigns: ['bleeding'] })
+    expect(fromSms).toMatchObject({ originDeviceId: 'D001', shortId: SID, status: 'received', destinationFacilityId: 'fac-0004', dangerSigns: ['bleeding'] })
 
-    // The gateway acknowledged with an LFS signed by the destination facility's phone.
     const [ack] = await prisma.job.findMany()
     const payload = ack!.payload as { to: string; body: string }
     expect(payload.to).toBe('0240000001')
-    expect(decode(payload.body, (id) => KEYS[id])).toMatchObject({ ok: true, message: { kind: 'LFS', signer: 'F003', origin: 'D001', short_id: SID, status: 'R' } })
+    const gw = await prisma.device.findUniqueOrThrow({ where: { id: 'GW01' } })
+    expect(decode(payload.body, (id) => (id === 'GW01' ? gw.keyHex! : KEYS[id]))).toMatchObject({ ok: true, message: { kind: 'LFS', signer: 'GW01', origin: 'D001', short_id: SID, status: 'R' } })
 
-    expect((await sms(encode(lfr, KEYS.D001!))).body).toMatchObject({ ok: true, duplicate: true })
-    expect((await sms(encode({ ...lfr, urgency: 1 }, KEYS.D001!))).body).toEqual({ ok: false, error: 'conflict' })
+    expect((await sms(encode(toTth, KEYS.D001!))).body).toMatchObject({ ok: true, duplicate: true })
+    expect((await sms(encode({ ...toTth, urgency: 1 }, KEYS.D001!))).body).toEqual({ ok: false, error: 'conflict' })
 
     const jwt = await activate('D001')
     const pushed = await pushAs(jwt, [
-      { table: 'referrals', row: { id: 'r-uuid-1', updated_at: TODAY - 5_000, origin_device_id: 'D001', short_id: SID, client_id: 'cl-0041', client_code: 'CL-0041', urgency: 3, danger_signs: ['bleeding'], destination_facility_id: 'fac-0003', status: 'closed' } },
+      { table: 'referrals', row: { id: 'r-uuid-1', updated_at: TODAY - 5_000, origin_device_id: 'D001', short_id: SID, client_id: 'cl-0041', client_code: 'CL-0041', urgency: 3, danger_signs: ['bleeding'], destination_facility_id: 'fac-0004', status: 'closed' } },
       { table: 'referral_events', row: event({ status: 'sent' }) },
     ])
     expect(pushed.body).toEqual({ accepted: ['r-uuid-1', expect.any(String)], rejected: [] })
