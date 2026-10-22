@@ -224,6 +224,9 @@ async function handle(env: Env, raw: Incoming): Promise<IncomingResult> {
 
   const m = message
   if (m.kind === 'LFS') {
+    // Only facilities move a referral forward; any other key holder signing an LFS is refused.
+    const signer = await db.get<{ role: string }>('SELECT role FROM devices WHERE id = ?', [m.signer])
+    if (signer?.role !== 'facility') return { kind: 'rejected', error: 'not_a_facility' }
     const ref = await db.get<{ id: string }>('SELECT id FROM referrals WHERE origin_device_id = ? AND short_id = ?', [m.origin, m.short_id])
     const status = STATUS_FROM_CODE[m.status]
     if (ref) await addEvent(env, ref.id, status, m.signer, raw.via)

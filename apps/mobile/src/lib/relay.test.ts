@@ -143,6 +143,17 @@ describe('QR hop', () => {
   })
 })
 
+describe('status authority', () => {
+  it('ignores a validly signed status update that does not come from a facility device', async () => {
+    const cho = await phone('D001')
+    const { referral } = await referNewborn(cho)
+    const { encode } = await import('@laafia/core')
+    const forged = encode({ kind: 'LFS', signer: 'V001', origin: 'D001', short_id: referral.short_id, status: 'T' }, dev('V001').key_hex)
+    expect(await processIncoming(cho, { sender: '0240000002', body: forged, received_at: 1, via: 'sms' })).toEqual({ kind: 'rejected', error: 'not_a_facility' })
+    expect(await referralStatus(cho, referral.id)).toBe('created')
+  })
+})
+
 describe('QR hop safety', () => {
   it('a carrier holding the signer key still refuses a tampered QR', async () => {
     const cho = await phone('D001')
