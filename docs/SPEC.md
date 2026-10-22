@@ -60,7 +60,7 @@ The same mobile app serves `cho`, `volunteer` and `facility`; the mode is set at
 | Secure storage | `expo-secure-store` for keys and PIN hash | Section 18 |
 | Crypto | `@noble/hashes` (HMAC-SHA256, PBKDF2), `expo-crypto` for random bytes | Pure JS, works offline |
 | Connectivity | `@react-native-community/netinfo` | Sync triggers |
-| Backend | Node 22+, Express, TypeScript, Drizzle ORM, PostgreSQL 16+ | Section 16 |
+| Backend | Node 22+, Express, TypeScript, Prisma ORM (driver adapter `@prisma/adapter-pg`), PostgreSQL 16+ | Section 16 |
 | Web | Next.js (App Router), server-sent events for the live inbox | Section 12.4 |
 | Shared code | `packages/core`: rules engine, scorer, payload codec, HMAC, types. Used by mobile, backend and web | Single source of truth for anything that must behave identically on both ends |
 | Model training | Python 3, scikit-learn, exports `risk_model.json` | Section 6 |
@@ -458,7 +458,7 @@ created -> sent -> received -> arrived -> treated -> closed
 
 ### 16.5 Backend layout
 
-Express with Zod schemas on every route; Drizzle migrations; `packages/core` for parsing, verification and rules; an in-process event bus feeding SSE; a `jobs` table for gateway sends with the same backoff rules as the phone outbox.
+Express with Zod schemas on every route; Prisma schema and migrations (`apps/api/prisma`), feature modules under `apps/api/src/modules`; `packages/core` for parsing, verification and rules; an in-process event bus feeding SSE; a `jobs` table for gateway sends with the same backoff rules as the phone outbox.
 
 ---
 

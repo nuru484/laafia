@@ -1,6 +1,6 @@
 # Laafia API
 
-Express + Drizzle + PostgreSQL backend in `apps/api`. This is the contract the mobile app and web dashboard are written against.
+Express + Prisma + PostgreSQL backend in `apps/api`. This is the contract the mobile app and web dashboard are written against.
 
 ## Run
 
