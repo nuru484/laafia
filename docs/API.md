@@ -438,7 +438,7 @@ All admin routes accept the `district_admin` session cookie (with `X-CSRF-Token`
 
 ### Audit log
 
-`GET /admin/audit?limit=50&before=<at>&target_type=<type>` → `{ "events": [{ "id", "at", "actor_kind": "user"|"device"|"script", "actor_id", "actor_name", "action", "target_type", "target_id", "details" }], "next_before": number | null }`, newest first. Page by passing `next_before` as `before`. Actions: `user.create|password_reset|deactivate|activate`, `device.create|code_reissue|deactivate`, `facility.create|update`, `provider.create|update|retire`, `export.push`, `clip.upload|delete`, `pack.upload`, `referral.refer_onward`, `transport.request`.
+`GET /admin/audit?limit=50&before=<at>&target_type=<type>` → `{ "events": [{ "id", "at", "actor_kind": "user"|"device"|"script", "actor_id", "actor_name", "action", "target_type", "target_id", "details" }], "next_before": number | null }`, newest first. Page by passing `next_before` as `before`. Actions: `user.create|password_reset|deactivate|activate`, `device.create|code_reissue|deactivate`, `facility.create|update`, `provider.create|update|retire`, `import.preview|commit|undo`, `export.push`, `clip.upload|delete`, `pack.upload`, `referral.refer_onward`, `transport.request`.
 
 ### Content
 
