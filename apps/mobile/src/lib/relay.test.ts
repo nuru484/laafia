@@ -193,6 +193,13 @@ describe('closing the loop', () => {
     expect(stub).toEqual({ client_id: newborn.id, followup_due: cho.now() + 3 * 86_400_000, rule_id: 'REFERRAL-CLOSED' })
     await processIncoming(cho, { sender: hospital.self.phone, body: close.body, received_at: 3, via: 'sms' })
     expect(await cho.db.all("SELECT id FROM visits WHERE rule_id = 'REFERRAL-CLOSED'")).toHaveLength(1)
+
+    // The same discharge recorded on the facility's web dashboard arrives again, signed by the server gateway.
+    const { encode } = await import('@laafia/core')
+    await cho.db.run("INSERT INTO devices (id, role, user_name, phone_number, key_hex, active) VALUES ('GW01', 'facility', 'Laafia server', '', ?, 1)", ['33'.repeat(32)])
+    const fromWeb = encode({ kind: 'LFS', signer: 'GW01', origin: 'D001', short_id: referral.short_id, status: 'C' }, '33'.repeat(32))
+    await processIncoming(cho, { sender: 'Laafia', body: fromWeb, received_at: 4, via: 'sms' })
+    expect(await cho.db.all("SELECT id FROM visits WHERE rule_id = 'REFERRAL-CLOSED'")).toHaveLength(1)
   })
 })
 
