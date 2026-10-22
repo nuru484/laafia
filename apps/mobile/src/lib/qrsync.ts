@@ -32,8 +32,23 @@ function fromBase64(s: string): Uint8Array {
   return out
 }
 
+type Rec = { table: string; row: Record<string, unknown> }
+
+/**
+ * Only register tables travel phone to phone. Facilities and devices (phone
+ * numbers, keys) are server-owned; a forged QR must never rewrite them. The
+ * table name used in SQL always comes from this map, never from the payload.
+ */
+const SHAREABLE: Record<string, string> = {
+  households: 'households', clients: 'clients', visits: 'visits', referrals: 'referrals',
+  referral_events: 'referral_events', transport_providers: 'transport_providers', transport_requests: 'transport_requests',
+}
+
 export async function buildFrames(env: Env): Promise<string[]> {
-  const records = await collectUnsynced(env, 2000, true)
+  return encodeFrames(env, await collectUnsynced(env, 2000, true))
+}
+
+export function encodeFrames(env: Env, records: Rec[]): string[] {
   if (!records.length) return []
   const packed = deflateSync(strToU8(JSON.stringify({ v: 1, from: env.self.device_id, records })), { level: 9 })
   const check = bytesToHex(sha256(packed)).slice(0, 8)
@@ -80,9 +95,14 @@ export class Receiver {
     if (!this.complete()) throw new Error('Not all frames scanned yet')
     const packed = fromBase64(Array.from({ length: this.count }, (_, i) => this.chunks.get(i)!).join(''))
     if (bytesToHex(sha256(packed)).slice(0, 8) !== this.check) throw new Error('The records failed their checksum; scan the frames again')
-    const payload = JSON.parse(strFromU8(inflateSync(packed))) as { from: string; records: { table: string; row: Record<string, unknown> }[] }
+    const payload = JSON.parse(strFromU8(inflateSync(packed))) as { from: string; records: Rec[] }
+    if (!Array.isArray(payload.records)) throw new Error('Not a Laafia record share')
+    for (const r of payload.records) {
+      if (!Object.hasOwn(SHAREABLE, r.table) || typeof r.row?.id !== 'string') throw new Error(`Record type ${String(r.table).slice(0, 40)} is not allowed in a share; nothing was saved`)
+    }
     await env.db.tx(async () => {
-      for (const { table, row } of payload.records) {
+      for (const { table: name, row } of payload.records) {
+        const table = SHAREABLE[name]!
         await applyPulled(env, table, row)
         await env.db.run(`UPDATE ${table} SET synced = 0 WHERE id = ?`, [row.id as string])
         if (table === 'referrals' && typeof row.lfr === 'string') {

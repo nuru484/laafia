@@ -5,7 +5,7 @@ import { PROTOCOLS, evaluate, generateSeed } from '@laafia/core'
 import { testDb } from '../../test/node-db'
 import { createReferral, loadSeed, referralStatus, type Env } from './relay'
 import { enrol } from './register'
-import { FRAME_BYTES, Receiver, buildFrames } from './qrsync'
+import { FRAME_BYTES, Receiver, buildFrames, encodeFrames } from './qrsync'
 
 const TODAY = Date.UTC(2026, 9, 22, 8)
 const seed = generateSeed(TODAY)
@@ -61,6 +61,21 @@ describe('record share by QR', () => {
     const rx = new Receiver()
     for (const f of frames) rx.add(f.replace(/\|([A-Za-z0-9+/=]{10})/, '|AAAAAAAAAA'))
     await expect(rx.apply(await phone('D001'))).rejects.toThrow(/checksum/)
+  })
+
+  it('refuses a payload that touches a server-owned or unknown table, writing nothing', async () => {
+    const cho = await phone('D001')
+    for (const table of ['devices', 'facilities', "clients SET name = 'x'; --"]) {
+      const frames = encodeFrames(cho, [
+        { table: 'households', row: { id: 'hh-evil', community: 'X', head_name: 'Y', landmark: '', lat: null, lng: null, consent_at: null, updated_at: TODAY + 1, device_id: 'V001', deleted: false } },
+        { table, row: { id: 'D001', role: 'cho', user_name: 'x', phone_number: '0249999999', active: true } },
+      ])
+      const rx = new Receiver()
+      for (const f of frames) rx.add(f)
+      await expect(rx.apply(cho)).rejects.toThrow(/not allowed/)
+    }
+    expect(await cho.db.get("SELECT id FROM households WHERE id = 'hh-evil'")).toBeUndefined()
+    expect(await cho.db.get("SELECT phone_number FROM devices WHERE id = 'D001'")).toEqual({ phone_number: '0240000001' })
   })
 
   it('ignores frames from a different share and junk', () => {
