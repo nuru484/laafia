@@ -16,12 +16,10 @@ npm install
 ## 2. API
 
 ```bash
-createdb laafia
-createdb laafia_test
-cp apps/api/.env.example apps/api/.env   # fill in JWT_SECRET, ADMIN_TOKEN, SMS_WEBHOOK_TOKEN
-npm run db:migrate -w @laafia/api
+cp apps/api/.env.example apps/api/.env   # fill in the database URL, JWT_SECRET, ADMIN_TOKEN, SMS_WEBHOOK_TOKEN, SMS_CALLBACK_SECRET
+npm run db:migrate -w @laafia/api        # creates the database if it does not exist
 npm run seed -w @laafia/api              # prints one activation code per demo device
-npm run dev -w @laafia/api               # http://<machine LAN IP>:4000
+npm run api                             # http://<machine LAN IP>:4000
 ```
 
 Check it from a phone's browser: `http://<machine LAN IP>:4000/health` returns `{"ok":true}`.
