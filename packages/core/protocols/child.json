@@ -1,0 +1,66 @@
+{
+  "id": "child",
+  "version": 1,
+  "clinical_review": "pending: WHO IMCI / iCCM 2-59 months with MUAC, to be reviewed by the team clinician",
+  "questions": [
+    { "id": "ch_drink", "type": "yesno", "prompt": "ch_drink", "text_en": "Is the child able to drink or breastfeed?" },
+    { "id": "ch_vomit_all", "type": "yesno", "prompt": "ch_vomit_all", "text_en": "Does the child vomit everything?" },
+    { "id": "ch_convulsions", "type": "yesno", "prompt": "ch_convulsions", "text_en": "Has the child had fits or convulsions?" },
+    { "id": "ch_lethargic", "type": "yesno", "prompt": "ch_lethargic", "text_en": "Is the child very sleepy or hard to wake?" },
+    { "id": "ch_cough", "type": "yesno", "prompt": "ch_cough", "text_en": "Does the child have a cough or difficult breathing?" },
+    { "id": "ch_breaths", "type": "number", "unit": "breaths/min", "prompt": "ch_breaths", "text_en": "Count the child's breaths for one full minute.", "ask_if": { "ch_cough": true } },
+    { "id": "ch_chest_indrawing", "type": "yesno", "prompt": "ch_chest_indrawing", "text_en": "Does the lower chest pull in when the child breathes in?", "ask_if": { "ch_cough": true } },
+    { "id": "ch_diarrhoea", "type": "yesno", "prompt": "ch_diarrhoea", "text_en": "Does the child have diarrhoea?" },
+    { "id": "ch_blood_stool", "type": "yesno", "prompt": "ch_blood_stool", "text_en": "Is there blood in the stool?", "ask_if": { "ch_diarrhoea": true } },
+    { "id": "ch_diarrhoea_days", "type": "number", "unit": "days", "prompt": "ch_diarrhoea_days", "text_en": "For how many days?", "ask_if": { "ch_diarrhoea": true } },
+    { "id": "ch_fever", "type": "yesno", "prompt": "ch_fever", "text_en": "Does the child have fever?" },
+    { "id": "ch_fever_days", "type": "number", "unit": "days", "prompt": "ch_fever_days", "text_en": "For how many days?", "ask_if": { "ch_fever": true } },
+    { "id": "ch_oedema", "type": "yesno", "prompt": "ch_oedema", "text_en": "Press both feet for 3 seconds. Does a dent stay on both?" },
+    { "id": "ch_muac", "type": "number", "unit": "mm", "prompt": "ch_muac", "text_en": "Measure the arm with the MUAC tape.", "ask_if": { "age_months": { "gte": 6 } } }
+  ],
+  "rules": [
+    { "id": "CH-R1", "when": { "ch_drink": false }, "outcome": "refer", "urgency": 3, "danger_sign": "cannot_drink", "actions": ["go_now", "keep_feeding"], "stop": true },
+    { "id": "CH-R2", "when": { "ch_convulsions": true }, "outcome": "refer", "urgency": 3, "danger_sign": "convulsions", "actions": ["go_now"], "stop": true },
+    { "id": "CH-R3", "when": { "ch_vomit_all": true }, "outcome": "refer", "urgency": 3, "danger_sign": "vomits_all", "actions": ["go_now"] },
+    { "id": "CH-R4", "when": { "ch_lethargic": true }, "outcome": "refer", "urgency": 3, "danger_sign": "lethargic", "actions": ["go_now"] },
+    { "id": "CH-R5", "when": { "ch_chest_indrawing": true }, "outcome": "refer", "urgency": 3, "danger_sign": "chest_indrawing", "actions": ["go_now"] },
+    { "id": "CH-R6", "when": { "ch_oedema": true }, "outcome": "refer", "urgency": 3, "danger_sign": "oedema", "actions": ["go_now", "keep_feeding"] },
+    { "id": "CH-R7", "when": { "ch_muac": { "lte": 114 } }, "outcome": "refer", "urgency": 2, "danger_sign": "muac_red", "actions": ["go_today", "keep_feeding"] },
+    { "id": "CH-R8", "when": { "ch_blood_stool": true }, "outcome": "refer", "urgency": 2, "danger_sign": "blood_stool", "actions": ["ors", "go_today"] },
+    { "id": "CH-R9", "when": { "ch_diarrhoea_days": { "gte": 14 } }, "outcome": "refer", "urgency": 2, "danger_sign": "long_diarrhoea", "actions": ["ors", "go_today"] },
+    { "id": "CH-R10", "when": { "ch_fever_days": { "gte": 7 } }, "outcome": "refer", "urgency": 2, "danger_sign": "long_fever", "actions": ["go_today"] },
+    { "id": "CH-F1", "when": { "ch_breaths": { "gte": 50 }, "age_months": { "lte": 11 } }, "outcome": "followup", "followup_days": 2, "actions": ["treat_pneumonia"] },
+    { "id": "CH-F2", "when": { "ch_breaths": { "gte": 40 }, "age_months": { "gte": 12 } }, "outcome": "followup", "followup_days": 2, "actions": ["treat_pneumonia"] },
+    { "id": "CH-F3", "when": { "ch_diarrhoea": true }, "outcome": "followup", "followup_days": 2, "actions": ["ors", "zinc", "keep_feeding"] },
+    { "id": "CH-F4", "when": { "ch_fever": true }, "outcome": "followup", "followup_days": 2, "actions": ["malaria_test"] },
+    { "id": "CH-F5", "when": { "ch_muac": { "gte": 115, "lte": 124 } }, "outcome": "followup", "followup_days": 14, "actions": ["nutrition_counsel"] },
+    { "id": "CH-DEFAULT", "when": {}, "outcome": "routine", "actions": ["counsel_danger_signs"] }
+  ],
+  "signs": {
+    "cannot_drink": { "code": "nd", "prompt": "sign_cannot_drink", "text_en": "Unable to drink or breastfeed" },
+    "convulsions": { "code": "cv", "prompt": "sign_convulsions", "text_en": "Convulsions" },
+    "vomits_all": { "code": "vo", "prompt": "sign_vomits_all", "text_en": "Vomits everything" },
+    "lethargic": { "code": "lt", "prompt": "sign_lethargic", "text_en": "Very sleepy or unconscious" },
+    "chest_indrawing": { "code": "ci", "prompt": "sign_chest_indrawing", "text_en": "Chest indrawing" },
+    "oedema": { "code": "oe", "prompt": "sign_oedema", "text_en": "Swelling of both feet" },
+    "muac_red": { "code": "mr", "prompt": "sign_muac_red", "text_en": "MUAC red (below 115 mm)" },
+    "blood_stool": { "code": "bs", "prompt": "sign_blood_stool", "text_en": "Blood in stool" },
+    "long_diarrhoea": { "code": "pd", "prompt": "sign_long_diarrhoea", "text_en": "Diarrhoea 14 days or more" },
+    "long_fever": { "code": "pf", "prompt": "sign_long_fever", "text_en": "Fever 7 days or more" }
+  },
+  "actions": {
+    "go_now": { "prompt": "act_go_now", "text_en": "Go to the facility now. Do not wait." },
+    "go_today": { "prompt": "act_go_today", "text_en": "Go to the facility today." },
+    "keep_feeding": { "prompt": "act_keep_feeding", "text_en": "Keep breastfeeding and giving food and water." },
+    "ors": { "prompt": "act_ors", "text_en": "Give ORS after every loose stool, also on the way." },
+    "zinc": { "prompt": "act_zinc", "text_en": "Give zinc as per your protocol." },
+    "treat_pneumonia": { "prompt": "act_treat_pneumonia", "text_en": "Fast breathing: treat for pneumonia as per your iCCM protocol and check again in 2 days." },
+    "malaria_test": { "prompt": "act_malaria_test", "text_en": "Do a malaria rapid test and treat as per your protocol." },
+    "nutrition_counsel": { "prompt": "act_nutrition_counsel", "text_en": "Counsel on feeding and enrol in the nutrition programme; measure again in 2 weeks." },
+    "counsel_danger_signs": { "prompt": "act_counsel_danger_signs", "text_en": "Explain the danger signs and to come at once if any appear." }
+  },
+  "destination": {
+    "default": "nearest:health_centre",
+    "by_danger_sign": { "convulsions": "nearest:hospital", "lethargic": "nearest:hospital", "oedema": "nearest:hospital", "cannot_drink": "nearest:hospital" }
+  }
+}

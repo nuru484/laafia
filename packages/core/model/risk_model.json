@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "source": "hand-set placeholder until model/train.py writes this file",
+  "intercept": -2.1,
+  "weights": {
+    "anc_overdue_days": 0.08,
+    "days_postpartum_lt7": 1.4,
+    "no_pnc_visit": 1.2,
+    "prior_complications": 1.1,
+    "low_birth_weight": 0.9,
+    "muac_class": 0.8,
+    "followup_due_days": 0.12,
+    "first_pregnancy": 0.3
+  },
+  "reason_templates": {
+    "anc_overdue_days": "ANC contact {days} days overdue",
+    "days_postpartum_lt7": "{days} days after delivery",
+    "no_pnc_visit": "no postnatal visit recorded",
+    "prior_complications": "previous {complication}",
+    "low_birth_weight": "low birth weight",
+    "muac_class": "MUAC {colour}",
+    "followup_due_days": "follow-up due {days} days ago",
+    "first_pregnancy": "first pregnancy"
+  }
+}

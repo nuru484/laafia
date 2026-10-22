@@ -1,0 +1,57 @@
+{
+  "id": "maternal",
+  "version": 1,
+  "clinical_review": "pending: WHO/GHS maternal danger signs, to be reviewed by the team clinician",
+  "questions": [
+    { "id": "m_bleeding", "type": "yesno", "prompt": "m_bleeding", "text_en": "Is she bleeding from the vagina? (In pregnancy any bleeding; after delivery, heavy bleeding)" },
+    { "id": "m_convulsions", "type": "yesno", "prompt": "m_convulsions", "text_en": "Has she had fits or convulsions?" },
+    { "id": "m_headache_vision", "type": "yesno", "prompt": "m_headache_vision", "text_en": "Does she have a severe headache or blurred vision?" },
+    { "id": "m_fever_weak", "type": "yesno", "prompt": "m_fever_weak", "text_en": "Does she have fever and is too weak to get out of bed?" },
+    { "id": "m_abdominal_pain", "type": "yesno", "prompt": "m_abdominal_pain", "text_en": "Does she have severe pain in the belly?" },
+    { "id": "m_breathing", "type": "yesno", "prompt": "m_breathing", "text_en": "Is her breathing fast or difficult?" },
+    { "id": "m_fetal_movement", "type": "yesno", "prompt": "m_fetal_movement", "text_en": "Has the baby in the womb stopped moving or moved less than usual?", "ask_if": { "client_type": "pregnant" } },
+    { "id": "m_waters", "type": "yesno", "prompt": "m_waters", "text_en": "Has her water broken without labour pains?", "ask_if": { "client_type": "pregnant" } },
+    { "id": "m_swelling", "type": "yesno", "prompt": "m_swelling", "text_en": "Are her face and hands swollen?" },
+    { "id": "m_discharge", "type": "yesno", "prompt": "m_discharge", "text_en": "Is there a bad-smelling discharge from the vagina?", "ask_if": { "client_type": "postpartum" } },
+    { "id": "m_breast", "type": "yesno", "prompt": "m_breast", "text_en": "Is a breast painful, red or swollen?", "ask_if": { "client_type": "postpartum" } }
+  ],
+  "rules": [
+    { "id": "M-R1", "when": { "m_bleeding": true }, "outcome": "refer", "urgency": 3, "danger_sign": "bleeding", "actions": ["go_now", "companion", "bring_card"], "stop": true },
+    { "id": "M-R2", "when": { "m_convulsions": true }, "outcome": "refer", "urgency": 3, "danger_sign": "convulsions", "actions": ["lie_left", "go_now", "bring_card"], "stop": true },
+    { "id": "M-R3", "when": { "m_headache_vision": true }, "outcome": "refer", "urgency": 3, "danger_sign": "headache_vision", "actions": ["go_now", "bring_card"] },
+    { "id": "M-R4", "when": { "m_fever_weak": true }, "outcome": "refer", "urgency": 3, "danger_sign": "fever_weak", "actions": ["go_now", "bring_card"] },
+    { "id": "M-R5", "when": { "m_abdominal_pain": true }, "outcome": "refer", "urgency": 3, "danger_sign": "abdominal_pain", "actions": ["go_now", "bring_card"] },
+    { "id": "M-R6", "when": { "m_breathing": true }, "outcome": "refer", "urgency": 3, "danger_sign": "breathing", "actions": ["go_now", "bring_card"] },
+    { "id": "M-R7", "when": { "m_fetal_movement": true }, "outcome": "refer", "urgency": 2, "danger_sign": "fetal_movement", "actions": ["go_today", "bring_card"] },
+    { "id": "M-R8", "when": { "m_waters": true }, "outcome": "refer", "urgency": 2, "danger_sign": "waters", "actions": ["go_today", "bring_card"] },
+    { "id": "M-R9", "when": { "m_swelling": true }, "outcome": "refer", "urgency": 2, "danger_sign": "swelling", "actions": ["go_today", "bring_card"] },
+    { "id": "M-R10", "when": { "m_discharge": true }, "outcome": "refer", "urgency": 2, "danger_sign": "discharge", "actions": ["go_today", "bring_card"] },
+    { "id": "M-F1", "when": { "m_breast": true }, "outcome": "followup", "followup_days": 2, "actions": ["breastfeed_often"] },
+    { "id": "M-DEFAULT", "when": {}, "outcome": "routine", "actions": ["counsel_danger_signs"] }
+  ],
+  "signs": {
+    "bleeding": { "code": "bl", "prompt": "sign_bleeding", "text_en": "Vaginal bleeding" },
+    "convulsions": { "code": "cv", "prompt": "sign_convulsions", "text_en": "Convulsions" },
+    "headache_vision": { "code": "hv", "prompt": "sign_headache_vision", "text_en": "Severe headache or blurred vision" },
+    "fever_weak": { "code": "fw", "prompt": "sign_fever_weak", "text_en": "Fever, too weak to get up" },
+    "abdominal_pain": { "code": "ap", "prompt": "sign_abdominal_pain", "text_en": "Severe abdominal pain" },
+    "breathing": { "code": "br", "prompt": "sign_breathing", "text_en": "Fast or difficult breathing" },
+    "fetal_movement": { "code": "fm", "prompt": "sign_fetal_movement", "text_en": "Reduced or no fetal movement" },
+    "waters": { "code": "wb", "prompt": "sign_waters", "text_en": "Waters broken without labour" },
+    "swelling": { "code": "sw", "prompt": "sign_swelling", "text_en": "Swollen face and hands" },
+    "discharge": { "code": "ds", "prompt": "sign_discharge", "text_en": "Foul-smelling vaginal discharge" }
+  },
+  "actions": {
+    "go_now": { "prompt": "act_go_now", "text_en": "Go to the facility now. Do not wait." },
+    "go_today": { "prompt": "act_go_today", "text_en": "Go to the facility today." },
+    "companion": { "prompt": "act_companion", "text_en": "Bring a family member who can give blood if needed." },
+    "bring_card": { "prompt": "act_bring_card", "text_en": "Bring her maternal health record book." },
+    "lie_left": { "prompt": "act_lie_left", "text_en": "Lay her on her left side and stay with her." },
+    "breastfeed_often": { "prompt": "act_breastfeed_often", "text_en": "Keep breastfeeding often from both breasts; use a warm cloth on the breast." },
+    "counsel_danger_signs": { "prompt": "act_counsel_danger_signs", "text_en": "Explain the danger signs and to come at once if any appear." }
+  },
+  "destination": {
+    "default": "nearest:health_centre",
+    "by_danger_sign": { "bleeding": "nearest:capability:cemonc", "convulsions": "nearest:capability:cemonc", "headache_vision": "nearest:capability:cemonc" }
+  }
+}
