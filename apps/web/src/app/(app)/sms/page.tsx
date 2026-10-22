@@ -24,7 +24,12 @@ export default function SmsPage() {
         <CardContent>
           {balance.isLoading ? <LoadingRows rows={1} /> : balance.error ? <ErrorState message={errorMessage(balance.error)} onRetry={balance.refetch} /> : !balance.data?.configured ? (
             <p className="text-sm text-muted-foreground">Frog is not connected on this server, so texts are logged instead of sent.</p>
-          ) : <p className="text-3xl font-semibold tabular-nums">{balance.data.balance ?? '-'} <span className="text-base font-normal text-muted-foreground">{balance.data.currency ?? 'credits'}</span></p>}
+          ) : (
+            <div className="flex flex-wrap items-end gap-6">
+              <p className="text-3xl font-semibold tabular-nums">{balance.data.currency ?? 'GHS'} {balance.data.balance?.toFixed(2) ?? '-'}</p>
+              {balance.data.sms_units !== null ? <p className="text-sm text-muted-foreground">{balance.data.sms_units} SMS units</p> : null}
+            </div>
+          )}
         </CardContent>
       </Card>
       <h2 className="mb-3 text-lg font-semibold">Recent texts</h2>

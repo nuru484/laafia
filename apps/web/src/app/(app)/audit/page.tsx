@@ -9,8 +9,9 @@ import { useAuditQuery } from '@/redux/endpoints'
 import type { AuditEvent } from '@/types/api'
 
 const TYPES = [
-  { value: '', label: 'Everything' }, { value: 'user', label: 'Users' }, { value: 'device', label: 'Phones' }, { value: 'import', label: 'Imports' },
-  { value: 'export', label: 'DHIMS2 exports' }, { value: 'clip', label: 'Recordings' }, { value: 'facility', label: 'Facilities' }, { value: 'referral', label: 'Referrals' },
+  { value: '', label: 'Everything' }, { value: 'user', label: 'Users' }, { value: 'device', label: 'Phones' }, { value: 'facility', label: 'Facilities' },
+  { value: 'transport_provider', label: 'Drivers' }, { value: 'transport_request', label: 'Pickups' }, { value: 'referral', label: 'Referrals' },
+  { value: 'import_batch', label: 'Imports' }, { value: 'export', label: 'DHIMS2 exports' }, { value: 'clip', label: 'Recordings' }, { value: 'content_pack', label: 'Maps' },
 ]
 
 /** Older pages are appended as cursors (`before`) so the list never re-orders under the reader. */
@@ -46,7 +47,7 @@ function Row({ e }: { e: AuditEvent }) {
   return (
     <li className="flex flex-col gap-1 p-4 text-sm sm:flex-row sm:items-start sm:justify-between sm:gap-4">
       <div className="min-w-0">
-        <p className="[overflow-wrap:anywhere]"><span className="font-medium">{e.actor_name}</span> {e.action.replace(/_/g, ' ')} {e.target_type}{e.target_id ? ` ${e.target_id}` : ''}</p>
+        <p className="[overflow-wrap:anywhere]"><span className="font-medium">{e.actor_name}</span> {e.action.replace(/[._]/g, ' ')}{e.target_id ? ` · ${e.target_id}` : ''}</p>
         {detail ? <p className="text-muted-foreground [overflow-wrap:anywhere]">{detail}</p> : null}
       </div>
       <time className="shrink-0 text-muted-foreground" dateTime={new Date(e.at).toISOString()}>{new Date(e.at).toLocaleString()}</time>

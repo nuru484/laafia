@@ -16,7 +16,7 @@ import { STATUS_LABEL, STATUS_ORDER, TYPE_LABEL, ago, signText } from '@/feature
 import { useLiveReferrals } from '@/features/referrals/use-live'
 import { cn } from '@/lib/utils'
 import { errorMessage } from '@/redux/api'
-import { useFacilitiesQuery, useMeQuery, useOnwardMutation, useReferralClientQuery, useReferralQuery, useSetStatusMutation } from '@/redux/endpoints'
+import { useFacilitiesQuery, useMeQuery, useOnwardMutation, useReferralClientQuery, useReferralQuery, useRequestTransportMutation, useSetStatusMutation, useTransportOptionsQuery } from '@/redux/endpoints'
 
 const NEXT: Partial<Record<ReferralStatus, { status: 'received' | 'arrived' | 'treated' | 'closed'; label: string }>> = {
   created: { status: 'received', label: 'Acknowledge' },
@@ -40,6 +40,8 @@ export default function ReferralDetail() {
   const [onward, onwardState] = useOnwardMutation()
   const [destination, setDestination] = useState('')
   const [confirmClose, setConfirmClose] = useState(false)
+  const { data: transportOptions } = useTransportOptionsQuery(id, { skip: !staff })
+  const [requestTransport, transportState] = useRequestTransportMutation()
   useLiveReferrals(staff ? (user.facility?.code ?? null) : null)
 
   if (isLoading) return <LoadingRows />
@@ -135,6 +137,17 @@ export default function ReferralDetail() {
         <Card>
           <CardHeader><CardTitle><h2>Transport</h2></CardTitle></CardHeader>
           <CardContent className="flex flex-col gap-2 text-sm">
+            {staff && atMyFacility && !reached('arrived') && transportOptions?.providers.length ? (
+              <div className="flex flex-col gap-2">
+                <p className="text-muted-foreground">Drivers near {transportOptions.community ?? 'the client'}. The driver is texted the pickup and replies 1 or 2.</p>
+                {transportOptions.providers.filter((p) => p.active && !r.transport.some((t) => t.provider_id === p.id && (t.status === 'requested' || t.status === 'coming'))).map((p) => (
+                  <Button key={p.id} variant="outline" className="h-11 justify-start" disabled={transportState.isLoading}
+                    onClick={() => requestTransport({ id, provider_id: p.id }).unwrap().then(() => toast.success(`${p.name} is texted.`), (e) => toast.error(errorMessage(e)))}>
+                    Text {p.name} ({p.vehicle || 'driver'}, {p.community})
+                  </Button>
+                ))}
+              </div>
+            ) : null}
             {r.transport.length === 0 ? <p className="text-muted-foreground">No driver requested.</p> : r.transport.map((t) => (
               <div key={t.id} className="flex flex-col gap-1 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between">
                 <span className="[overflow-wrap:anywhere]">{t.provider_name ?? 'Driver'}: {TRANSPORT[t.status] ?? t.status}</span>

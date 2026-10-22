@@ -40,6 +40,7 @@ export type Provider = { id: string; facility_id: string | null; facility_code: 
 export type Pack = { id: string; kind: 'audio' | 'tiles'; language: string | null; district_code: string | null; version: number; size: number; sha256: string; content_type: string; url: string; created_at: number }
 export type Clip = { id: string; prompt_id: string; lang: string; sha256: string; size: number; recorded_at: number; url: string; device_id?: string | null; recorded_by?: string | null }
 
+export type SmsBalance = { configured: boolean; balance: number | null; currency: string | null; sms_units: number | null }
 export type ApiErrorBody = { status: number; code: string; message: string; details?: { path: string; message: string }[] }
 
 export type ImportTemplate = { id: string; name: string; source: 'tabular' | 'dhis2'; mapping: Record<string, string>; constants: Record<string, string>; created_at: number }
@@ -62,7 +63,14 @@ export type ExportResult = {
   tracker: { status: string; stats: { created: number; updated: number; ignored: number; total: number }; errors: unknown[] }
   aggregate: { status: string; import_count: { imported: number; updated: number; ignored: number }; conflicts: unknown[] }
 }
-export type ExportRecord = { id: string; facility_code: string; period: string; dry_run: boolean; by: string | null; at: number; tracked_entities: number; status: string }
+export type ExportRecord = { id: string; facility_code: string; period: string; dry_run: boolean; actor: string | null; at: number; tracked_entities: number; status: 'ok' | 'error' }
 
 export type AuditEvent = { id: string; at: number; actor_kind: string; actor_id: string | null; actor_name: string; action: string; target_type: string; target_id: string | null; details: Record<string, unknown> }
 export type SmsMessage = { id: string; at: number; to_masked: string; kind: 'ack' | 'status' | 'driver' | 'referral'; status: 'queued' | 'sent' | 'delivered' | 'failed'; attempts: number; error: string | null }
+
+export type Brief = { id: string; short_id: string; client_code: string | null; urgency: number | null; status: string; destination_facility_id: string | null; made_at: number }
+export type Overview = {
+  today: { total: number; by_status: Record<string, number> }
+  overdue_acknowledgements: Brief[]; did_not_arrive: Brief[]; completion_rate_30d: number | null; median_ack_minutes_30d: number | null
+  devices_not_synced_3d: { id: string; role: string; user_name: string; facility_id: string | null; last_sync_at: number | null }[]
+}

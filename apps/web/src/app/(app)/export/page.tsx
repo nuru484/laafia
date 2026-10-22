@@ -96,10 +96,10 @@ export default function ExportPage() {
                 <>
                   {history.data.pending_periods.length ? <p>Not yet sent: {history.data.pending_periods.map((p) => months.find((m) => m.value === p)?.label ?? p).join(', ')}</p> : <p className="text-muted-foreground">Every month with activity has been sent.</p>}
                   <ul className="flex flex-col gap-2">
-                    {history.data.exports.map((x) => (
+                    {history.data.runs.map((x) => (
                       <li key={x.id} className="flex flex-wrap items-center justify-between gap-2 border-t pt-2">
-                        <span>{x.period} · {new Date(x.at).toLocaleString()}{x.by ? ` · ${x.by}` : ''}</span>
-                        <Badge variant={x.dry_run ? 'secondary' : 'default'}>{x.dry_run ? 'Check' : 'Sent'} {x.status}</Badge>
+                        <span>{months.find((m) => m.value === x.period)?.label ?? x.period} · {new Date(x.at).toLocaleString()}{x.actor ? ` · ${x.actor}` : ''}</span>
+                        <Badge variant={x.status === 'error' ? 'destructive' : x.dry_run ? 'secondary' : 'default'}>{x.dry_run ? 'Check' : 'Sent'}{x.status === 'error' ? ', failed' : ''}</Badge>
                       </li>
                     ))}
                   </ul>

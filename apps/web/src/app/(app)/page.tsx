@@ -9,7 +9,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { DailyColumns, LabelledBars } from '@/features/overview/charts'
 import { STATUS_LABEL, STATUS_ORDER } from '@/features/referrals/labels'
 import { errorMessage } from '@/redux/api'
-import { useMeQuery, useSummaryQuery } from '@/redux/endpoints'
+import Link from 'next/link'
+import { ago } from '@/features/referrals/labels'
+import { useMeQuery, useOverviewQuery, useSummaryQuery } from '@/redux/endpoints'
+import type { Brief } from '@/types/api'
 
 const pct = (v: number | null) => (v === null ? '-' : `${Math.round(v * 100)}%`)
 const mins = (v: number | null) => (v === null ? '-' : v < 60 ? `${Math.round(v)} min` : `${(v / 60).toFixed(1)} h`)
@@ -32,6 +35,7 @@ export default function Overview() {
   const staff = me?.user.role === 'facility_staff'
   const [days, setDays] = useState('30')
   const { data, error, isLoading, refetch } = useSummaryQuery(Number(days), { skip: staff, pollingInterval: 60_000 })
+  const { data: attention } = useOverviewQuery(undefined, { skip: staff, pollingInterval: 60_000 })
 
   useEffect(() => {
     if (staff) router.replace('/referrals')
@@ -54,6 +58,20 @@ export default function Overview() {
         <Tile label="Completed" value={pct(data.completion_rate)} note="Treated or closed" />
         <Tile label="Not acknowledged" value={String(data.by_status.sent ?? 0)} note="Sent, no facility reply yet" />
       </div>
+      {attention ? (
+        <div className="mt-6 grid gap-6 @4xl/main:grid-cols-3">
+          <Attention title="No acknowledgement" empty="Every referral was acknowledged in time." items={attention.overdue_acknowledgements} note="Call the facility; the CHO's phone is already prompting a resend." />
+          <Attention title="Did not arrive" empty="Everyone acknowledged has arrived." items={attention.did_not_arrive} note="The CHO is asked to visit the house." />
+          <Card>
+            <CardHeader><CardTitle><h2>Phones not synced in 3 days</h2></CardTitle></CardHeader>
+            <CardContent className="flex flex-col gap-2 text-sm">
+              {attention.devices_not_synced_3d.length === 0 ? <p className="text-muted-foreground">Every phone has synced recently.</p> : attention.devices_not_synced_3d.map((d) => (
+                <p key={d.id} className="[overflow-wrap:anywhere]"><span className="font-medium">{d.user_name}</span> <span className="text-muted-foreground">· {d.last_sync_at ? `last synced ${ago(d.last_sync_at)}` : 'never synced'}</span></p>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
       <div className="mt-6 grid gap-6 @4xl/main:grid-cols-2">
         <Card>
           <CardHeader><CardTitle><h2>Referrals per day</h2></CardTitle></CardHeader>
@@ -72,7 +90,7 @@ export default function Overview() {
               <li key={f.facility.id} className="rounded-md border p-3 text-sm">
                 <p className="font-medium [overflow-wrap:anywhere]">{f.facility.name}</p>
                 <p className="text-muted-foreground">Sent {f.referred_from} · received {f.received} · open {f.open}</p>
-                <p className="text-muted-foreground">Acknowledged in {mins(f.median_ack_minutes)} · completed {pct(f.completion_rate)}</p>
+                <p className="text-muted-foreground">{f.received ? `Acknowledged in ${mins(f.median_ack_minutes)} · completed ${pct(f.completion_rate)}` : 'Receives no referrals'}</p>
               </li>
             ))}
           </ul>
@@ -105,5 +123,26 @@ export default function Overview() {
         </CardContent>
       </Card>
     </>
+  )
+}
+
+function Attention({ title, empty, items, note }: { title: string; empty: string; items: Brief[]; note: string }) {
+  return (
+    <Card className={items.length ? 'border-refer/40' : undefined}>
+      <CardHeader><CardTitle><h2>{title}{items.length ? ` (${items.length})` : ''}</h2></CardTitle></CardHeader>
+      <CardContent className="flex flex-col gap-2 text-sm">
+        {items.length === 0 ? <p className="text-muted-foreground">{empty}</p> : (
+          <>
+            {items.map((r) => (
+              <Link key={r.id} href={`/referrals/${r.id}`} className="flex min-h-11 items-center justify-between gap-2 rounded-md border px-3 hover:bg-muted">
+                <span className="[overflow-wrap:anywhere]">{r.client_code} · urgency {r.urgency}</span>
+                <span className="shrink-0 text-muted-foreground">{ago(r.made_at)}</span>
+              </Link>
+            ))}
+            <p className="text-xs text-muted-foreground">{note}</p>
+          </>
+        )}
+      </CardContent>
+    </Card>
   )
 }
