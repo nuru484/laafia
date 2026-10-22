@@ -40,13 +40,14 @@ async function eventsByReferral(env: Env) {
 
 export type TodayRow = {
   client_id: string; name: string; code: string; type: ClientType; score: number; reasons: Reason[]
-  pinned: 'open_referral' | 'newborn_48h' | null; community: string; landmark: string; lat: number | null; lng: number | null
+  pinned: 'open_referral' | 'newborn_48h' | 'scheduled' | null; community: string; landmark: string; lat: number | null; lng: number | null
 }
 
 /**
- * Today's visits (spec 6): rank everyone, take the top `limit`, keep pinned
- * cases first, and walk the rest in route order from the compound. The CHO's
- * manual order for today, if any, wins.
+ * Today's visits (spec 6): rank everyone, keep every pinned case (open
+ * referrals, newborns, anyone scheduled for today) whatever the cap, add the
+ * top `limit` of the rest, and walk those in route order from the compound.
+ * The CHO's manual order for today, if any, wins.
  */
 export async function todayList(env: Env, origin: Point, limit = 12): Promise<TodayRow[]> {
   const { db } = env
@@ -56,7 +57,8 @@ export async function todayList(env: Env, origin: Point, limit = 12): Promise<To
   const refs = await db.all<{ id: string; client_id: string | null }>('SELECT id, client_id FROM referrals WHERE deleted = 0')
   const open = new Set(refs.filter((r) => r.client_id && OPEN.includes(deriveStatus(events.get(r.id) ?? []))).map((r) => r.client_id!))
 
-  const ranked = rank(RISK_MODEL, clients, visits, open, env.now()).slice(0, limit)
+  const all = rank(RISK_MODEL, clients, visits, open, env.now())
+  const ranked = [...all.filter((r) => r.pinned), ...all.filter((r) => !r.pinned).slice(0, limit)]
   const households = new Map((await db.all<{ id: string; community: string; landmark: string; lat: number | null; lng: number | null }>('SELECT id, community, landmark, lat, lng FROM households')).map((h) => [h.id, h]))
   const byId = new Map(clients.map((c) => [c.id, c]))
   const rows: TodayRow[] = ranked.map((r) => {

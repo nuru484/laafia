@@ -36,7 +36,7 @@ export default function Today() {
         {error ? <Banner tone="refer" text={error.message} /> : null}
         {!data ? <Loading /> : data.length === 0 ? <Empty title="No one on the register yet" body="Enrol households as you visit, or sync to download the register." /> : null}
         {data?.map((r, i) => (
-          <Card key={r.client_id} onPress={() => router.push(`/client/${r.client_id}`)} accent={r.pinned ? color.refer : r.score >= 0.6 ? color.followup : color.line}
+          <Card key={r.client_id} onPress={() => router.push(`/client/${r.client_id}`)} accent={r.pinned === 'scheduled' ? color.followup : r.pinned ? color.refer : r.score >= 0.6 ? color.followup : color.line}
             accessibilityLabel={`${i + 1}. ${r.name}, ${TYPE_NAME[r.type]}. ${r.reasons.map((x) => x.text).join(', ')}`}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: space.sm }}>
               <Body style={{ fontWeight: '700', flex: 1 }}>{i + 1}. {r.name}</Body>
@@ -44,6 +44,7 @@ export default function Today() {
             </View>
             {r.pinned === 'open_referral' ? <Chip label="Open referral" fg={color.refer} bg={color.referBg} /> : null}
             {r.pinned === 'newborn_48h' ? <Chip label="Newborn: visit within 48 hours" fg={color.refer} bg={color.referBg} /> : null}
+            {r.pinned === 'scheduled' ? <Chip label="Scheduled today" fg={color.followup} bg={color.followupBg} /> : null}
             {r.reasons.length ? <Body>Why: {r.reasons.map((x) => x.text).join('; ')}</Body> : <Body muted>Routine check</Body>}
             <Body muted>{r.landmark || r.community}{r.lat === null ? ' (no GPS yet)' : ''}</Body>
             {reorder ? (

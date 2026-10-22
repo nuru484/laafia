@@ -19,7 +19,7 @@ export type Ranked = {
   client_id: string
   score: number
   reasons: Reason[]
-  pinned: 'open_referral' | 'newborn_48h' | null
+  pinned: 'open_referral' | 'newborn_48h' | 'scheduled' | null
 }
 
 const DAY = 86_400_000
@@ -128,10 +128,15 @@ export const FOLLOWUP_FLOOR = 0.3
 
 /**
  * Score everyone, then apply the list rules (spec 6.5): open referrals and
- * newborns inside 48 h without a postnatal visit are pinned on top; a due
- * follow-up is lifted above the routine list.
+ * newborns inside 48 h without a postnatal visit are pinned on top; then
+ * anyone scheduled for today, so a planned visit is never pushed off the list
+ * by riskier clients. Scheduled means the latest visit's follow-up falls
+ * before tomorrow (UTC day, Ghana's time zone), or the client is in `booked`.
  */
-export function rank(model: RiskModel, clients: Client[], visits: Visit[], openReferralClientIds: Set<string>, today: number): Ranked[] {
+export function rank(model: RiskModel, clients: Client[], visits: Visit[], openReferralClientIds: Set<string>, today: number, booked: Set<string> = new Set()): Ranked[] {
+  const tomorrow = Math.floor(today / DAY) * DAY + DAY
+  const latestDue = new Map<string, number | null>()
+  for (const v of [...visits].sort((a, b) => a.visited_at - b.visited_at)) latestDue.set(v.client_id, v.followup_due)
   const out = clients.map((c): Ranked => {
     const { x, vars } = features(c, visits, today)
     const s = score(model, x, vars)
@@ -139,13 +144,18 @@ export function rank(model: RiskModel, clients: Client[], visits: Visit[], openR
     if (x.followup_due_days !== undefined) value = Math.max(value, FOLLOWUP_FLOOR + value / 10)
     const birth = birthOf(c)
     const newborn48 = c.type === 'newborn' && birth !== null && today - birth <= 2 * DAY && x.no_pnc_visit === 1
-    const pinned = openReferralClientIds.has(c.id) ? 'open_referral' : newborn48 ? 'newborn_48h' : null
-    return { client_id: c.id, score: value, reasons: s.reasons, pinned }
+    const due = latestDue.get(c.id) ?? null
+    const scheduled = booked.has(c.id) || (due !== null && due < tomorrow)
+    const pinned = openReferralClientIds.has(c.id) ? 'open_referral' : newborn48 ? 'newborn_48h' : scheduled ? 'scheduled' : null
+    const reasons = [...s.reasons]
+    if (booked.has(c.id)) reasons.unshift({ feature: 'booked', text: 'Visit booked for today' })
+    else if (due !== null && due >= tomorrow - DAY && due < tomorrow) reasons.unshift({ feature: 'scheduled', text: 'Follow-up due today' })
+    return { client_id: c.id, score: value, reasons: reasons.slice(0, 3), pinned }
   })
-  const pinRank = { open_referral: 0, newborn_48h: 1 } as const
+  const pinRank = { open_referral: 0, newborn_48h: 1, scheduled: 2 } as const
   return out.sort((a, b) => {
-    const pa = a.pinned ? pinRank[a.pinned] : 2
-    const pb = b.pinned ? pinRank[b.pinned] : 2
+    const pa = a.pinned ? pinRank[a.pinned] : 3
+    const pb = b.pinned ? pinRank[b.pinned] : 3
     return pa - pb || b.score - a.score
   })
 }

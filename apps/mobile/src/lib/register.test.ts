@@ -30,7 +30,8 @@ describe('today list', () => {
     expect(list[0]!.name).toMatch(/^Baby of Amina/)
     expect(list[0]!.pinned).toBe('newborn_48h')
     expect(list[0]!.reasons.length).toBeGreaterThan(0)
-    expect(list).toHaveLength(12)
+    // The cap applies to the ranked rest; pinned and scheduled clients come on top of it.
+    expect(list.filter((r) => !r.pinned)).toHaveLength(12)
   })
 
   it('a follow-up visit brings the client back on the due date', async () => {
@@ -42,6 +43,17 @@ describe('today list', () => {
     cho.tick(14 * DAY)
     const row = (await todayList(cho, { lat: 9.603, lng: -0.805 }, 100)).find((r) => r.client_id === child.id)!
     expect(row.score).toBeGreaterThanOrEqual(FOLLOWUP_FLOOR)
+  })
+})
+
+describe('scheduled visits', () => {
+  it('keeps everyone scheduled for today on the list, past the daily cap', async () => {
+    const cho = await phone('D001')
+    const child = seed.clients.find((c) => c.type === 'child' && c.name !== 'x')!
+    await cho.db.run("INSERT INTO visits (id, client_id, protocol_id, protocol_version, visited_at, answers, outcome, rule_id, followup_due, updated_at, device_id) VALUES ('vs', ?, 'child', 1, ?, '{}', 'followup', 'X', ?, ?, 'D001')",
+      [child.id, TODAY - 5 * DAY, TODAY + 6 * 3_600_000, TODAY])
+    const list = await todayList(cho, { lat: 9.603, lng: -0.805 }, 1)
+    expect(list.find((r) => r.client_id === child.id)).toMatchObject({ pinned: 'scheduled' })
   })
 })
 

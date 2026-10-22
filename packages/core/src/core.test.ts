@@ -219,6 +219,23 @@ describe('scorer', () => {
     expect(r!.reasons.map((x) => x.text)).toContain('follow-up due 3 days ago')
   })
 
+  it('pins anyone scheduled for today, even later today and even when low risk, after the urgent pins', () => {
+    const now = TODAY + 8 * 3_600_000
+    const laterToday = client({ id: 'later', dob: TODAY - 700 * DAY })
+    const tomorrow = client({ id: 'tomorrow', dob: TODAY - 700 * DAY })
+    const booked = client({ id: 'booked', dob: TODAY - 700 * DAY })
+    const nb = client({ id: 'nb', type: 'newborn', dob: now - DAY })
+    const mother = client({ id: 'm', type: 'postpartum', delivery_date: now - 3 * DAY })
+    const visits = [
+      visit({ client_id: 'later', followup_due: TODAY + 15 * 3_600_000 }),
+      visit({ id: 'v2', client_id: 'tomorrow', followup_due: TODAY + DAY + 3_600_000 }),
+    ]
+    const out = rank(RISK_MODEL, [mother, tomorrow, laterToday, booked, nb], visits, new Set(), now, new Set(['booked']))
+    expect(out.map((r) => [r.client_id, r.pinned])).toEqual([['nb', 'newborn_48h'], ['later', 'scheduled'], ['booked', 'scheduled'], ['m', null], ['tomorrow', null]])
+    expect(out[1]!.reasons[0]!.text).toBe('Follow-up due today')
+    expect(out[2]!.reasons[0]!.text).toBe('Visit booked for today')
+  })
+
   it('more overdue ANC never lowers the score', () => {
     const at = (gaWeeks: number) => rank(RISK_MODEL, [client({ type: 'pregnant', edd: TODAY + (280 - gaWeeks * 7) * DAY, parity: 2 })], [], new Set(), TODAY)[0]!.score
     expect(at(14)).toBeLessThanOrEqual(at(16))
