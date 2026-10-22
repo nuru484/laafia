@@ -4,6 +4,7 @@ import { rename, rm } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import type { Deps } from '../../platform/deps.ts'
 import { HttpError } from '../../platform/http/errors.ts'
+import { audit } from '../../platform/audit.ts'
 import type { Actor, Device } from '../../platform/middleware/auth.ts'
 import { districtOrThrow } from '../../platform/scope.ts'
 import type { UploadFields } from './content.schemas.ts'
@@ -49,6 +50,7 @@ export async function addPack(deps: Deps, actor: Actor, file: { path: string; si
     const pack = await deps.prisma.contentPack.create({
       data: { id, kind: f.kind, language, districtId, version, size: file.size, sha256, filename, contentType: TYPE[f.kind], createdAt: deps.clock() },
     })
+    await audit(deps, actor, 'pack.upload', { type: 'content_pack', id: pack.id, districtId }, { kind: f.kind, district: f.district_code, version, size: file.size })
     return view(pack, f.district_code ?? null)
   } catch (e) {
     await rm(join(contentDir(deps), filename), { force: true })

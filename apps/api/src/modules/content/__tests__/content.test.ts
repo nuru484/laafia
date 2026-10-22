@@ -5,7 +5,10 @@ import { join } from 'node:path'
 import request from 'supertest'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { env } from '../../../config/env.ts'
-import { ADMIN, activate, app, bearer, useDb } from '../../../platform/testing/helpers.ts'
+import ffmpegPath from 'ffmpeg-static'
+import { execFileSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
+import { ADMIN, USERS, activate, app, bearer, signIn, useDb } from '../../../platform/testing/helpers.ts'
 
 useDb()
 beforeEach(() => {
@@ -112,5 +115,57 @@ describe('audio clips', () => {
     expect((await request(app).get('/content/clips?lang=dag').set(bearer(cho))).body.clips).toEqual([])
     expect((await request(app).get(`/content/clips/${up.body.id}/file`).set(bearer(cho))).status).toBe(404)
     expect((await request(app).delete(`/admin/content/clips/${up.body.id}`).set(ADMIN)).status).toBe(404)
+  })
+})
+
+describe('recording matrix and dashboard clips', () => {
+  /** A tone in `format`, made with the bundled ffmpeg, like a browser upload or a MediaRecorder blob. */
+  function tone(format: 'mp3' | 'webm' | 'wav') {
+    const dir = mkdtempSync(join(tmpdir(), 'laafia-tone-'))
+    const out = join(dir, `t.${format}`)
+    const codec = format === 'webm' ? ['-c:a', 'libopus'] : format === 'mp3' ? ['-c:a', 'libmp3lame'] : []
+    execFileSync(ffmpegPath!, ['-loglevel', 'error', '-f', 'lavfi', '-i', 'sine=frequency=330:duration=1', '-ac', '1', ...codec, out])
+    return readFileSync(out)
+  }
+  const webClip = (agent: request.Agent, csrf: Record<string, string>, fields: Record<string, string>, audio: Buffer, name: string) => {
+    let r = agent.post('/admin/content/clips').set(csrf)
+    for (const [k, v] of Object.entries(fields)) r = r.field(k, v)
+    return r.attach('audio', audio, name)
+  }
+
+  it('lists every prompt against each language with who recorded it', async () => {
+    const cho = await activate('D001')
+    await clip(cho, { prompt_id: 'yi_feeding', lang: 'dag' }, m4a('take'))
+    const { agent, csrf } = await signIn(USERS.admin)
+    for (const [fmt, prompt] of [['mp3', 'act_go_now'], ['webm', 'num_3'], ['wav', 'outcome_refer']] as const) {
+      const up = await webClip(agent, csrf, { prompt_id: prompt, lang: 'dag' }, tone(fmt), `rec.${fmt}`)
+      expect([fmt, up.status]).toEqual([fmt, 201])
+    }
+    const m = (await agent.get('/admin/content/clips/matrix')).body
+    expect(m.languages).toEqual(['dag', 'en'])
+    expect(m.total).toBeGreaterThan(60)
+    expect(m.recorded).toEqual({ dag: 4, en: 0 })
+    const byId = Object.fromEntries(m.prompts.map((p: { id: string }) => [p.id, p]))
+    expect(byId.yi_feeding.clips.dag).toMatchObject({ recorded_by: 'Abiba Sulemana', url: expect.stringMatching(/^\/content\/clips\//) })
+    expect(byId.act_go_now.clips.dag).toMatchObject({ recorded_by: 'Alhassan Yakubu' })
+    expect(byId.act_go_now.clips.en).toBeNull()
+    expect(byId.num_30).toMatchObject({ group: 'Numbers', text_en: '30' })
+
+    // Converted to m4a: phones get one format whatever was uploaded.
+    const file = await agent.get(byId.num_3.clips.dag.url).buffer(true).parse((res, cb) => {
+      const chunks: Buffer[] = []
+      res.on('data', (c: Buffer) => chunks.push(c)).on('end', () => cb(null, Buffer.concat(chunks)))
+    })
+    expect((file.body as Buffer).toString('ascii', 4, 8)).toBe('ftyp')
+    expect((await agent.get('/admin/audit?target_type=clip')).body.events[0]).toMatchObject({ action: 'clip.upload', actor_name: 'Alhassan Yakubu' })
+  })
+
+  it('refuses dashboard clip changes from other roles and undecodable audio', async () => {
+    const { agent, csrf } = await signIn(USERS.admin)
+    expect((await webClip(agent, csrf, { prompt_id: 'x', lang: 'dag' }, Buffer.from('not audio at all'), 'x.mp3')).status).toBe(415)
+    const sup = await signIn(USERS.supervisor)
+    expect((await sup.agent.get('/admin/content/clips/matrix')).status).toBe(403)
+    const staff = await signIn(USERS.hospital)
+    expect((await webClip(staff.agent, staff.csrf, { prompt_id: 'x', lang: 'dag' }, tone('wav'), 'x.wav')).status).toBe(403)
   })
 })

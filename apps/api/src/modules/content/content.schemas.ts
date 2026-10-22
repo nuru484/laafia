@@ -19,3 +19,7 @@ export type ClipFields = z.infer<typeof ClipFields>
 
 export const ClipQuery = z.object({ lang: z.string().regex(/^[a-z]{2,3}$/).optional() })
 export const ClipParams = z.object({ id: z.string().max(64) })
+
+export const MatrixQuery = z.object({
+  langs: z.string().regex(/^[a-z]{2,3}(,[a-z]{2,3})*$/).optional().transform((v) => v?.split(',')),
+})
