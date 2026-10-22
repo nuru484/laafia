@@ -8,14 +8,14 @@ import type { Device } from '../../platform/middleware/auth.ts'
 import type { UploadFields } from './content.schemas.ts'
 
 /*
- * Content packs (audio clips per language, PMTiles per district) live on disk
+ * Map tile packs (PMTiles per district) live on disk
  * under CONTENT_DIR, named by pack id. Downloads answer Range requests, so a
  * phone on a poor network resumes where it stopped.
  */
 
 export const contentDir = (deps: Deps) => resolve(deps.env.CONTENT_DIR)
-const EXT = { audio: '.zip', tiles: '.pmtiles' } as const
-const TYPE = { audio: 'application/zip', tiles: 'application/vnd.pmtiles' } as const
+const EXT = { tiles: '.pmtiles' } as const
+const TYPE = { tiles: 'application/vnd.pmtiles' } as const
 
 const sha256File = (path: string) =>
   new Promise<string>((ok, fail) => {
@@ -31,12 +31,10 @@ const view = (p: Pack, districtCode: string | null) => ({
 
 /** Stores an uploaded file (already on disk at `file.path`) as a new pack version; computes size and sha256. */
 export async function addPack(deps: Deps, file: { path: string; size: number }, f: UploadFields) {
-  if (f.kind === 'audio' && !f.language) throw new HttpError(400, 'invalid_request', 'Audio packs need a language')
-  if (f.kind === 'tiles' && !f.district_code) throw new HttpError(400, 'invalid_request', 'Tile packs need a district_code')
-  const district = f.district_code ? await deps.prisma.district.findUnique({ where: { code: f.district_code } }) : null
-  if (f.district_code && !district) throw new HttpError(404, 'not_found', 'Unknown district')
-  const language = f.kind === 'audio' ? f.language! : null
-  const districtId = f.kind === 'tiles' ? district!.id : null
+  const district = await deps.prisma.district.findUnique({ where: { code: f.district_code } })
+  if (!district) throw new HttpError(404, 'not_found', 'Unknown district')
+  const language = null
+  const districtId = district.id
   const latest = await deps.prisma.contentPack.aggregate({ where: { kind: f.kind, language, districtId }, _max: { version: true } })
   const version = f.version ?? (latest._max.version ?? 0) + 1
   const exists = await deps.prisma.contentPack.findFirst({ where: { kind: f.kind, language, districtId, version }, select: { id: true } })
@@ -63,18 +61,19 @@ export async function listPacks(deps: Deps) {
   return rows.map((r) => view(r, r.district?.code ?? null))
 }
 
-/** Latest audio pack per language the device's facility or district speaks (plus English fallback), and the district's tiles. */
+/**
+ * The device's district map tiles (latest version), plus the languages its facility and district speak
+ * (with English fallback) so the phone knows which clip sets to fetch from GET /content/clips.
+ */
 export async function manifest(deps: Deps, device: Device) {
   const home = device.facilityId
     ? await deps.prisma.facility.findUnique({ where: { id: device.facilityId }, select: { languages: true, district: { select: { id: true, code: true, languages: true } } } })
     : null
   const languages = [...new Set([...((home?.languages as string[]) ?? []), ...((home?.district?.languages as string[]) ?? []), 'en'])]
-  const audio = await deps.prisma.contentPack.findMany({ where: { kind: 'audio', language: { in: languages } }, orderBy: { version: 'desc' } })
   const tiles = home?.district
     ? await deps.prisma.contentPack.findMany({ where: { kind: 'tiles', districtId: home.district.id }, orderBy: { version: 'desc' }, take: 1 })
     : []
-  const latestAudio = languages.map((l) => audio.find((p) => p.language === l)).filter((p): p is (typeof audio)[number] => !!p)
-  return { languages, packs: [...latestAudio.map((p) => view(p, null)), ...tiles.map((p) => view(p, home!.district!.code))] }
+  return { languages, packs: tiles.map((p) => view(p, home!.district!.code)) }
 }
 
 export async function packFile(deps: Deps, id: string | undefined) {

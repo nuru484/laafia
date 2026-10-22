@@ -32,6 +32,7 @@ const numbers = {
   mappingTemplate: num('createdAt'),
   importBatch: { ...num('createdAt'), ...numOrNull('committedAt', 'undoneAt') },
   contentPack: num('size', 'createdAt'),
+  contentClip: num('recordedAt'),
 }
 
 export function createPrisma(connectionString: string) {

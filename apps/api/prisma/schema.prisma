@@ -314,3 +314,18 @@ model ContentPack {
   @@unique([kind, language, districtId, version], map: "content_packs_version")
   @@map("content_packs")
 }
+
+/// One recorded prompt clip per (lang, promptId): a newer recording replaces the older row and file.
+model ContentClip {
+  id         String @id
+  lang       String
+  promptId   String @map("prompt_id")
+  sha256     String
+  size       Int
+  filename   String
+  deviceId   String @map("device_id")
+  recordedAt BigInt @map("recorded_at")
+
+  @@unique([lang, promptId], map: "content_clips_prompt")
+  @@map("content_clips")
+}
