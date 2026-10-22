@@ -143,6 +143,27 @@ describe('QR hop', () => {
   })
 })
 
+describe('closing the loop', () => {
+  it('when the facility closes the referral, the CHO gets a follow-up due in 3 days', async () => {
+    const cho = await phone('D001')
+    const hospital = await phone('F003')
+    const { referral } = await referNewborn(cho)
+    const sms = await radioSends(cho)
+    await processIncoming(hospital, { sender: cho.self.phone, body: sms.body, received_at: 1, via: 'sms' })
+    await radioSends(hospital)
+    const atHospital = await hospital.db.get<{ id: string }>('SELECT id FROM referrals')
+    const { facilityUpdate } = await import('./relay')
+    await facilityUpdate(hospital, atHospital!.id, 'closed')
+    const close = await radioSends(hospital)
+    await processIncoming(cho, { sender: hospital.self.phone, body: close.body, received_at: 2, via: 'sms' })
+    expect(await referralStatus(cho, referral.id)).toBe('closed')
+    const stub = await cho.db.get<{ client_id: string; followup_due: number; rule_id: string }>("SELECT client_id, followup_due, rule_id FROM visits WHERE rule_id = 'REFERRAL-CLOSED'")
+    expect(stub).toEqual({ client_id: newborn.id, followup_due: cho.now() + 3 * 86_400_000, rule_id: 'REFERRAL-CLOSED' })
+    await processIncoming(cho, { sender: hospital.self.phone, body: close.body, received_at: 3, via: 'sms' })
+    expect(await cho.db.all("SELECT id FROM visits WHERE rule_id = 'REFERRAL-CLOSED'")).toHaveLength(1)
+  })
+})
+
 describe('status authority', () => {
   it('ignores a validly signed status update that does not come from a facility device', async () => {
     const cho = await phone('D001')

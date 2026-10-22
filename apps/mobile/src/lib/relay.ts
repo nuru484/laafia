@@ -229,7 +229,11 @@ async function handle(env: Env, raw: Incoming): Promise<IncomingResult> {
     if (signer?.role !== 'facility') return { kind: 'rejected', error: 'not_a_facility' }
     const ref = await db.get<{ id: string }>('SELECT id FROM referrals WHERE origin_device_id = ? AND short_id = ?', [m.origin, m.short_id])
     const status = STATUS_FROM_CODE[m.status]
-    if (ref) await addEvent(env, ref.id, status, m.signer, raw.via)
+    if (ref) {
+      const isNew = await addEvent(env, ref.id, status, m.signer, raw.via)
+      // Discharge closes the loop: the client comes back on the origin CHO's list (spec 14).
+      if (isNew && status === 'closed' && m.origin === env.self.device_id) await scheduleFollowUpAfterClose(env, ref.id)
+    }
     return { kind: 'status', referral_id: ref?.id ?? null, status }
   }
 
@@ -262,6 +266,17 @@ async function handle(env: Env, raw: Incoming): Promise<IncomingResult> {
     if (dest?.phone) await enqueueSms(env, dest.phone, referral.wire, 'referrals', referral.id)
   }
   return { kind: 'referral', referral_id: referral.id, isNew: true }
+}
+
+const FOLLOW_UP_AFTER_CLOSE_DAYS = 3
+
+async function scheduleFollowUpAfterClose(env: Env, referralId: string) {
+  const r = await env.db.get<{ client_id: string | null; client_type: string }>('SELECT client_id, client_type FROM referrals WHERE id = ?', [referralId])
+  if (!r?.client_id) return
+  const protocol = r.client_type === 'NB' ? 'young_infant' : r.client_type === 'CH' ? 'child' : 'maternal'
+  await env.db.run(
+    "INSERT INTO visits (id, client_id, protocol_id, protocol_version, visited_at, answers, outcome, rule_id, followup_due, updated_at, device_id) VALUES (?, ?, ?, ?, ?, '{}', 'followup', 'REFERRAL-CLOSED', ?, ?, ?)",
+    [env.uuid(), r.client_id, protocol, PROTOCOLS[protocol].version, env.now(), env.now() + FOLLOW_UP_AFTER_CLOSE_DAYS * DAY, ...sync(env)])
 }
 
 /** Facility buttons: arrived, treated, closed. Each is an event and a signed SMS back to the CHO. */
