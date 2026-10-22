@@ -143,6 +143,18 @@ describe('QR hop', () => {
   })
 })
 
+describe('escalation', () => {
+  it('resends the same signed referral to a backup number, so the facility still dedupes it', async () => {
+    const cho = await phone('D001')
+    const { referral, wire } = await referNewborn(cho)
+    await radioSends(cho)
+    const { resendReferral } = await import('./relay')
+    await resendReferral(cho, referral.id, '024 555 0000')
+    const [again] = await dueMessages(cho)
+    expect(again).toMatchObject({ recipient: '0245550000', body: wire, ref_id: referral.id })
+  })
+})
+
 describe('closing the loop', () => {
   it('when the facility closes the referral, the CHO gets a follow-up due in 3 days', async () => {
     const cho = await phone('D001')

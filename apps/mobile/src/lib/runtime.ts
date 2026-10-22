@@ -105,7 +105,7 @@ export async function activate(code: string, phone: string, onProgress: (p: Acti
 }
 
 /** Copies what the SMS receiver needs when JavaScript is not running: mode, keys, and numbers to watch. */
-async function pushNativeState() {
+export async function pushNativeState() {
   if (!current || !session) return
   const { db: d } = current
   const keys = await d.all<{ id: string; key_hex: string }>('SELECT id, key_hex FROM devices WHERE active = 1 AND key_hex IS NOT NULL')

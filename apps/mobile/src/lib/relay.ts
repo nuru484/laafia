@@ -268,6 +268,15 @@ async function handle(env: Env, raw: Incoming): Promise<IncomingResult> {
   return { kind: 'referral', referral_id: referral.id, isNew: true }
 }
 
+/** No acknowledgement: send the identical signed text again, to the facility or a backup number. */
+export async function resendReferral(env: Env, referralId: string, recipient?: string): Promise<void> {
+  const r = await env.db.get<{ wire: string; destination_code: string }>('SELECT wire, destination_code FROM referrals WHERE id = ?', [referralId])
+  if (!r?.wire) throw new Error('This referral has no signed text on this phone to resend')
+  const to = recipient ?? (await env.db.get<{ phone: string | null }>('SELECT phone FROM facilities WHERE code = ?', [r.destination_code]))?.phone
+  if (!to) throw new Error('No phone number for the destination facility')
+  await enqueueSms(env, to, r.wire, 'referrals', referralId)
+}
+
 const FOLLOW_UP_AFTER_CLOSE_DAYS = 3
 
 async function scheduleFollowUpAfterClose(env: Env, referralId: string) {
