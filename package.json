@@ -1,5 +1,14 @@
 {
   "name": "laafia",
   "private": true,
-  "workspaces": ["apps/*", "packages/*"]
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "api": "npm run dev -w @laafia/api",
+    "mobile": "npm start -w @laafia/mobile",
+    "web": "npm run dev -w @laafia/web",
+    "test": "npm test --workspaces --if-present"
+  }
 }
