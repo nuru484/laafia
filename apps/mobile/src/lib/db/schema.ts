@@ -4,6 +4,10 @@ import type { Db } from './db'
  * Local schema (spec section 5). Synced tables carry updated_at, device_id,
  * synced and deleted. JSON columns are TEXT. Each migration runs once, tracked
  * by PRAGMA user_version.
+ *
+ * Foreign keys are declared for documentation but not enforced (SQLite's
+ * default): sync pages arrive in server order, so a visit can land before its
+ * client, and a referral first seen by SMS is re-keyed to the server's id.
  */
 const SYNC = `updated_at INTEGER NOT NULL, device_id TEXT NOT NULL, synced INTEGER NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0`
 
