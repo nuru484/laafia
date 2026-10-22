@@ -180,11 +180,17 @@ model Referral {
   nextOfKin             String?         @map("next_of_kin")
   status                String          @default("created")
   deliveredVia          String?         @map("delivered_via")
+  /// Refer onward: the onward referral (new short id, signed by the facility) names the one it continues.
+  parentReferralId      String?         @map("parent_referral_id")
+  /// Server-maintained from the latest onward child, so the parent shows where the patient went next.
+  onwardReferralId      String?         @map("onward_referral_id")
+  onwardStatus          String?         @map("onward_status")
   events                ReferralEvent[]
 
   @@unique([originDeviceId, shortId], map: "referrals_key")
   @@index([facilityId, seq], map: "referrals_scope")
   @@index([destinationFacilityId, seq], map: "referrals_dest")
+  @@index([parentReferralId], map: "referrals_parent")
   @@map("referrals")
 }
 

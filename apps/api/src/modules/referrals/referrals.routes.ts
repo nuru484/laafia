@@ -10,5 +10,6 @@ export function createReferralsRouter(deps: Deps, auth: Auth) {
   const facilityOrAdmin = auth({ roles: ['facility'], admin: true })
   return Router()
     .get('/referrals', facilityOrAdmin, validate({ query: FacilityQuery }), c.list)
+    .get('/referrals/:id', auth({ admin: true }), validate({ params: IdParams }), c.get)
     .post('/referrals/:id/status', facilityOrAdmin, validate({ params: IdParams, body: StatusBody }), c.status)
 }

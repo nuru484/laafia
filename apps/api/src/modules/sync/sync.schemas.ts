@@ -33,6 +33,8 @@ export const ROW_SCHEMAS = {
     client_id: opt(id), visit_id: opt(id), client_code: opt(str(32)), client_type: opt(CLIENT_TYPE), context: opt(str(16)),
     urgency: opt(z.number().int().min(1).max(3)), danger_signs: strings, destination_facility_id: opt(id), next_of_kin: opt(str(20)),
     delivered_via: opt(z.enum(['sms', 'qr', 'https'])),
+    // Refer onward: the referral this one continues (set on the onward referral, fixed after creation).
+    parent_referral_id: opt(id),
     // Optional proof for creating a referral pushed by a device other than its origin: the origin's signed LFR.
     lfr: opt(str(200)),
   }),

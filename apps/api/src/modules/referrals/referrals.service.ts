@@ -99,8 +99,15 @@ export async function pushReferral(tx: Tx, device: Device, pushed: PushReferral,
   let target = idRow ?? keyRow
   if (!target) {
     if (device.id !== row.originDeviceId && !(await provesOrigin(tx, lfr, row.originDeviceId, row.shortId))) return 'forbidden'
+    if (row.parentReferralId) {
+      // Refer onward: only a device that may act on the parent (its destination, typically) may continue it.
+      const parent = await byId(tx, row.parentReferralId)
+      if (!parent) return 'unknown_referral'
+      if (!(await mayAct(tx, device, parent))) return 'forbidden'
+    }
     const created = await tx.referral.create({ data: { ...row, dangerSigns: row.dangerSigns ?? [], facilityId: (await facilityOfDevice(tx, row.originDeviceId)) ?? device.facilityId, status: 'created' } })
     touched.add(row.id)
+    await syncOnward(tx, created, touched)
     // Reached the facility by HTTPS: if no phone there is in facility mode, the server acknowledges for it.
     const origin = await tx.device.findUnique({ where: { id: created.originDeviceId }, select: { phoneNumber: true } })
     await acknowledgeIfNoFacilityPhone(tx, Date.now(), created, origin?.phoneNumber ?? null, touched, 'https')
@@ -112,7 +119,8 @@ export async function pushReferral(tx: Tx, device: Device, pushed: PushReferral,
   }
   if (row.updatedAt > target.updatedAt) {
     const { id: _id, ...fields } = row
-    await tx.referral.update({ where: { id: target.id }, data: { ...fields, dangerSigns: fields.dangerSigns ?? [] } })
+    // The parent link is fixed at creation; a later push cannot re-point a chain.
+    await tx.referral.update({ where: { id: target.id }, data: { ...fields, parentReferralId: target.parentReferralId, dangerSigns: fields.dangerSigns ?? [] } })
   }
   touched.add(target.id)
   return null
@@ -149,7 +157,50 @@ export async function pushEvent(tx: Tx, device: Device | null, ev: PushEvent, to
   await tx.referralEvent.createMany({ data: [{ ...row, referralId: target.id }], skipDuplicates: true })
   await recomputeStatus(tx, target.id)
   touched.add(target.id)
+  await syncOnward(tx, (await byId(tx, target.id))!, touched)
   return null
+}
+
+/**
+ * Copies an onward referral's id and status onto its parent, so the parent (and the CHO phone that
+ * pulls it) shows where the patient went next. Bumps the parent's updated_at so phones apply it under LWW.
+ */
+async function syncOnward(tx: Tx, child: Pick<Referral, 'id' | 'status' | 'parentReferralId'>, touched: Set<string>) {
+  if (!child.parentReferralId) return
+  const res = await tx.referral.updateMany({
+    // Spelled out with nulls: SQL's NOT (a = x AND b = y) is unknown, not true, while a column is still null.
+    where: {
+      id: child.parentReferralId,
+      OR: [{ onwardReferralId: null }, { onwardReferralId: { not: child.id } }, { onwardStatus: null }, { onwardStatus: { not: child.status } }],
+    },
+    data: { onwardReferralId: child.id, onwardStatus: child.status, updatedAt: Date.now() },
+  })
+  if (res.count) touched.add(child.parentReferralId)
+}
+
+const MAX_HOPS = 10
+
+/** The referral with every hop before and after it (root first). Visible to the admin and to devices on the chain. */
+export async function referralChain(deps: Deps, id: string, device: Device | null) {
+  const start = await deps.prisma.referral.findUnique({ where: { id } })
+  if (!start) throw new HttpError(404, 'not_found', 'Referral not found')
+  const chain: Referral[] = [start]
+  for (let r = start; r.parentReferralId && chain.length < MAX_HOPS; ) {
+    const parent = await deps.prisma.referral.findUnique({ where: { id: r.parentReferralId } })
+    if (!parent) break
+    chain.unshift(parent)
+    r = parent
+  }
+  for (let r = start; r.onwardReferralId && chain.length < MAX_HOPS; ) {
+    const next = await deps.prisma.referral.findUnique({ where: { id: r.onwardReferralId } })
+    if (!next) break
+    chain.push(next)
+    r = next
+  }
+  const sees = (r: Referral) => !device || r.originDeviceId === device.id || (!!device.facilityId && (r.facilityId === device.facilityId || r.destinationFacilityId === device.facilityId))
+  if (!chain.some(sees)) throw new HttpError(404, 'not_found', 'Referral not found')
+  const views = await Promise.all(chain.map((r) => referralView(deps, r.id)))
+  return { referral: views[chain.indexOf(start)]!, chain: views.filter((v): v is ReferralView => !!v) }
 }
 
 /** LFS from the server is signed as the destination facility's phone when it has one, else as the gateway device. */
