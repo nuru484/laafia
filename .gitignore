@@ -12,3 +12,4 @@ __pycache__/
 .venv/
 apps/api/content/
 /.playwright-mcp/
+*.tsbuildinfo
