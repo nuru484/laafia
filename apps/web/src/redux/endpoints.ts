@@ -1,4 +1,4 @@
-import type { Clip, Device, ExportPreview, ExportRecord, ExportResult, Facility, ImportBatch, ImportTemplate, Pack, Provider, Referral, Summary, User } from '@/types/api'
+import type { AuditEvent, Clip, Device, SmsMessage, ExportPreview, ExportRecord, ExportResult, Facility, ImportBatch, ImportTemplate, Pack, Provider, Referral, Summary, User } from '@/types/api'
 import { api } from './api'
 
 export const endpoints = api.injectEndpoints({
@@ -59,6 +59,13 @@ export const endpoints = api.injectEndpoints({
     exportPush: b.mutation<ExportResult, { facility: string; period: string; dry_run: boolean }>({ query: (body) => ({ url: '/export/dhis2', method: 'POST', body }), invalidatesTags: ['Export'] }),
     exportHistory: b.query<{ exports: ExportRecord[]; pending_periods: string[] }, string>({ query: (facility) => ({ url: '/export/dhis2/history', params: { facility, limit: 20 } }), providesTags: ['Export'] }),
 
+    audit: b.query<{ events: AuditEvent[]; next_before: number | null }, { before?: number; target_type?: string }>({
+      query: (q) => ({ url: '/admin/audit', params: { limit: 50, ...Object.fromEntries(Object.entries(q).filter(([, v]) => v !== undefined && v !== '')) } }),
+      providesTags: ['Audit'],
+    }),
+    smsBalance: b.query<{ configured: boolean; balance: number | null; currency: string | null }, void>({ query: () => '/admin/sms/balance', providesTags: ['Sms'] }),
+    smsLog: b.query<{ messages: SmsMessage[]; next_before: number | null }, { before?: number }>({ query: (q) => ({ url: '/admin/sms/log', params: { limit: 50, ...(q.before ? { before: q.before } : {}) } }), providesTags: ['Sms'] }),
+
     packs: b.query<{ packs: Pack[] }, void>({ query: () => '/admin/content/packs', providesTags: ['Pack'] }),
     uploadPack: b.mutation<{ pack: Pack }, FormData>({ query: (body) => ({ url: '/admin/content/packs', method: 'POST', body }), invalidatesTags: ['Pack'] }),
     clips: b.query<{ clips: Clip[] }, string>({ query: (lang) => ({ url: '/admin/content/clips', params: { lang } }), providesTags: ['Clip'] }),
@@ -74,5 +81,5 @@ export const {
   useReissueCodeMutation, useDeactivateDeviceMutation, useProvidersQuery, useCreateProviderMutation, useUpdateProviderMutation,
   usePacksQuery, useUploadPackMutation, useClipsQuery, useDeleteClipMutation, useUploadClipMutation, useTemplatesQuery, useCreateTemplateMutation,
   usePreviewUploadMutation, usePreviewDhis2Mutation, useBatchesQuery, useCommitBatchMutation, useUndoBatchMutation,
-  useExportPreviewQuery, useExportPushMutation, useExportHistoryQuery,
+  useExportPreviewQuery, useExportPushMutation, useExportHistoryQuery, useAuditQuery, useSmsBalanceQuery, useSmsLogQuery,
 } = endpoints

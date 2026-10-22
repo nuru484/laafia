@@ -63,3 +63,6 @@ export type ExportResult = {
   aggregate: { status: string; import_count: { imported: number; updated: number; ignored: number }; conflicts: unknown[] }
 }
 export type ExportRecord = { id: string; facility_code: string; period: string; dry_run: boolean; by: string | null; at: number; tracked_entities: number; status: string }
+
+export type AuditEvent = { id: string; at: number; actor_kind: string; actor_id: string | null; actor_name: string; action: string; target_type: string; target_id: string | null; details: Record<string, unknown> }
+export type SmsMessage = { id: string; at: number; to_masked: string; kind: 'ack' | 'status' | 'driver' | 'referral'; status: 'queued' | 'sent' | 'delivered' | 'failed'; attempts: number; error: string | null }
