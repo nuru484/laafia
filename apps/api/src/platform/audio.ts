@@ -32,5 +32,6 @@ export async function ffmpeg(audio: Buffer, outArgs: string[], outName: string):
 export const toWav16k = (audio: Buffer, maxSeconds: number) =>
   ffmpeg(audio, ['-t', String(maxSeconds), '-ac', '1', '-ar', '16000', '-acodec', 'pcm_s16le', '-f', 'wav'], 'out.wav')
 
-/** Mono AAC in an m4a container (what phones play), from m4a, mp3, webm/opus, ogg or wav. */
-export const toM4a = (audio: Buffer) => ffmpeg(audio, ['-vn', '-ac', '1', '-ar', '44100', '-c:a', 'aac', '-b:a', '64k', '-movflags', '+faststart'], 'out.m4a')
+/** Mono AAC at 32 kbps in an m4a container (what phones play), at most `maxSeconds`, from m4a, mp3, webm/opus, ogg/opus or wav. */
+export const toM4a = (audio: Buffer, maxSeconds: number) =>
+  ffmpeg(audio, ['-vn', '-t', String(maxSeconds), '-ac', '1', '-ar', '22050', '-c:a', 'aac', '-b:a', '32k', '-movflags', '+faststart'], 'out.m4a')

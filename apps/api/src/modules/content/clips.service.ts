@@ -18,8 +18,9 @@ import { contentDir } from './content.service.ts'
  */
 
 export const MAX_CLIP_BYTES = 300 * 1024
-/** Browser uploads and recordings (webm, wav) are larger before conversion. */
-export const MAX_WEB_CLIP_BYTES = 5 * 1024 * 1024
+/** Browser uploads and MediaRecorder blobs, before conversion. */
+export const MAX_WEB_CLIP_BYTES = 2 * 1024 * 1024
+export const MAX_WEB_CLIP_SECONDS = 20
 const isMp4 = (buf: Buffer) => buf.length >= 12 && buf.toString('ascii', 4, 8) === 'ftyp'
 
 type Clip = { id: string; lang: string; promptId: string; sha256: string; size: number; filename: string; deviceId: string; recordedAt: number }
@@ -38,11 +39,22 @@ export async function saveClip(deps: Deps, device: Device, audio: Buffer | undef
  */
 export async function saveClipFromWeb(deps: Deps, actor: Actor, audio: Buffer | undefined, f: ClipFields) {
   if (!audio) throw new HttpError(400, 'invalid_request', 'Expected a multipart file field "audio"')
-  const m4a = await toM4a(audio)
+  if (!allPrompts().some((p) => p.id === f.prompt_id)) throw new HttpError(400, 'invalid_request', `Unknown prompt_id ${f.prompt_id}`)
+  if (!isRecognisedAudio(audio)) throw new HttpError(415, 'unsupported_audio', 'Upload m4a, mp3, webm, ogg or wav audio')
+  const m4a = await toM4a(audio, MAX_WEB_CLIP_SECONDS)
   const recordedBy = actor.kind === 'user' ? `web:${actor.user.id}` : 'web:admin'
-  const clip = await storeClip(deps, recordedBy, m4a, f)
-  await audit(deps, actor, 'clip.upload', { type: 'clip', id: clip.id }, { prompt_id: f.prompt_id, lang: f.lang })
-  return clip
+  const stored = await storeClip(deps, recordedBy, m4a, f)
+  await audit(deps, actor, 'clip.upload', { type: 'clip', id: stored.id }, { prompt_id: f.prompt_id, lang: f.lang })
+  const row = await deps.prisma.contentClip.findUniqueOrThrow({ where: { id: stored.id } })
+  return { ...view(row), recorded_by: actor.kind === 'user' ? actor.user.name : 'Admin token' }
+}
+
+/** Container magic numbers: MP4 (ftyp), MP3 (ID3 or a frame sync), WebM/Matroska, Ogg, RIFF WAVE. */
+function isRecognisedAudio(b: Buffer) {
+  if (b.length < 12) return false
+  const ascii = (s: number, e: number) => b.toString('ascii', s, e)
+  return ascii(4, 8) === 'ftyp' || ascii(0, 3) === 'ID3' || (b[0] === 0xff && (b[1]! & 0xe0) === 0xe0)
+    || b.readUInt32BE(0) === 0x1a45dfa3 || ascii(0, 4) === 'OggS' || (ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WAVE')
 }
 
 async function storeClip(deps: Deps, recordedBy: string, audio: Buffer, f: ClipFields) {
@@ -76,8 +88,8 @@ async function recorderNames(deps: Deps, ids: string[]) {
   return names
 }
 
-export async function adminListClips(deps: Deps) {
-  const rows = await deps.prisma.contentClip.findMany({ orderBy: { recordedAt: 'desc' } })
+export async function adminListClips(deps: Deps, lang?: string) {
+  const rows = await deps.prisma.contentClip.findMany({ where: lang ? { lang } : {}, orderBy: { recordedAt: 'desc' } })
   const names = await recorderNames(deps, [...new Set(rows.map((r) => r.deviceId))])
   return rows.map((c) => ({ ...view(c), device_id: c.deviceId, recorded_by: names.get(c.deviceId) ?? c.deviceId }))
 }

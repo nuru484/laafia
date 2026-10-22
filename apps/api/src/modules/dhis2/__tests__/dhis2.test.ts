@@ -2,7 +2,7 @@ import request from 'supertest'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { buildDhis2Export, dhis2Uid, loadMapping, type ExportInput } from '../dhis2.export.ts'
 import { env } from '../../../config/env.ts'
-import { ADMIN, USERS, activate, app, event, pushAs, signIn, useDb } from '../../../platform/testing/helpers.ts'
+import { ADMIN, USERS, activate, app, event, prisma, pushAs, signIn, useDb } from '../../../platform/testing/helpers.ts'
 
 const DAY = 86_400_000
 const OCT = Date.UTC(2026, 9, 1)
@@ -62,6 +62,7 @@ describe('buildDhis2Export (pure)', () => {
     expect(v[de.pnc_within_48h]).toBe('0') // cl-1 delivered 1 Oct, first visit 4 Oct is after 48 h
     expect(v[de.referrals_made]).toBe('2')
     expect(v[de.referrals_completed]).toBe('1')
+    expect(buildDhis2Export(fixture, mapping).summary).toEqual({ anc_contacts: 2, pnc_within_48h: 0, referrals_made: 2, referrals_completed: 1, tracked_entities: 3, events: 6 })
   })
 
   it('rejects a bad period and an unmapped facility', () => {
@@ -131,7 +132,14 @@ describe('/export/dhis2', () => {
     expect(pending.periods).toHaveLength(12)
     expect(pending.periods[0]).toMatchObject({ period, exported: true })
     expect(pending.periods[1].exported).toBe(false)
-    const history = (await agent.get('/export/dhis2/history?facility=SAV-CHPS-01')).body.runs
+    const historyBody = (await agent.get('/export/dhis2/history?facility=SAV-CHPS-01')).body
+    const history = historyBody.runs
+    expect(history[0]).toMatchObject({ actor: 'Alhassan Yakubu', counts: { tracked_entities: expect.any(Number), referrals_made: expect.any(Number) } })
+    // A visit four months ago makes the months since then due; last month was exported for real above.
+    await prisma.visit.create({ data: { id: 'v-old', clientId: 'cl-0001', facilityId: 'fac-0001', protocolId: 'maternal', visitedAt: Date.UTC(last.getUTCFullYear(), last.getUTCMonth() - 3, 10), outcome: 'routine', ruleId: 'X', updatedAt: Date.now() } })
+    const due = (await agent.get('/export/dhis2/history?facility=SAV-CHPS-01')).body.pending_periods
+    expect(due).toHaveLength(3)
+    expect(due).not.toContain(period)
     expect(history.map((r: { dry_run: boolean }) => r.dry_run)).toEqual([false, true])
     const auditRows = (await agent.get('/admin/audit?target_type=export')).body.events
     expect(auditRows).toHaveLength(2)

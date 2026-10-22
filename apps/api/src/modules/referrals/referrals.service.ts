@@ -263,12 +263,12 @@ async function signerFor(tx: Tx, destinationFacilityId: string | null) {
 }
 
 /** `dedupeKey` drops a second LFS for the same (referral, status); acknowledgements of a resent LFR leave it unset on purpose. */
-export async function enqueueStatusSms(tx: Tx, now: number, r: Pick<Referral, 'originDeviceId' | 'shortId' | 'destinationFacilityId'>, status: ReferralStatus, to: string | null, dedupeKey?: string) {
+export async function enqueueStatusSms(tx: Tx, now: number, r: Pick<Referral, 'originDeviceId' | 'shortId' | 'destinationFacilityId' | 'facilityId'>, status: ReferralStatus, to: string | null, dedupeKey?: string) {
   const code = CODE_FROM_STATUS[status]
   if (!code || !to) return
   const signer = await signerFor(tx, r.destinationFacilityId)
   const msg: StatusMessage = { kind: 'LFS', signer: signer.id, origin: r.originDeviceId, short_id: r.shortId, status: code }
-  await enqueueSms(tx, now, to, encode(msg, signer.keyHex!), dedupeKey)
+  await enqueueSms(tx, now, to, encode(msg, signer.keyHex!), { purpose: dedupeKey ? 'status' : 'ack', facilityId: r.facilityId ?? r.destinationFacilityId, dedupeKey })
 }
 
 /** True when the facility has an active device in facility mode, which acknowledges referrals itself. */
@@ -282,7 +282,7 @@ export async function hasFacilityPhone(tx: Tx, facilityId: string | null) {
  * LFS R to the sender) only when the destination has no phone in facility mode to do it.
  * Returns whether it acknowledged.
  */
-export async function acknowledgeIfNoFacilityPhone(tx: Tx, now: number, r: Pick<Referral, 'id' | 'originDeviceId' | 'shortId' | 'destinationFacilityId'>, to: string | null, touched: Set<string>, via: 'sms' | 'https') {
+export async function acknowledgeIfNoFacilityPhone(tx: Tx, now: number, r: Pick<Referral, 'id' | 'originDeviceId' | 'shortId' | 'destinationFacilityId' | 'facilityId'>, to: string | null, touched: Set<string>, via: 'sms' | 'https') {
   if (!r.destinationFacilityId || (await hasFacilityPhone(tx, r.destinationFacilityId))) return false
   await pushEvent(tx, null, {
     id: `gw-${r.originDeviceId}-${r.shortId}-received`, referral_id: r.id, origin_device_id: r.originDeviceId, short_id: r.shortId,

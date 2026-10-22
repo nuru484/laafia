@@ -5,6 +5,7 @@ import type { Deps } from '../../platform/deps.ts'
 import { HttpError } from '../../platform/http/errors.ts'
 import { toWire } from '../../platform/http/wire.ts'
 import { audit, districtOfFacility } from '../../platform/audit.ts'
+import { enqueueSms } from '../../platform/jobs/worker.ts'
 import type { Actor, Device } from '../../platform/middleware/auth.ts'
 import { assertFacility, facilityScope, inScope } from '../../platform/scope.ts'
 import { facilityByCode, mayAct } from '../referrals/index.ts'
@@ -104,7 +105,7 @@ export async function requestTransport(deps: Deps, device: Device, body: Request
       data: { id: body.id ?? randomUUID(), referralId: referral.id, providerId: provider.id, status: 'requested', scheduledFor: body.scheduled_for ?? null, facilityId: device.facilityId, deviceId: device.id, updatedAt: now },
     })
     const runAt = body.scheduled_for ? Math.max(now, body.scheduled_for - HOLD_MS) : now
-    await tx.job.create({ data: { kind: 'sms', payload: { to: provider.phone, body: text }, runAt, createdAt: now } })
+    await enqueueSms(tx, now, provider.phone, text, { purpose: 'driver', facilityId: device.facilityId, runAt })
     return created
   })
   return toWire(row)

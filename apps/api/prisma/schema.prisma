@@ -305,8 +305,13 @@ model Job {
   deliveredAt    BigInt? @map("delivered_at")
   /// e.g. lfs:<referral id>:<status>; a second enqueue with the same key is dropped. Unique allows many NULLs.
   dedupeKey      String? @unique(map: "jobs_dedupe_key") @map("dedupe_key")
+  /// ack (LFS R for a facility without a phone) | status (LFS from the web) | driver (pickup SMS) | referral (onward LFR)
+  purpose        String?
+  /// District of the referral or facility the SMS is about, so the SMS log is scoped like everything else.
+  districtId     String? @map("district_id")
 
   @@index([status, runAt], map: "jobs_due")
+  @@index([districtId, createdAt], map: "jobs_district")
   @@map("jobs")
 }
 

@@ -80,7 +80,7 @@ export async function referOnward(deps: Deps, actor: Actor, parentId: string, bo
     await syncOnward(tx, (await byId(tx, child.id))!, touched)
     if (await hasFacilityPhone(tx, dest.id)) {
       const lfr = dest.phone ? onwardLfr(child, dest.code, gw.keyHex) : null
-      if (lfr) await enqueueSms(tx, now, dest.phone!, lfr, `lfr:${child.id}`)
+      if (lfr) await enqueueSms(tx, now, dest.phone!, lfr, { purpose: 'referral', facilityId: child.facilityId, dedupeKey: `lfr:${child.id}` })
     } else {
       await acknowledgeIfNoFacilityPhone(tx, now, child, null, touched, 'https')
     }

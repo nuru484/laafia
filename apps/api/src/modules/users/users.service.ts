@@ -4,6 +4,7 @@ import type { Deps } from '../../platform/deps.ts'
 import { HttpError } from '../../platform/http/errors.ts'
 import type { Actor, UserRole } from '../../platform/middleware/auth.ts'
 import { hashPassword, verifyPassword } from '../../platform/passwords.ts'
+import { audit, districtOfFacility } from '../../platform/audit.ts'
 import { districtOrThrow } from '../../platform/scope.ts'
 import { createSession, revokeSessions } from '../../platform/sessions.ts'
 import type { CreateUserInput } from './users.schemas.ts'
@@ -78,6 +79,7 @@ export async function createUser(deps: Deps, actor: Actor, body: CreateUserInput
       facilityId, districtId: body.role === 'facility_staff' ? null : districtId, passwordChangedAt: now, createdAt: now,
     },
   })
+  await audit(deps, actor, 'user.create', { type: 'user', id: user.id, districtId: user.districtId ?? (await districtOfFacility(deps, user.facilityId)) }, { role: user.role })
   return userView(user)
 }
 
@@ -93,6 +95,7 @@ export async function resetPassword(deps: Deps, actor: Actor, id: string, passwo
   const u = await userInScope(deps, actor, id)
   const updated = await deps.prisma.user.update({ where: { id: u.id }, data: { passwordHash: await hashPassword(password), passwordChangedAt: deps.clock() } })
   await revokeSessions(deps, { userId: u.id })
+  await audit(deps, actor, 'user.password_reset', { type: 'user', id: u.id, districtId: u.districtId ?? (await districtOfFacility(deps, u.facilityId)) })
   return userView(updated)
 }
 
@@ -101,5 +104,6 @@ export async function setActive(deps: Deps, actor: Actor, id: string, active: bo
   const u = await userInScope(deps, actor, id)
   const updated = await deps.prisma.user.update({ where: { id: u.id }, data: { active } })
   if (!active) await revokeSessions(deps, { userId: u.id })
+  await audit(deps, actor, active ? 'user.activate' : 'user.deactivate', { type: 'user', id: u.id, districtId: u.districtId ?? (await districtOfFacility(deps, u.facilityId)) })
   return userView(updated)
 }

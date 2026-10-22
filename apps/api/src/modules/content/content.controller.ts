@@ -70,14 +70,14 @@ export function createContentController(deps: Deps) {
     await sendStored(res, await clipFile(deps, input(res, 'params', ClipParams).id))
   }
   const adminClips: RequestHandler = async (_req, res) => {
-    res.json({ clips: await adminListClips(deps) })
+    res.json({ clips: await adminListClips(deps, input(res, 'query', ClipQuery).lang) })
   }
   const removeClip: RequestHandler = async (_req, res) => {
     res.json(await deleteClip(deps, actorOf(res), input(res, 'params', ClipParams).id))
   }
   const webClipUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_WEB_CLIP_BYTES, files: 1, fields: 5 } }).single('audio')
   const createWebClip: RequestHandler = async (req, res) => {
-    res.status(201).json(await saveClipFromWeb(deps, actorOf(res), req.file?.buffer, ClipFields.parse(req.body)))
+    res.status(201).json({ clip: await saveClipFromWeb(deps, actorOf(res), req.file?.buffer, ClipFields.parse(req.body)) })
   }
   const matrix: RequestHandler = async (_req, res) => {
     res.json(await clipMatrix(deps, input(res, 'query', MatrixQuery).langs))
