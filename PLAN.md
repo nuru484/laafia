@@ -15,6 +15,12 @@ Out (non-goals): diagnosis, a caregiver chatbot, iOS, Play Store distribution (S
 - Referral status is derived from `referral_events` and only moves forward.
 - Acknowledgement timeout by urgency: 10 min (3), 30 min (2), 2 h (1); then the backup number and a call button.
 - Mobile uses raw SQL over `expo-sqlite` with SQLCipher (no Drizzle on the phone; a dozen tables do not need it).
+- Low-end Android first: minSdk 24, Hermes, arm64-v8a and armeabi-v7a only, virtualised lists, no raster maps. Content is not bundled per language: the device downloads only its catchment's language audio pack and district map pack (versioned, sha256-verified, resumable). English text and clips stay bundled as the fallback.
+- Background survival: a manifest SMS receiver; at every launch a catch-up scan of the SMS inbox for anything missed while the app was force-stopped; in facility mode a foreground service. Onboarding opens the right battery and autostart screen for the manufacturer (Samsung sleeping apps, Transsion, Xiaomi) and checks that the setting took effect.
+- WHO checklists ship inside the app bundle (`packages/core/protocols`), fully offline. Every visit stores the protocol id and version. Protocol updates go out by EAS Update.
+- Register onboarding is one scalable pipeline on the server: CSV/XLSX with saved column-mapping templates, or a direct DHIS2 Tracker pull. Each runs as a dry run, then commits, and can be undone. The web app drives it. Devices pull only their catchment's active clients and 12 months of visits, paged and resumable.
+- Secrets (Khaya, Arkesel, DHIS2, JWT) live only in server env. The phone calls Khaya through the API, never directly.
+- iOS cannot read or send SMS from an app, so iPhones are out of scope.
 - Protocol tables await review by the team clinician before any field use.
 
 ## Rule for the demo
