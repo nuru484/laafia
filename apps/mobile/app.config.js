@@ -17,6 +17,9 @@ export default () => ({
   userInterfaceStyle: 'light',
   android: {
     package: 'org.laafia.app',
+    // Patient records stay off Google backups. A restored database also arrives without its SecureStore key
+    // ("file is not a database" after a reinstall).
+    allowBackup: false,
     googleServicesFile: firebase,
     adaptiveIcon: {
       backgroundColor: '#FFFFFF',
