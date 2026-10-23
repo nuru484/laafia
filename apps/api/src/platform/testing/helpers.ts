@@ -4,7 +4,7 @@ import { afterAll, beforeEach, expect } from 'vitest'
 import { createApp } from '../../app.ts'
 import { resetActivationLimits } from '../../modules/auth/index.ts'
 import { resetLoginLimits } from '../../modules/users/index.ts'
-import { DEMO_CODES, DEMO_PASSWORD, seedDemo } from '../../seed-demo.ts'
+import { DEMO_CODES, seedDemo } from '../../seed-demo.ts'
 import { buildDeps } from '../deps.ts'
 import type { Logger } from '../logger.ts'
 import type { PushMessage } from '../push-gateway.ts'
@@ -36,7 +36,7 @@ export function useDb() {
     await prisma.device.deleteMany()
     await prisma.facility.deleteMany()
     await prisma.district.deleteMany()
-    await seedDemo(deps, TODAY)
+    await seedDemo(deps, { password: DEMO_PASSWORD, admins: [{ name: 'Test Admin', email: USERS.admin }], district: { code: 'SAV', name: 'Savelugu Municipal' } }, TODAY)
     resetActivationLimits()
     resetLoginLimits()
   })
@@ -57,6 +57,7 @@ export async function signIn(email: string, password = DEMO_PASSWORD) {
   expect(res.status).toBe(200)
   return { agent, csrf: { 'X-CSRF-Token': res.body.csrf_token as string }, user: res.body.user }
 }
+export const DEMO_PASSWORD = 'Laafia-test-2026'
 export const USERS = { admin: 'admin@laafia.demo', supervisor: 'supervisor@laafia.demo', hospital: 'hospital@laafia.demo', healthCentre: 'healthcentre@laafia.demo' }
 export const pushAs = (jwt: string, records: { table: string; row: Record<string, unknown> }[]) =>
   request(app).post('/sync/push').set(bearer(jwt)).send({ records })

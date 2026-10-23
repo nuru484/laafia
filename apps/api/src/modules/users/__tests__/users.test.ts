@@ -1,7 +1,6 @@
 import request from 'supertest'
 import { describe, expect, it } from 'vitest'
-import { DEMO_PASSWORD } from '../../../seed-demo.ts'
-import { ADMIN, SID, TODAY, USERS, activate, app, prisma, pushAs, signIn, useDb } from '../../../platform/testing/helpers.ts'
+import { ADMIN, DEMO_PASSWORD, SID, TODAY, USERS, activate, app, prisma, pushAs, signIn, useDb } from '../../../platform/testing/helpers.ts'
 
 useDb()
 
@@ -44,7 +43,7 @@ describe('dashboard sign-in', () => {
 
 describe('user administration', () => {
   it('lets a district admin create, reset and deactivate accounts in their district', async () => {
-    const { agent, csrf } = await signIn(USERS.admin)
+    const { agent, csrf, user: me } = await signIn(USERS.admin)
     const created = await agent.post('/admin/users').set(csrf).send({ name: 'Mariama Osman', email: 'Mariama@laafia.demo', password: 'first-pass-123', role: 'facility_staff', facility_code: 'PTA-HC-01' })
     expect(created.status).toBe(201)
     expect(created.body.user).toMatchObject({ email: 'mariama@laafia.demo', role: 'facility_staff', facility_id: 'fac-0002' })
@@ -60,7 +59,7 @@ describe('user administration', () => {
 
     const list = await agent.get('/admin/users')
     expect(list.body.users.map((u: { email: string }) => u.email)).toEqual(expect.arrayContaining([USERS.admin, USERS.hospital, 'mariama@laafia.demo']))
-    expect((await agent.post('/admin/users/usr-0001/deactivate').set(csrf)).status).toBe(400) // not yourself
+    expect((await agent.post(`/admin/users/${me.id}/deactivate`).set(csrf)).status).toBe(400) // not yourself
   })
 
   it("edits an account's name, email and phone, refusing a clash or no way to sign in", async () => {

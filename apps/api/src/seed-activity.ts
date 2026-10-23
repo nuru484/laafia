@@ -105,8 +105,9 @@ export async function seedActivity(deps: Deps, now = Date.now()) {
       ],
     })
 
+    const admin = await tx.user.findFirst({ where: { role: 'district_admin', districtId: 'dist-sav' }, orderBy: { createdAt: 'asc' } })
     const audit = (n: number, ago: number, action: string, targetType: string, targetId: string, details: object) => ({
-      id: `demo-a${n}`, at: now - ago, actorKind: 'user', actorId: 'usr-0001', actorName: 'Nurudeen Abdul-Majeed', action, targetType, targetId, districtId: 'dist-sav', details,
+      id: `demo-a${n}`, at: now - ago, actorKind: 'user', actorId: admin?.id ?? null, actorName: admin?.name ?? 'District admin', action, targetType, targetId, districtId: 'dist-sav', details,
     })
     await tx.auditEvent.createMany({
       data: [

@@ -1,5 +1,5 @@
 import { generateSeed } from '@laafia/core'
-import { randomBytes } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { write, type Tx } from './platform/db.ts'
 import { buildDeps, type Deps } from './platform/deps.ts'
@@ -28,6 +28,19 @@ async function upsertAll(model: unknown, rows: Record<string, unknown>[]) {
   }
 }
 
+/** By id; a district made earlier under the same code (an older seed, the dashboard) is folded into the demo one. */
+async function upsertDistricts(tx: Tx) {
+  for (const d of DISTRICTS) {
+    const old = await tx.district.findFirst({ where: { code: d.code, id: { not: d.id } } })
+    if (old) await tx.district.update({ where: { id: old.id }, data: { code: `${d.code}-${old.id}` } })
+    await tx.district.upsert({ where: { id: d.id }, create: d, update: d })
+    if (!old) continue
+    await tx.user.updateMany({ where: { districtId: old.id }, data: { districtId: d.id } })
+    await tx.facility.updateMany({ where: { districtId: old.id }, data: { districtId: d.id } })
+    await tx.district.delete({ where: { id: old.id } })
+  }
+}
+
 /** The device the server signs its own SMS with. Its key is generated once and kept across re-seeds. */
 async function ensureGateway(tx: Tx, now: number) {
   await tx.device.upsert({
@@ -37,14 +50,14 @@ async function ensureGateway(tx: Tx, now: number) {
 }
 
 /** Load the deterministic demo catchment (core generateSeed). Safe to re-run: it overwrites the seed rows. */
-export async function seedDemo(deps: Deps, today = Date.now()) {
+export async function seedDemo(deps: Deps, users: SeedUsers, today = Date.now()) {
   const s = generateSeed(today)
   const now = deps.clock()
   const base = { updated_at: now, device_id: 'seed', deleted: false }
   const facOf = Object.fromEntries(s.facilities.map((f) => [f.code, f.id]))
   const home = facOf['SAV-CHPS-01']!
   await write(deps.prisma, async (tx: Tx) => {
-    await upsertAll(tx.district, DISTRICTS)
+    await upsertDistricts(tx)
     await upsertAll(tx.facility, s.facilities.map((f) => ({ ...base, ...f, district_id: f.code.startsWith('TTH') ? 'dist-tml' : 'dist-sav' })))
     await upsertAll(tx.device, s.devices.map((d) => ({
       ...base, id: d.id, role: d.role, user_name: d.user_name, phone_number: d.phone_number,
@@ -58,59 +71,91 @@ export async function seedDemo(deps: Deps, today = Date.now()) {
       const data = { deviceId, expiresAt: now + 7 * DAY, usedAt: null }
       await tx.activationCode.upsert({ where: { code }, create: { code, ...data }, update: data })
     }
-    await upsertUsers(tx, DEMO_USERS, now)
+    await upsertUsers(tx, [...adminAccounts(users, await ensureDistrict(tx, users.district)), ...DEMO_STAFF], users.password, now)
   })
   return s
 }
 
-/** Dashboard accounts, inserted or reset by id. */
-async function upsertUsers(tx: Tx, users: typeof DEMO_USERS, now: number) {
-  const passwordHash = await demoPasswordHash()
-  for (const u of users) {
-    const data = { name: u.name, email: u.email, role: u.role, facilityId: u.facilityId, districtId: u.districtId, passwordHash, active: true, passwordChangedAt: now }
-    await tx.user.upsert({ where: { id: u.id }, create: { id: u.id, ...data, createdAt: now }, update: data })
-  }
+export type SeedUsers = { password: string; admins: { name: string; email: string }[]; district: { code: string; name: string } }
+
+/**
+ * From .env: SEED_ADMINS ("Name <email>", comma-separated), SEED_PASSWORD (10+ characters, every seeded account's),
+ * and the admins' district, SEED_DISTRICT_CODE and SEED_DISTRICT_NAME (SAV is the demo district).
+ */
+export function seedUsersFromEnv(env: Record<string, string | undefined> = process.env): SeedUsers {
+  const password = env.SEED_PASSWORD?.trim() ?? ''
+  const admins = (env.SEED_ADMINS ?? '').split(',').filter((a) => a.trim()).map((a) => /^\s*(.+?)\s*<\s*(\S+@\S+?)\s*>\s*$/.exec(a))
+  const code = env.SEED_DISTRICT_CODE?.trim().toUpperCase() ?? ''
+  const name = env.SEED_DISTRICT_NAME?.trim() ?? ''
+  const problems = [
+    password.length < 10 && 'SEED_PASSWORD must be at least 10 characters',
+    !/^[A-Z]{2,10}$/.test(code) && 'SEED_DISTRICT_CODE must be 2 to 10 letters, e.g. SAV',
+    !name && 'SEED_DISTRICT_NAME must be set',
+    (!admins.length || admins.some((m) => !m)) && 'SEED_ADMINS must be "Name <email>", comma-separated',
+  ].filter(Boolean)
+  if (problems.length) throw new Error(`${problems.join('; ')} (see apps/api/.env.example)`)
+  return { password, admins: admins.map((m) => ({ name: m![1]!, email: m![2]!.toLowerCase() })), district: { code, name } }
 }
 
-const ADMINS = () => DEMO_USERS.filter((u) => u.role === 'district_admin')
-
-/** Only the district admins and their districts (npm run seed:admin). */
-export async function seedAdmins(deps: Deps) {
-  const now = deps.clock()
-  await write(deps.prisma, async (tx: Tx) => {
-    await upsertAll(tx.district, DISTRICTS)
-    await upsertUsers(tx, ADMINS(), now)
-  })
+/** The admins' district by code, created on first use; returns its id. */
+async function ensureDistrict(tx: Tx, d: SeedUsers['district']) {
+  return (await tx.district.upsert({ where: { code: d.code }, update: {}, create: { id: `dist-${d.code.toLowerCase()}`, ...d } })).id
 }
 
-/** One dashboard account per role. Demo only: every account shares DEMO_PASSWORD. */
-export const DEMO_PASSWORD = 'Laafia-demo-2026'
-export const DEMO_USERS = [
-  { id: 'usr-0001', name: 'Nurudeen Abdul-Majeed', email: 'admin@laafia.demo', role: 'district_admin', facilityId: null, districtId: 'dist-sav', scope: 'Savelugu district' },
-  { id: 'usr-0005', name: 'Osman Saaratu Deeshini', email: 'osman@laafia.demo', role: 'district_admin', facilityId: null, districtId: 'dist-sav', scope: 'Savelugu district' },
+type Account = { id?: string; name: string; email: string; role: string; facilityId: string | null; districtId: string | null; scope: string }
+
+/** Demo staff, one per other role. */
+const DEMO_STAFF: Account[] = [
   { id: 'usr-0002', name: 'Dr. Fuseini Abdulai', email: 'supervisor@laafia.demo', role: 'supervisor', facilityId: null, districtId: 'dist-sav', scope: 'Savelugu district' },
   { id: 'usr-0003', name: 'Salamatu Iddrisu', email: 'hospital@laafia.demo', role: 'facility_staff', facilityId: 'fac-0003', districtId: null, scope: 'Savelugu Municipal Hospital' },
   { id: 'usr-0004', name: 'Rahinatu Mahama', email: 'healthcentre@laafia.demo', role: 'facility_staff', facilityId: 'fac-0002', districtId: null, scope: 'Pong-Tamale Health Centre' },
 ]
+const adminAccounts = (u: SeedUsers, districtId: string): Account[] =>
+  u.admins.map((a) => ({ ...a, role: 'district_admin', facilityId: null, districtId, scope: u.district.name }))
+
+/** Inserted or reset by email; the password is set to the seed's. */
+async function upsertUsers(tx: Tx, users: Account[], password: string, now: number) {
+  const passwordHash = await hashOnce(password)
+  for (const { id, scope: _, ...u } of users) {
+    const data = { ...u, passwordHash, active: true, passwordChangedAt: now }
+    await tx.user.upsert({ where: { email: u.email }, create: { id: id ?? randomUUID(), ...data, createdAt: now }, update: data })
+  }
+}
+
 // Hashed once per process: the tests re-seed before every case.
-let demoHash: Promise<string> | null = null
-const demoPasswordHash = () => (demoHash ??= hashPassword(DEMO_PASSWORD))
+let hashed: { password: string; hash: Promise<string> } | null = null
+const hashOnce = (password: string) => (hashed?.password === password ? hashed : (hashed = { password, hash: hashPassword(password) })).hash
+
+/** Only the district admins, and their district if it is new (npm run seed:admin). */
+export async function seedAdmins(deps: Deps, users: SeedUsers) {
+  const now = deps.clock()
+  await write(deps.prisma, async (tx: Tx) => {
+    await upsertUsers(tx, adminAccounts(users, await ensureDistrict(tx, users.district)), users.password, now)
+  })
+}
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const deps = buildDeps()
-  const admins = process.argv[2] === 'admins'
-  if (admins) await seedAdmins(deps)
-  else {
-    const s = await seedDemo(deps)
-    console.log(`seeded ${s.facilities.length} facilities, ${s.households.length} households, ${s.clients.length} clients, ${s.visits.length} visits`)
-    console.log('activation codes (valid 7 days, single use; re-run seed to reset):')
-    for (const d of s.devices) console.log(`  ${DEMO_CODES[d.id]}  ${d.id}  ${d.role.padEnd(9)} ${d.user_name} (${d.facility_code})`)
+  try {
+    const users = seedUsersFromEnv()
+    const adminsOnly = process.argv[2] === 'admins'
+    if (adminsOnly) await seedAdmins(deps, users)
+    else {
+      const s = await seedDemo(deps, users)
+      console.log(`seeded ${s.facilities.length} facilities, ${s.households.length} households, ${s.clients.length} clients, ${s.visits.length} visits`)
+      console.log('activation codes (valid 7 days, single use; re-run seed to reset):')
+      for (const d of s.devices) console.log(`  ${DEMO_CODES[d.id]}  ${d.id}  ${d.role.padEnd(9)} ${d.user_name} (${d.facility_code})`)
+    }
+    console.log('dashboard users (password: SEED_PASSWORD):')
+    for (const u of [...users.admins.map((a) => ({ ...a, role: 'district_admin', scope: users.district.name })), ...(adminsOnly ? [] : DEMO_STAFF)]) console.log(`  ${u.email.padEnd(26)} ${u.role.padEnd(15)} ${u.name} (${u.scope})`)
+    if (!adminsOnly) {
+      const a = await seedActivity(deps)
+      console.log(`demo activity: ${a.referrals} referrals with events, device syncs, SMS log, audit`)
+    }
+  } catch (e) {
+    console.error(e instanceof Error ? e.message : e)
+    process.exitCode = 1
+  } finally {
+    await deps.prisma.$disconnect()
   }
-  console.log(`dashboard users (password for all: ${DEMO_PASSWORD}):`)
-  for (const u of admins ? ADMINS() : DEMO_USERS) console.log(`  ${u.email.padEnd(26)} ${u.role.padEnd(15)} ${u.name} (${u.scope})`)
-  if (!admins) {
-    const a = await seedActivity(deps)
-    console.log(`demo activity: ${a.referrals} referrals with events, device syncs, SMS log, audit`)
-  }
-  await deps.prisma.$disconnect()
 }

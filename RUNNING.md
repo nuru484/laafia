@@ -16,14 +16,14 @@ npm install
 ## 2. API
 
 ```bash
-cp apps/api/.env.example apps/api/.env   # fill in the database URL, JWT_SECRET, ADMIN_TOKEN, SMS_WEBHOOK_TOKEN, SMS_CALLBACK_SECRET
+cp apps/api/.env.example apps/api/.env   # fill in the database URL, JWT_SECRET, ADMIN_TOKEN, SMS_WEBHOOK_TOKEN, SMS_CALLBACK_SECRET, SEED_*
 npm run seed:all -w @laafia/api          # migrations, then the demo district: facilities, phones, clients, dashboard logins
 npm run api                             # prints its URLs: localhost for this machine, the LAN one for phones
 ```
 
 Check it from a phone's browser: `<LAN URL>/health` returns `{"ok":true}`.
 
-`npm run seed:admin -w @laafia/api` seeds only the district admins. Both reset the demo rows, so never run them against a real database.
+`npm run seed:admin -w @laafia/api` seeds only the district admins (`SEED_*` in `.env`; a new `SEED_DISTRICT_CODE` starts a new district). Both reset the demo rows, so never run them against a real database.
 
 ## 3. Web dashboard
 
@@ -32,12 +32,11 @@ cp apps/web/.env.example apps/web/.env   # API_URL, the API the dashboard proxie
 npm run web                              # prints Local and Network URLs
 ```
 
-Demo accounts (password `Laafia-demo-2026` for all), created by `seed:all`:
+Demo accounts (password `SEED_PASSWORD` for all), created by `seed:all`:
 
 | Login | Role | Sees |
 | --- | --- | --- |
-| admin@laafia.demo | District admin (Nurudeen Abdul-Majeed) | Everything for Savelugu district |
-| osman@laafia.demo | District admin (Osman Saaratu Deeshini) | Everything for Savelugu district |
+| `SEED_ADMINS` | District admin | Everything for their district |
 | supervisor@laafia.demo | Supervisor | Overview, referrals and checklists, read only |
 | hospital@laafia.demo | Facility staff | Savelugu Municipal Hospital's inbox and actions |
 | healthcentre@laafia.demo | Facility staff | Pong-Tamale Health Centre's inbox and actions |
