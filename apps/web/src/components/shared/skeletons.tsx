@@ -18,7 +18,7 @@ function Busy({ children, className }: { children: React.ReactNode; className?: 
 /** Phone rows (below md). `lines` is one array of bar widths per text line; `h-5` bars stand in for badges. */
 export function RowListSkeleton({ lines, rows = 5, className }: { lines: string[][]; rows?: number; className?: string }) {
   return (
-    <ul className={cn('-mx-4 flex flex-col divide-y border-y sm:mx-0 sm:border md:hidden', className)}>
+    <ul className={cn('-mx-4 flex flex-col divide-y border-y sm:mx-0 sm:rounded-lg sm:border md:hidden', className)}>
       {Array.from({ length: rows }, (_, r) => (
         <li key={r} className="flex flex-col gap-2.5 px-4 py-3.5">
           {lines.map((line, i) => (
@@ -90,7 +90,7 @@ export function OverviewSkeleton() {
       </div>
       <div className="mt-6 grid gap-6 @4xl/main:grid-cols-3">
         {Array.from({ length: 3 }, (_, i) => (
-          <div key={i} className="-mx-4 flex flex-col gap-3 border-y p-4 sm:mx-0 sm:border">
+          <div key={i} className="-mx-4 flex flex-col gap-3 border-y p-4 sm:mx-0 sm:rounded-lg sm:border">
             <Skeleton className="h-4 w-36" />
             {Array.from({ length: 3 }, (_, j) => (
               <div key={j} className="flex justify-between gap-3"><Skeleton className="h-4 w-32" /><Skeleton className="h-4 w-12" /></div>
@@ -99,13 +99,13 @@ export function OverviewSkeleton() {
         ))}
       </div>
       <div className="mt-6 grid gap-6 @4xl/main:grid-cols-2">
-        <div className="-mx-4 flex flex-col gap-4 border-y p-4 sm:mx-0 sm:border">
+        <div className="-mx-4 flex flex-col gap-4 border-y p-4 sm:mx-0 sm:rounded-lg sm:border">
           <Skeleton className="h-4 w-32" />
           <div className="flex h-40 items-end gap-1">
             {[30, 45, 20, 60, 35, 80, 50, 25, 70, 40, 55, 90, 35, 65].map((h, i) => <Skeleton key={i} className="flex-1" style={{ height: `${h}%` }} />)}
           </div>
         </div>
-        <div className="-mx-4 flex flex-col gap-3 border-y p-4 sm:mx-0 sm:border">
+        <div className="-mx-4 flex flex-col gap-3 border-y p-4 sm:mx-0 sm:rounded-lg sm:border">
           <Skeleton className="h-4 w-40" />
           {[60, 85, 40, 45, 25, 95, 20].map((w, i) => (
             <div key={i} className="flex items-center gap-3"><Skeleton className="h-3.5 w-24 shrink-0" /><Skeleton className="h-3.5" style={{ width: `${w * 0.5}%` }} /></div>
@@ -126,11 +126,11 @@ export function ReferralDetailSkeleton() {
         <Skeleton className="h-4 w-80 max-w-full" />
       </div>
       <div className="grid gap-6 @3xl/main:grid-cols-2">
-        <div className="-mx-4 flex flex-col gap-2.5 border-y p-4 sm:mx-0 sm:border">
+        <div className="-mx-4 flex flex-col gap-2.5 border-y p-4 sm:mx-0 sm:rounded-lg sm:border">
           <Skeleton className="h-4 w-28" />
           {[70, 85, 55, 60].map((w, i) => <Skeleton key={i} className="h-10" style={{ width: `${w}%` }} />)}
         </div>
-        <div className="-mx-4 flex flex-col gap-3 border-y p-4 sm:mx-0 sm:border">
+        <div className="-mx-4 flex flex-col gap-3 border-y p-4 sm:mx-0 sm:rounded-lg sm:border">
           <Skeleton className="h-4 w-20" />
           {Array.from({ length: 6 }, (_, i) => (
             <div key={i} className="flex items-center gap-3"><Skeleton className="size-3 rounded-full" /><Skeleton className="h-4 w-32" /><Skeleton className="ml-auto h-3.5 w-20" /></div>

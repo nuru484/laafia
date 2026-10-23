@@ -23,7 +23,7 @@ export default function AuditPage() {
     <>
       <PageHeader title="Audit log" description="Every change made on this dashboard: who, what and when." />
       <div className="mb-4 max-w-xs"><FilterSelect label="Show" value={type} onChange={(v) => { setType(v); setCursors([undefined]) }} options={TYPES} /></div>
-      <ul className="-mx-4 flex flex-col divide-y border-y sm:mx-0 sm:border">
+      <ul className="-mx-4 flex flex-col divide-y border-y sm:mx-0 sm:rounded-lg sm:border">
         {cursors.map((before, i) => <AuditChunk key={`${type}-${i}`} before={before} type={type} last={i === cursors.length - 1} onMore={(next) => setCursors((c) => [...c, next])} />)}
       </ul>
     </>

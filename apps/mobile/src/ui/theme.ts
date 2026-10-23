@@ -23,7 +23,7 @@ export const color = {
 } as const
 
 export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 } as const
-// Square corners throughout, the clinical look; only status dots stay round.
-export const radius = 0
+// A slight rounding on every corner: crisp, clinical, not boxy. Status dots stay round.
+export const radius = 4
 export const touch = 48
 export const font = { small: 14, body: 16, title: 20, big: 26 } as const

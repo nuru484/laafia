@@ -37,7 +37,7 @@ export default function SmsPage() {
       <h2 className="mb-3 text-lg font-semibold">Recent texts</h2>
       {log.isLoading ? <LogSkeleton lines={[['w-44', 'h-5 w-20'], ['w-56']]} /> : log.error ? <ErrorState message={errorMessage(log.error)} onRetry={log.refetch} /> : !log.data?.messages.length ? <EmptyState title="No texts sent yet" /> : (
         <>
-          <ul className="-mx-4 flex flex-col divide-y border-y sm:mx-0 sm:border">
+          <ul className="-mx-4 flex flex-col divide-y border-y sm:mx-0 sm:rounded-lg sm:border">
             {log.data.messages.map((m) => (
               <li key={m.id} className="flex flex-col gap-1 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">

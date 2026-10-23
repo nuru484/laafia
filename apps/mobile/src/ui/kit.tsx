@@ -155,7 +155,7 @@ export function Segmented<T extends string>({ label, options, value, onChange, r
           const on = o.value === value
           return (
             <Pressable key={o.value} onPress={() => onChange(o.value)} accessibilityRole="radio" accessibilityState={{ checked: on }}
-              style={({ pressed }) => [s.segment, i > 0 && { borderLeftWidth: 0 }, on && s.segmentOn, pressed && !on && { backgroundColor: color.primaryBg }]}>
+              style={({ pressed }) => [s.segment, i > 0 && { borderLeftWidth: 0 }, i === 0 && s.segmentFirst, i === options.length - 1 && s.segmentLast, on && s.segmentOn, pressed && !on && { backgroundColor: color.primaryBg }]}>
               <Text style={[s.segmentText, on && { color: color.primaryText, fontWeight: '700' }]} numberOfLines={1}>{o.label}</Text>
             </Pressable>
           )
@@ -375,6 +375,9 @@ export const s = StyleSheet.create({
   label: { fontSize: font.small, fontWeight: '700', color: color.muted, textTransform: 'uppercase', letterSpacing: 0.5 },
   segments: { flexDirection: 'row' },
   segment: { flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.sm, borderWidth: 1, borderColor: color.line, backgroundColor: color.card },
+  // Joined buttons: only the outer ends are rounded.
+  segmentFirst: { borderTopLeftRadius: radius, borderBottomLeftRadius: radius },
+  segmentLast: { borderTopRightRadius: radius, borderBottomRightRadius: radius },
   segmentOn: { backgroundColor: color.primary, borderColor: color.primary },
   segmentText: { fontSize: font.body, color: color.text, fontWeight: '600' },
   select: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.sm },

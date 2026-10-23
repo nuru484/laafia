@@ -47,7 +47,7 @@ export default function DuplicatesPage() {
       ) : (
         <ul className="flex flex-col gap-4">
           {data.groups.map((g) => (
-            <li key={g.clients.map((c) => c.id).join('|')} className="-mx-4 border-y bg-card sm:mx-0 sm:border">
+            <li key={g.clients.map((c) => c.id).join('|')} className="-mx-4 border-y bg-card sm:mx-0 sm:rounded-lg sm:border">
               <p className="border-b px-4 py-2.5 text-sm text-muted-foreground sm:px-5">
                 <span className="font-medium text-foreground">{g.reason === 'same phone' ? 'Same phone number' : 'Same name, type and community'}</span> · {g.clients.length} records
               </p>

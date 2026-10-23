@@ -82,8 +82,8 @@
     --chart-3: #566770;
     --chart-4: #9AA9B1;
     --chart-5: #DCE3E7;
-    /* Square corners throughout, the clinical look; only status dots stay round. */
-    --radius: 0;
+    /* A slight rounding on every corner: crisp, clinical, not boxy. Status dots stay round. */
+    --radius: 0.25rem;
     --sidebar: #F3F6F8;
     --sidebar-foreground: #0E1B22;
     --sidebar-primary: #0077A8;

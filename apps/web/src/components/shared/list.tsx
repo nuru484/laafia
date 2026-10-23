@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils'
  * not a box per row inside the page padding. From sm it takes a frame again.
  */
 export function RowList({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <ul className={cn('-mx-4 flex flex-col divide-y border-y bg-card sm:mx-0 sm:border md:hidden', className)}>{children}</ul>
+  return <ul className={cn('-mx-4 flex flex-col divide-y overflow-hidden border-y bg-card sm:mx-0 sm:rounded-lg sm:border md:hidden', className)}>{children}</ul>
 }
 
 export function Row({ children, className }: { children: React.ReactNode; className?: string }) {

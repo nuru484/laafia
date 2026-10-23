@@ -77,7 +77,7 @@ export default function GuidePage() {
         {roles.map((r) => (
           <TabsContent key={r} value={r} className="flex flex-col gap-4">
             {[...GUIDE[r], ALL].map((sec) => (
-              <section key={sec.title} className="-mx-4 border-y bg-card px-4 py-5 sm:mx-0 sm:border sm:px-6" aria-labelledby={`${r}-${sec.title}`}>
+              <section key={sec.title} className="-mx-4 border-y bg-card px-4 py-5 sm:mx-0 sm:rounded-lg sm:border sm:px-6" aria-labelledby={`${r}-${sec.title}`}>
                 <div className="mb-3 flex items-center gap-3">
                   <span className="grid size-9 shrink-0 place-items-center bg-primary/10 text-primary" aria-hidden><sec.icon className="size-4" /></span>
                   <h2 id={`${r}-${sec.title}`} className="text-base font-semibold">{sec.title}</h2>

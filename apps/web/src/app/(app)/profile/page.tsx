@@ -29,7 +29,7 @@ const password = z
 /** A section of the profile: heading, a note, and its one action on the right of the heading. */
 function Section({ title, note, action, children }: { title: string; note?: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <section className="-mx-4 border-y bg-card sm:mx-0 sm:border" aria-labelledby={`${title}-h`}>
+    <section className="-mx-4 border-y bg-card sm:mx-0 sm:rounded-lg sm:border" aria-labelledby={`${title}-h`}>
       <div className="flex items-start justify-between gap-3 border-b px-4 py-4 sm:px-6">
         <div className="min-w-0">
           <h2 id={`${title}-h`} className="text-base font-semibold">{title}</h2>
