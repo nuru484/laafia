@@ -36,5 +36,5 @@ describe('PIN', () => {
     expect(await checkPin('482915')).toEqual({ result: 'ok' })
     expect(JSON.parse(store.get('laafia_pin')!)).toMatchObject({ v: 2 })
     expect(await checkPin('482915')).toEqual({ result: 'ok' })
-  })
+  }, 20_000) // three 100k-round PBKDF2 runs in plain JS
 })

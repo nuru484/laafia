@@ -147,6 +147,8 @@ The API and the dashboard go online; the phones keep working offline and sync wh
   ```
 
   Then create the facilities and phones from the dashboard.
+
+  For a demo district instead: after `db:migrate`, run `seed:demo` first, then `seed` with `SEED_DISTRICT_CODE='SAV'` so your admin joins the demo district (the other order fails on the district code). The demo facilities' referral numbers are placeholders: set the real ones on the dashboard's Facilities page.
 - Render's free plan sleeps after 15 idle minutes, so the first sync afterwards waits for it to wake.
 
 **Dashboard on Vercel** (root directory `apps/web`): set `API_URL` to the Render URL. The dashboard proxies `/api` to it, so sign-in cookies stay on the dashboard's own domain.
