@@ -79,19 +79,19 @@ export async function seedDemo(deps: Deps, users: SeedUsers, today = Date.now())
 export type SeedUsers = { password: string; admins: { name: string; email: string }[]; district: { code: string; name: string } }
 
 /**
- * From .env: SEED_ADMINS ("Name <email>", comma-separated), SEED_PASSWORD (10+ characters, every seeded account's),
+ * From .env: SEED_ADMINS ("Name email" or "Name <email>", comma-separated), SEED_PASSWORD (10+ characters, every seeded account's),
  * and the admins' district, SEED_DISTRICT_CODE and SEED_DISTRICT_NAME (SAV is the demo district).
  */
 export function seedUsersFromEnv(env: Record<string, string | undefined> = process.env): SeedUsers {
   const password = env.SEED_PASSWORD?.trim() ?? ''
-  const admins = (env.SEED_ADMINS ?? '').split(',').filter((a) => a.trim()).map((a) => /^\s*(.+?)\s*<\s*(\S+@\S+?)\s*>\s*$/.exec(a))
+  const admins = (env.SEED_ADMINS ?? '').split(',').filter((a) => a.trim()).map((a) => /^\s*(.+?)\s*<?\s*(\S+@[^\s>]+)\s*>?\s*$/.exec(a))
   const code = env.SEED_DISTRICT_CODE?.trim().toUpperCase() ?? ''
   const name = env.SEED_DISTRICT_NAME?.trim() ?? ''
   const problems = [
     password.length < 10 && 'SEED_PASSWORD must be at least 10 characters',
     !/^[A-Z]{2,10}$/.test(code) && 'SEED_DISTRICT_CODE must be 2 to 10 letters, e.g. SAV',
     !name && 'SEED_DISTRICT_NAME must be set',
-    (!admins.length || admins.some((m) => !m)) && 'SEED_ADMINS must be "Name <email>", comma-separated',
+    (!admins.length || admins.some((m) => !m)) && 'SEED_ADMINS must be "Name email", comma-separated',
   ].filter(Boolean)
   if (problems.length) throw new Error(`${problems.join('; ')} (see apps/api/.env.example)`)
   return { password, admins: admins.map((m) => ({ name: m![1]!, email: m![2]!.toLowerCase() })), district: { code, name } }

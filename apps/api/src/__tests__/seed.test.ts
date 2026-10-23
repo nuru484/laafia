@@ -6,7 +6,7 @@ import { seedAdmins, seedDemo, seedUsersFromEnv } from '../seed-demo.ts'
 useDb()
 
 const ENV = {
-  SEED_ADMINS: 'Fatima Alhassan <Fatima@ghs.example>, Issah Mahama <issah@ghs.example>', SEED_PASSWORD: 'first-password-1',
+  SEED_ADMINS: 'Fatima Alhassan <Fatima@ghs.example>, Issah Mahama issah@ghs.example', SEED_PASSWORD: 'first-password-1',
   SEED_DISTRICT_CODE: 'kmb', SEED_DISTRICT_NAME: 'Kumbungu',
 }
 
@@ -16,7 +16,7 @@ describe('seed', () => {
       password: 'first-password-1', district: { code: 'KMB', name: 'Kumbungu' },
       admins: [{ name: 'Fatima Alhassan', email: 'fatima@ghs.example' }, { name: 'Issah Mahama', email: 'issah@ghs.example' }],
     })
-    expect(() => seedUsersFromEnv({ SEED_ADMINS: 'Fatima fatima@ghs.example', SEED_PASSWORD: 'short' }))
+    expect(() => seedUsersFromEnv({ SEED_ADMINS: 'Fatima Alhassan', SEED_PASSWORD: 'short' }))
       .toThrow(/SEED_PASSWORD.*SEED_DISTRICT_CODE.*SEED_DISTRICT_NAME.*SEED_ADMINS/)
   })
 
