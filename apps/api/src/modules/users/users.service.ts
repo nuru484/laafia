@@ -92,7 +92,15 @@ async function userInScope(deps: Deps, actor: Actor, id: string) {
 
 /** Name and sign-in details. An account keeps at least one of email and phone. */
 export async function updateUser(deps: Deps, actor: Actor, id: string, body: UpdateUserInput) {
-  const u = await userInScope(deps, actor, id)
+  return userView(await applyUpdate(deps, actor, await userInScope(deps, actor, id), body))
+}
+
+/** A signed-in user's own name and sign-in details; role and scope stay with the district admin. */
+export async function updateMe(deps: Deps, actor: Actor & { kind: 'user' }, body: UpdateUserInput) {
+  return withScope(deps, await applyUpdate(deps, actor, await deps.prisma.user.findUniqueOrThrow({ where: { id: actor.user.id } }), body))
+}
+
+async function applyUpdate(deps: Deps, actor: Actor, u: UserRow & { districtId: string | null; facilityId: string | null }, body: UpdateUserInput) {
   const email = body.email === undefined ? u.email : body.email?.toLowerCase() ?? null
   const phone = body.phone === undefined ? u.phone : body.phone ? normalizePhone(body.phone) : null
   if (!email && !phone) throw new HttpError(400, 'invalid_request', 'An account needs an email or a phone to sign in with')
@@ -100,7 +108,16 @@ export async function updateUser(deps: Deps, actor: Actor, id: string, body: Upd
   if (clash) throw new HttpError(409, 'conflict', 'That email or phone already has an account')
   const updated = await deps.prisma.user.update({ where: { id: u.id }, data: { name: body.name ?? u.name, email, phone } })
   await audit(deps, actor, 'user.update', { type: 'user', id: u.id, districtId: u.districtId ?? (await districtOfFacility(deps, u.facilityId)) }, { fields: Object.keys(body) })
-  return userView(updated)
+  return updated
+}
+
+/** The user's own password change: the current one is required, and every other session of theirs ends. */
+export async function changeMyPassword(deps: Deps, actor: Actor & { kind: 'user' }, current: string, next: string, keepSessionId: string | null) {
+  const u = await deps.prisma.user.findUniqueOrThrow({ where: { id: actor.user.id } })
+  if (!(await verifyPassword(current, u.passwordHash))) throw new HttpError(400, 'wrong_password', 'The current password is not right')
+  await deps.prisma.user.update({ where: { id: u.id }, data: { passwordHash: await hashPassword(next), passwordChangedAt: deps.clock() } })
+  await deps.prisma.webSession.updateMany({ where: { userId: u.id, revokedAt: null, ...(keepSessionId ? { id: { not: keepSessionId } } : {}) }, data: { revokedAt: deps.clock() } })
+  await audit(deps, actor, 'user.password_change', { type: 'user', id: u.id, districtId: u.districtId ?? (await districtOfFacility(deps, u.facilityId)) })
 }
 
 /** Admin password reset: every session of that user ends. */

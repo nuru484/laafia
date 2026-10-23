@@ -1,10 +1,13 @@
 import type { RequestHandler } from 'express'
 import type { Deps } from '../../platform/deps.ts'
 import { input } from '../../platform/http/validate.ts'
-import { actorOf, userOf } from '../../platform/middleware/auth.ts'
+import { actorOf, userOf, type Actor } from '../../platform/middleware/auth.ts'
 import { clearSessionCookies, readCookie, revokeSessions, resolveSession, SESSION_COOKIE, setSessionCookies } from '../../platform/sessions.ts'
-import { CreateUserBody, LoginBody, PasswordBody, UpdateUserBody, UserParams } from './users.schemas.ts'
-import { createUser, listUsers, login, me, resetPassword, setActive, updateUser } from './users.service.ts'
+import { ChangePasswordBody, CreateUserBody, LoginBody, PasswordBody, UpdateUserBody, UserParams } from './users.schemas.ts'
+import { changeMyPassword, createUser, listUsers, login, me, resetPassword, setActive, updateMe, updateUser } from './users.service.ts'
+
+// Routes behind `anyUser` only ever see a signed-in dashboard user.
+type UserActor = Actor & { kind: 'user' }
 
 export function createUsersController(deps: Deps) {
   const signIn: RequestHandler = async (_req, res) => {
@@ -22,6 +25,15 @@ export function createUsersController(deps: Deps) {
   }
   const whoAmI: RequestHandler = async (_req, res) => {
     res.json({ user: await me(deps, userOf(res).id) })
+  }
+  const updateMine: RequestHandler = async (_req, res) => {
+    res.json({ user: await updateMe(deps, actorOf(res) as UserActor, input(res, 'body', UpdateUserBody)) })
+  }
+  /** Keeps the session that made the change; every other one ends. */
+  const changePassword: RequestHandler = async (_req, res) => {
+    const b = input(res, 'body', ChangePasswordBody)
+    await changeMyPassword(deps, actorOf(res) as UserActor, b.current_password, b.new_password, (res.locals.sessionId as string | undefined) ?? null)
+    res.json({ ok: true })
   }
   const list: RequestHandler = async (_req, res) => {
     res.json({ users: await listUsers(deps, actorOf(res)) })
@@ -41,5 +53,5 @@ export function createUsersController(deps: Deps) {
   const activate: RequestHandler = async (_req, res) => {
     res.json({ user: await setActive(deps, actorOf(res), input(res, 'params', UserParams).id, true) })
   }
-  return { signIn, signOut, whoAmI, list, create, update, password, deactivate, activate }
+  return { signIn, signOut, whoAmI, updateMine, changePassword, list, create, update, password, deactivate, activate }
 }

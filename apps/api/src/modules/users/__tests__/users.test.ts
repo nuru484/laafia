@@ -123,3 +123,28 @@ describe('scope: one facility cannot see another', () => {
     expect((await request(app).get('/admin/devices').set(ADMIN)).body.devices.map((d: { id: string }) => d.id)).toContain('GW01')
   })
 })
+
+describe('own account', () => {
+  it('lets any signed-in user change their own name and sign-in details, never their role', async () => {
+    const { agent, csrf } = await signIn(USERS.supervisor)
+    const r = await agent.patch('/web/me').set(csrf).send({ name: 'Dr. F. Abdulai', phone: '0241119999' })
+    expect(r.status).toBe(200)
+    expect(r.body.user).toMatchObject({ name: 'Dr. F. Abdulai', phone: '0241119999', role: 'supervisor' })
+    expect((await agent.patch('/web/me').set(csrf).send({ role: 'district_admin' })).status).toBe(400)
+    expect((await agent.patch('/web/me').set(csrf).send({ email: USERS.admin })).body.code).toBe('conflict')
+    expect((await agent.patch('/web/me').send({ name: 'No CSRF' })).status).toBe(403)
+  })
+
+  it('changes the password only with the current one, and signs out the other sessions', async () => {
+    const one = await signIn(USERS.supervisor)
+    const two = await signIn(USERS.supervisor)
+    const wrong = await one.agent.post('/web/me/password').set(one.csrf).send({ current_password: 'not-my-password', new_password: 'brand-new-pass-1' })
+    expect(wrong.status).toBe(400)
+    expect(wrong.body.code).toBe('wrong_password')
+    expect((await one.agent.post('/web/me/password').set(one.csrf).send({ current_password: DEMO_PASSWORD, new_password: 'short' })).status).toBe(400)
+    expect((await one.agent.post('/web/me/password').set(one.csrf).send({ current_password: DEMO_PASSWORD, new_password: 'brand-new-pass-1' })).status).toBe(200)
+    expect((await one.agent.get('/web/me')).status).toBe(200)
+    expect((await two.agent.get('/web/me')).status).toBe(401)
+    expect((await login(USERS.supervisor, 'brand-new-pass-1', '10.9.5.1')).status).toBe(200)
+  })
+})

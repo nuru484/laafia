@@ -30,4 +30,5 @@ export const UpdateUserBody = z
 export type UpdateUserInput = z.infer<typeof UpdateUserBody>
 
 export const PasswordBody = z.object({ password })
+export const ChangePasswordBody = z.object({ current_password: z.string().min(1).max(200), new_password: password })
 export const UserParams = z.object({ id: z.string().max(64) })
