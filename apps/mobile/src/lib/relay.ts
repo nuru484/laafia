@@ -128,6 +128,11 @@ export type NewReferral = {
   protocol_id: keyof typeof PROTOCOLS
   evaluation: Evaluation
   destination_code: string
+  /**
+   * Online, the referral goes to the server at once and is pushed to the facility phone; the SMS waits this long
+   * and is dropped if the facility confirms first (skipAnsweredSms). Offline, it goes straight away.
+   */
+  hold_sms_ms?: number
 }
 
 export async function createReferral(env: Env, input: NewReferral): Promise<{ referral: ReferralRow; wire: string }> {
@@ -156,7 +161,7 @@ export async function createReferral(env: Env, input: NewReferral): Promise<{ re
     }
     await insertReferral(env, referral)
     await addEvent(env, referral.id, 'created', env.self.device_id, 'local')
-    if (facility.phone) await enqueueSms(env, facility.phone, wire, 'referrals', referral.id)
+    if (facility.phone) await enqueueSms(env, facility.phone, wire, 'referrals', referral.id, input.hold_sms_ms ? env.now() + input.hold_sms_ms : undefined)
     return { referral, wire }
   })
 }
@@ -355,6 +360,30 @@ export function smsProblem(error: string | null): string {
   if (error && NO_SIGNAL.has(error) && error !== 'no_sms_permission') return 'No signal. The SMS will send by itself when signal returns.'
   if (error === 'no_sms_permission') return 'Laafia is not allowed to send SMS. Open More, Phone setup, and allow SMS; it sends within a minute after that.'
   return `SMS not sent (${error ?? 'unknown error'}); retrying.`
+}
+
+/** Referral SMS still waiting while the facility already has the referral (it reached them by internet): not sent. */
+export async function skipAnsweredSms(env: Env): Promise<number> {
+  const r = await env.db.run(
+    `UPDATE outbox SET status = 'skipped' WHERE status = 'pending' AND ref_table = 'referrals'
+       AND ref_id IN (SELECT referral_id FROM referral_events WHERE status IN ('received', 'arrived', 'treated', 'closed'))`)
+  return r.changes
+}
+
+/**
+ * Facility phone: a referral to this facility that came by internet is received here, as one that came by SMS
+ * is, so the CHO's phone hears it at once and holds back its SMS.
+ */
+export async function receivePulled(env: Env): Promise<number> {
+  if (env.self.role !== 'facility') return 0
+  const me = await env.db.get<{ facility_code: string | null }>('SELECT facility_code FROM devices WHERE id = ?', [env.self.device_id])
+  const fresh = await env.db.all<{ id: string }>(
+    `SELECT id FROM referrals r WHERE r.destination_code = ? AND r.created_at >= ?
+       AND NOT EXISTS (SELECT 1 FROM referral_events ev WHERE ev.referral_id = r.id AND ev.status IN ('received', 'arrived', 'treated', 'closed', 'cancelled'))`,
+    // Only the fresh ones: a phone activated today does not acknowledge last week's referrals.
+    [me?.facility_code ?? '', env.now() - 6 * 3_600_000])
+  for (const r of fresh) await addEvent(env, r.id, 'received', env.self.device_id, 'https')
+  return fresh.length
 }
 
 export async function dueMessages(env: Env): Promise<OutboxRow[]> {

@@ -1,12 +1,13 @@
 import { useFonts } from 'expo-font'
-import { Stack } from 'expo-router'
+import * as Notifications from 'expo-notifications'
+import { Stack, router } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect, useState, type ReactNode } from 'react'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { Activate } from '../features/Activate'
 import { Pin } from '../features/Pin'
 import { isUnlocked, onLockChange, setUnlocked } from '../lib/lock'
-import { boot, currentSession, subscribe } from '../lib/runtime'
+import { boot, currentSession, subscribe, syncNow } from '../lib/runtime'
 import { hasPin } from '../lib/session'
 import { Banner, Loading, Screen } from '../ui/kit'
 import { color } from '../ui/theme'
@@ -20,6 +21,13 @@ export default function RootLayout() {
   const [gate, setGate] = useState<Gate>('booting')
   // Local files, so this takes a moment; if they cannot load the app carries on in the system font.
   const [fontsLoaded, fontError] = useFonts(FONTS)
+  // Tapping a referral or status notification opens that referral, once the app is unlocked and it has synced.
+  const tapped = Notifications.useLastNotificationResponse()
+  const tappedId = tapped?.notification.request.content.data?.referral_id ?? tapped?.notification.request.content.data?.referralId
+  useEffect(() => {
+    if (gate !== 'ready' || typeof tappedId !== 'string') return
+    void syncNow().then(() => router.push(`/referral/${tappedId}`))
+  }, [gate, tappedId])
 
   async function decide() {
     try {

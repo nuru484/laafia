@@ -10,6 +10,7 @@ import { createDashboardRouter } from './modules/dashboard/index.ts'
 import { createEventsRouter } from './modules/events/index.ts'
 import { createProtocolsRouter } from './modules/protocols/protocols.routes.ts'
 import { createReferralsRouter } from './modules/referrals/index.ts'
+import { startReferralPush } from './modules/referrals/referrals.push.ts'
 import { createSmsRouter } from './modules/sms/index.ts'
 import { createSyncRouter } from './modules/sync/index.ts'
 import { createUsersRouter } from './modules/users/index.ts'
@@ -29,4 +30,5 @@ export function mountModules(app: Express, deps: Deps) {
   app.use(createClientsRouter(deps, auth))
   app.use(createAuditRouter(deps, auth))
   app.use(createProtocolsRouter(auth))
+  startReferralPush(deps)
 }

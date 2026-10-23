@@ -1,5 +1,11 @@
 /** The API URL comes from the environment: .env locally (see .env.example), eas.json per build profile. */
 
+import { existsSync } from 'node:fs'
+
+// Push over the internet needs the Firebase project's google-services.json here (RUNNING.md, Push). Without it the
+// build still works: referrals go by SMS and sync only.
+const firebase = existsSync('./google-services.json') ? './google-services.json' : undefined
+
 export default () => ({
   name: 'Laafia',
   slug: 'laafia',
@@ -11,6 +17,7 @@ export default () => ({
   userInterfaceStyle: 'light',
   android: {
     package: 'org.laafia.app',
+    googleServicesFile: firebase,
     adaptiveIcon: {
       backgroundColor: '#FFFFFF',
       foregroundImage: './assets/images/android-icon-foreground.png',

@@ -103,6 +103,13 @@ The instant booking alert with the app closed and printing are native changes: r
 
 Signing out and unlocking: More, Sign out of this phone removes the register and returns the phone to activation (a new code from the Nurses page brings it back); it refuses while anything is still waiting to upload or send. Fingerprint or face unlock appears on the PIN screen once the development build includes `expo-local-authentication` (rebuild, section 4); More has the switch to turn it off.
 
+Push over the internet (one-off setup; without it everything runs on SMS and sync as before):
+1. console.firebase.google.com: Add project, name it Laafia, Google Analytics off. In the project, add an Android app with package `org.laafia.app`, download `google-services.json` and put it in `apps/mobile/`.
+2. In Firebase, Project settings, Service accounts, Generate new private key. Keep that file private; never commit it.
+3. expo.dev, project laafia, Credentials, Android, `org.laafia.app`, FCM V1 service account key: upload that file.
+4. Rebuild the development build (section 4) and install it. Each phone registers on its next sync once notifications are allowed.
+Then a referral reaches the facility phone by push within seconds and rings it; the facility phone marks it received, the CHO's phone hears that, and the referral SMS it was holding (45 s for an emergency, 90 s otherwise) is dropped. Offline, or with no answer in time, the SMS goes as before.
+
 Facility alarm: it rings only on a phone activated as a facility phone. On the dashboard, Phones, Facility phones, give the hospital's phone a code and activate it with the SIM that the facility's referral number belongs to; then in Laafia, More, Phone setup checks, allow notifications and the alarm over the lock screen. A referral sent to that number rings it, even with the app closed; an emergency rings until it is opened.
 
 Delivery: on a pregnant client, Record the delivery. She becomes after delivery and each baby is enrolled as a newborn at the top of Today (visit within 48 hours); a stillbirth enrols no baby.

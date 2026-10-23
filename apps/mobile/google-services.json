@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "563735229995",
+    "project_id": "laafia-1edfb",
+    "storage_bucket": "laafia-1edfb.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:563735229995:android:81865278d78d719d1b5c6e",
+        "android_client_info": {
+          "package_name": "org.laafia.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDU0TOzsD592DQrGoBP_wG4TRBYu-MZ-vE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

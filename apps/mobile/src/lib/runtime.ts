@@ -8,7 +8,8 @@ import { ApiError, deviceApi, publicCall } from './api'
 import type { Db } from './db/db'
 import { openDb, wipeDb } from './db/expo'
 import { toast } from '../ui/toast'
-import { applySendResult, dueMessages, markSending, processIncoming, referralStatus, smsProblem, type Env, type Role, type SendResult } from './relay'
+import { pushAddress } from './push'
+import { applySendResult, dueMessages, markSending, processIncoming, receivePulled, referralStatus, skipAnsweredSms, smsProblem, type Env, type Role, type SendResult } from './relay'
 import { clearSession, loadSession, saveSession, type Session } from './session'
 import { collectUnsynced, pull, push } from './sync'
 
@@ -213,6 +214,8 @@ const TYPE: Record<string, string> = { PW: 'Pregnant woman', PP: 'Mother after d
  */
 async function ringForPulledReferrals(e: Env, quiet = false) {
   if (e.self.role !== 'facility') return
+  // With push working, the server's push already rang for it.
+  if (!quiet && (await pushRegistered(e))) quiet = true
   const me = await e.db.get<{ facility_code: string | null }>('SELECT facility_code FROM devices WHERE id = ?', [e.self.device_id])
   const fresh = await e.db.all<{ id: string; short_id: string; urgency: number; client_type: string; client_code: string }>(
     `SELECT r.id, r.short_id, r.urgency, r.client_type, r.client_code FROM referrals r
@@ -250,6 +253,10 @@ export async function syncNow(): Promise<SyncState> {
     await push(current, api)
     await pull(current, api)
     await ringForPulledReferrals(current)
+    // A facility phone acknowledges what came by internet at once, so the CHO hears it on this same sync.
+    if (await receivePulled(current)) await push(current, api)
+    await skipAnsweredSms(current)
+    await registerPush(current)
     await clearAnsweredAlarms(current)
     await pushNativeState()
     syncState = { last_ok: Date.now(), last_error: null, running: false }
@@ -280,9 +287,31 @@ export async function deactivateLocally(): Promise<void> {
   changed()
 }
 
-/** Anything recorded on this phone reaches the server within a worker tick when there is internet. */
+const PUSH_KEY = 'push_token'
+
+export async function pushRegistered(e: Env): Promise<boolean> {
+  return !!(await e.db.get<{ value: string }>('SELECT value FROM meta WHERE key = ?', [PUSH_KEY]))?.value
+}
+
+/** Tells the server this phone's push address when it is new or changed, and forgets it when there is none. */
+async function registerPush(e: Env) {
+  const token = await pushAddress()
+  const known = (await e.db.get<{ value: string }>('SELECT value FROM meta WHERE key = ?', [PUSH_KEY]))?.value ?? null
+  if (token === known) return
+  // Not worth failing a sync over: the next one tries again.
+  try { await api.request('POST', '/sync/push-token', { token }) } catch { return }
+  if (token) await e.db.run('INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', [PUSH_KEY, token])
+  else await e.db.run('DELETE FROM meta WHERE key = ?', [PUSH_KEY])
+}
+
+/**
+ * Anything recorded on this phone reaches the server within a worker tick when there is internet. A referral SMS
+ * held back for the internet path also keeps the phone syncing, to hear the facility's "received" in time.
+ */
 async function syncIfUnsent() {
-  if (!current || !(await collectUnsynced(current, 1)).length) return
+  if (!current) return
+  const held = await current.db.get("SELECT 1 FROM outbox WHERE status = 'pending' AND ref_table = 'referrals' AND next_attempt_at > ?", [current.now()])
+  if (!held && !(await collectUnsynced(current, 1)).length) return
   if ((await NetInfo.fetch()).isInternetReachable) await syncNow()
 }
 
@@ -291,6 +320,8 @@ function startWorkers() {
   const subs = [
     LaafiaSms.addListener('onSmsReceived', () => void drainInbox()),
     LaafiaSms.addListener('onSmsStatus', () => void drainResults()),
+    // A push says the server has something for this phone: fetch it now rather than at the next tick.
+    Notifications.addNotificationReceivedListener(() => void syncNow()),
   ]
   const app = AppState.addEventListener('change', (s) => {
     if (s === 'active') void drainResults().then(drainInbox).then(sendDue)

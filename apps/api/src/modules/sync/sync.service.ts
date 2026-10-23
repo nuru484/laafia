@@ -1,4 +1,4 @@
-import { Prisma, savepoint, type Tx } from '../../platform/db.ts'
+import { Prisma, savepoint, write, type Tx } from '../../platform/db.ts'
 import type { Deps } from '../../platform/deps.ts'
 import { HttpError } from '../../platform/http/errors.ts'
 import { toWire } from '../../platform/http/wire.ts'
@@ -149,7 +149,8 @@ export async function pull(deps: Deps, device: Device, { since, limit }: PullInp
   const page = { orderBy: { seq: 'asc' as const }, take: limit }
   const find: Record<SyncTable, (where: Where) => Promise<{ seq: number }[]>> = {
     facilities: (where) => prisma.facility.findMany({ where, ...page }),
-    devices: (where) => prisma.device.findMany({ where, ...page, omit: { keyHex: true } }),
+    // Phones never get each other's keys or push addresses.
+    devices: (where) => prisma.device.findMany({ where, ...page, omit: { keyHex: true, pushToken: true } }),
     households: (where) => prisma.household.findMany({ where, ...page }),
     clients: (where) => prisma.client.findMany({ where, ...page }),
     visits: (where) => prisma.visit.findMany({ where, ...page }),
@@ -167,4 +168,15 @@ export async function pull(deps: Deps, device: Device, { since, limit }: PullInp
   const last = merged.length ? merged[merged.length - 1]!.row.seq : Math.max(seq, base)
   const records = merged.map(({ table, row }) => ({ table, row: toWire(row) }))
   return { records, cursor: `${last}.${base}`, more: all.length > limit || results.some((r) => r.rows.length === limit), keys: await keysFor(deps, device) }
+}
+
+/**
+ * Where to push to this phone. An address belongs to one install, so a phone activated again as another device
+ * takes its address with it.
+ */
+export async function setPushToken(deps: Deps, deviceId: string, token: string | null) {
+  await write(deps.prisma, async (tx) => {
+    if (token) await tx.device.updateMany({ where: { pushToken: token, id: { not: deviceId } }, data: { pushToken: null } })
+    await tx.device.update({ where: { id: deviceId }, data: { pushToken: token } })
+  })
 }

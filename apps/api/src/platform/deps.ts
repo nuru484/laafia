@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events'
 import { env as processEnv, type Env } from '../config/env.ts'
 import { createPrisma, type Db } from './db.ts'
 import { createLogger, type Logger } from './logger.ts'
+import { createPushGateway, type PushGateway } from './push-gateway.ts'
 import { createSmsGateway, type SmsGateway } from './sms-gateway.ts'
 
 /**
@@ -14,6 +15,8 @@ export type Deps = {
   env: Env
   logger: Logger
   sms: SmsGateway
+  /** Push to phones over the internet, so a referral or a status reaches a phone at once. */
+  push: PushGateway
   clock: () => number
   /** In-process bus feeding /events (SSE). Emits 'referral' with a ReferralView after the write commits. */
   bus: EventEmitter
@@ -31,6 +34,7 @@ export function buildDeps(over: Partial<Deps> = {}): Deps {
     bus,
     prisma: over.prisma ?? createPrisma(env.DATABASE_URL),
     sms: over.sms ?? createSmsGateway(env, logger),
+    push: over.push ?? createPushGateway(env, logger),
     clock,
   }
 }

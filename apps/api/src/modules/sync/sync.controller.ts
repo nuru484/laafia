@@ -2,8 +2,8 @@ import type { Request, RequestHandler } from 'express'
 import type { Deps } from '../../platform/deps.ts'
 import { input } from '../../platform/http/validate.ts'
 import { deviceOf } from '../../platform/middleware/auth.ts'
-import { PullQuery, PushBody } from './sync.schemas.ts'
-import { pull, push, recordContact } from './sync.service.ts'
+import { PullQuery, PushBody, PushTokenBody } from './sync.schemas.ts'
+import { pull, push, recordContact, setPushToken } from './sync.service.ts'
 
 const appVersion = (req: Request) => {
   const v = req.headers['x-app-version']
@@ -21,5 +21,9 @@ export function createSyncController(deps: Deps) {
     await recordContact(deps, device.id, appVersion(req))
     res.json(await pull(deps, device, input(res, 'query', PullQuery)))
   }
-  return { pushRows, pullRows }
+  const pushToken: RequestHandler = async (_req, res) => {
+    await setPushToken(deps, deviceOf(res).id, input(res, 'body', PushTokenBody).token)
+    res.json({ ok: true })
+  }
+  return { pushRows, pullRows, pushToken }
 }

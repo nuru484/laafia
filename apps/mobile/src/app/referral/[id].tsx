@@ -37,7 +37,7 @@ export default function ReferralScreen() {
         WHERE r.id = ?`, [id])
     if (!r) return null
     const events = await db.all<{ status: ReferralStatus; at: number; via: string; source_device_id: string }>('SELECT status, at, via, source_device_id FROM referral_events WHERE referral_id = ? ORDER BY at', [id])
-    const outbox = await db.all<{ status: string; last_error: string | null; recipient: string }>("SELECT status, last_error, recipient FROM outbox WHERE ref_id = ? AND ref_table = 'referrals' ORDER BY created_at DESC LIMIT 1", [id])
+    const outbox = await db.all<{ status: string; last_error: string | null; recipient: string; next_attempt_at: number }>("SELECT status, last_error, recipient, next_attempt_at FROM outbox WHERE ref_id = ? AND ref_table = 'referrals' ORDER BY created_at DESC LIMIT 1", [id])
     const facilities = await db.all<{ code: string; name: string; level: string }>('SELECT code, name, level FROM facilities ORDER BY level, name')
     const onward = await db.all<{ id: string; destination_code: string; short_id: string }>('SELECT id, destination_code, short_id FROM referrals WHERE parent_referral_id = ?', [id])
     const myCode = (await db.get<{ facility_code: string | null }>('SELECT facility_code FROM devices WHERE id = ?', [env().self.device_id]))?.facility_code ?? null
@@ -79,6 +79,10 @@ export default function ReferralScreen() {
       ) : null}
       {alert === 'not_arrived' ? <Banner tone="followup" text="The facility has not recorded her arrival. Visit the house." /> : null}
       {lastSms?.status === 'pending' && lastSms.last_error ? <Banner tone="followup" text={smsProblem(lastSms.last_error)} /> : null}
+      {lastSms?.status === 'pending' && !lastSms.last_error && lastSms.next_attempt_at > Date.now() ? (
+        <Banner text={`Sent by internet. The SMS goes too at ${new Date(lastSms.next_attempt_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })} unless the facility confirms first.`} />
+      ) : null}
+      {lastSms?.status === 'skipped' ? <Banner text="The facility got it by internet, so no SMS was needed." /> : null}
 
       {!isFacility && r.wire ? (
         <Card>

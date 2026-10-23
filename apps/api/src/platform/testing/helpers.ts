@@ -7,9 +7,12 @@ import { resetLoginLimits } from '../../modules/users/index.ts'
 import { DEMO_CODES, DEMO_PASSWORD, seedDemo } from '../../seed-demo.ts'
 import { buildDeps } from '../deps.ts'
 import type { Logger } from '../logger.ts'
+import type { PushMessage } from '../push-gateway.ts'
 
 const quiet: Logger = { info() {}, warn() {}, error() {} }
-export const deps = buildDeps({ logger: quiet })
+/** Every push the server sent, in order; a test reads and clears it. */
+export const pushes: PushMessage[] = []
+export const deps = buildDeps({ logger: quiet, push: { send: async (m) => { pushes.push(...m); return m.map(() => 'ok' as const) } } })
 export const prisma = deps.prisma
 export const app = createApp(deps)
 export const TODAY = Date.UTC(2026, 9, 22)

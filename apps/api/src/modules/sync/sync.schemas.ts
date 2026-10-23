@@ -65,3 +65,6 @@ export const PullQuery = z.object({
   limit: z.coerce.number().int().min(1).max(1000).default(500),
 })
 export type PullInput = z.infer<typeof PullQuery>
+
+/** The phone's Expo push address, or null to stop pushes (notifications turned off, signed out). */
+export const PushTokenBody = z.object({ token: z.string().regex(/^Expo(nent)?PushToken\[[A-Za-z0-9_-]{8,}\]$/).nullable() })

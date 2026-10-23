@@ -110,6 +110,8 @@ model Device {
   keyHex          String?          @map("key_hex")
   active          Boolean          @default(true)
   activatedAt     BigInt?          @map("activated_at")
+  /// Expo push address the phone registered: referrals and status changes reach it at once when it has internet.
+  pushToken       String?          @map("push_token")
   activationCodes ActivationCode[]
 
   @@index([seq], map: "devices_seq")

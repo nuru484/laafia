@@ -10,7 +10,9 @@ import {
   loadSeed,
   markSending,
   processIncoming,
+  receivePulled,
   receiveSlip,
+  skipAnsweredSms,
   referralStatus,
   type Env,
 } from './relay'
@@ -234,6 +236,42 @@ describe('referral signatures', () => {
     await hospital.db.run("UPDATE devices SET key_hex = NULL WHERE id = 'D001'")
     const { wire } = await referNewborn(cho)
     expect(await processIncoming(hospital, { sender: cho.self.phone, body: wire, received_at: 1, via: 'sms' })).toEqual({ kind: 'rejected', error: 'unknown_signer' })
+  })
+})
+
+describe('the internet path', () => {
+  it('holds the referral SMS while online, and drops it once the facility has it over the internet', async () => {
+    const cho = await phone('D001')
+    const evaluation = evaluate(PROTOCOLS.young_infant, { yi_feeding: false, yi_breaths: 66 })
+    const { referral } = await createReferral(cho, { client_id: newborn.id, visit_id: null, protocol_id: 'young_infant', evaluation, destination_code: 'SAV-HOSP-01', hold_sms_ms: 45_000 })
+    expect(await dueMessages(cho)).toHaveLength(0)
+    // The facility's "received" arrives by sync before the hold runs out.
+    await cho.db.run("INSERT INTO referral_events (id, referral_id, status, at, source_device_id, via, updated_at, device_id, synced) VALUES ('ev-r', ?, 'received', ?, 'F003', 'https', ?, 'F003', 1)", [referral.id, cho.now(), cho.now()])
+    expect(await skipAnsweredSms(cho)).toBe(1)
+    cho.tick(60_000)
+    expect(await dueMessages(cho)).toHaveLength(0)
+    expect(await cho.db.get('SELECT status FROM outbox WHERE ref_id = ?', [referral.id])).toEqual({ status: 'skipped' })
+  })
+
+  it('sends the held SMS when no one confirms in time', async () => {
+    const cho = await phone('D001')
+    const evaluation = evaluate(PROTOCOLS.young_infant, { yi_feeding: false })
+    await createReferral(cho, { client_id: newborn.id, visit_id: null, protocol_id: 'young_infant', evaluation, destination_code: 'SAV-HOSP-01', hold_sms_ms: 45_000 })
+    expect(await skipAnsweredSms(cho)).toBe(0)
+    cho.tick(46_000)
+    expect(await dueMessages(cho)).toHaveLength(1)
+  })
+
+  it('a facility phone marks a referral that came by internet as received, once', async () => {
+    const cho = await phone('D001')
+    const hospital = await phone('F003')
+    const { referral } = await referNewborn(cho)
+    await hospital.db.run("INSERT INTO referrals (id, origin_device_id, short_id, client_code, client_type, context, urgency, sign_codes, destination_code, wire, created_at, updated_at, device_id, synced) VALUES (?, 'D001', ?, ?, 'NB', 'PP1', 3, '[]', 'SAV-HOSP-01', '', ?, ?, 'D001', 1)",
+      [referral.id, referral.short_id, referral.client_code, hospital.now(), hospital.now()])
+    expect(await receivePulled(hospital)).toBe(1)
+    expect(await receivePulled(hospital)).toBe(0)
+    expect(await referralStatus(hospital, referral.id)).toBe('received')
+    expect(await hospital.db.get("SELECT via FROM referral_events WHERE referral_id = ? AND status = 'received'", [referral.id])).toEqual({ via: 'https' })
   })
 })
 

@@ -31,6 +31,8 @@ const Env = z.object({
   WEB_ORIGIN: optional,
   TRUST_PROXY: z.string().default('loopback').transform(trustProxy),
   FROG_API_KEY: optional,
+  // Only when the Expo project enforces enhanced push security.
+  EXPO_ACCESS_TOKEN: optional,
   FROG_USERNAME: optional,
   FROG_SENDER_ID: blank(z.string().max(11).optional()),
   SMS_CALLBACK_SECRET: optional,

@@ -8,7 +8,8 @@ import { outcomeTone } from '../../features/format'
 import { armAckAlarm } from '../../lib/alarms'
 import { createReferral } from '../../lib/relay'
 import { saveVisit, toClient } from '../../lib/register'
-import { changed, currentSession, env, sendDue } from '../../lib/runtime'
+import NetInfo from '@react-native-community/netinfo'
+import { changed, currentSession, env, pushRegistered, sendDue, syncNow } from '../../lib/runtime'
 import { useQuery } from '../../lib/useQuery'
 import { Banner, Body, Button, Card, Field, Heading, Label, Loading, Screen } from '../../ui/kit'
 import { color, space } from '../../ui/theme'
@@ -108,11 +109,15 @@ export default function Visit() {
       id ??= await saveVisit(e, { client_id: data!.client.id, protocol_id: protocol.id as ProtocolId, answers, evaluation: result, muac_mm: typeof answers.ch_muac === 'number' ? answers.ch_muac : null })
       setVisitId(id)
       if (refer && destination) {
-        const { referral } = await createReferral(e, { client_id: data!.client.id, visit_id: id, protocol_id: protocol.id as ProtocolId, evaluation: result, destination_code: destination.code })
+        // Online with push working, the referral goes by internet first and the SMS waits a little as the backup.
+        const internet = (await NetInfo.fetch()).isInternetReachable === true && (await pushRegistered(e))
+        const hold = internet ? (result.urgency === 3 ? 45_000 : 90_000) : undefined
+        const { referral } = await createReferral(e, { client_id: data!.client.id, visit_id: id, protocol_id: protocol.id as ProtocolId, evaluation: result, destination_code: destination.code, hold_sms_ms: hold })
         await armAckAlarm(e.db, referral.id, referral.short_id, referral.urgency as 1 | 2 | 3)
         changed()
-        void sendDue()
-        toast('Referral saved. Sending the SMS to the facility.')
+        if (hold) void syncNow()
+        else void sendDue()
+        toast(hold ? `Referral sent by internet. The SMS follows in ${hold / 1000} s unless the facility confirms first.` : 'Referral saved. Sending the SMS to the facility.')
         router.replace(`/referral/${referral.id}`)
       } else {
         changed()
