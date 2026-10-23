@@ -16,21 +16,14 @@ npm install
 ## 2. API
 
 ```bash
-cp apps/api/.env.example apps/api/.env   # fill in the database URL, JWT_SECRET, ADMIN_TOKEN, SMS_WEBHOOK_TOKEN, SMS_CALLBACK_SECRET, SEED_*
-npm run db:migrate -w @laafia/api        # creates the database if it does not exist
-npm run seed -w @laafia/api              # the district, the SMS gateway and the first district admin
+cp apps/api/.env.example apps/api/.env   # fill in the database URL, JWT_SECRET, ADMIN_TOKEN, SMS_WEBHOOK_TOKEN, SMS_CALLBACK_SECRET
+npm run seed:all -w @laafia/api          # migrations, then the demo district: facilities, phones, clients, dashboard logins
 npm run api                             # prints its URLs: localhost for this machine, the LAN one for phones
 ```
 
 Check it from a phone's browser: `<LAN URL>/health` returns `{"ok":true}`.
 
-`npm run seed` creates only what the dashboard cannot: the district (`SEED_DISTRICT_CODE`, `SEED_DISTRICT_NAME`) and its first admin (`SEED_ADMIN_*`). Re-running it never changes a password. Then sign in to the dashboard as that admin and set up the district:
-
-1. **Facilities**: the CHPS compounds, and the health centres and hospitals that receive referrals, each with the phone number referral SMS go to.
-2. **Nurses**: each nurse under her facility, and under Facility phones one phone per receiving facility. Each gets an 8-digit activation code.
-3. On each phone, open Laafia and enter the code and the phone's own number.
-
-For a ready-made demo district instead (Savelugu, sample clients and fixed activation codes), run `npm run seed:demo -w @laafia/api`. It resets that demo data every time, so never run it against a real database.
+`npm run seed:admin -w @laafia/api` seeds only the district admins. Both reset the demo rows, so never run them against a real database.
 
 ## 3. Web dashboard
 
@@ -39,11 +32,12 @@ cp apps/web/.env.example apps/web/.env   # API_URL, the API the dashboard proxie
 npm run web                              # prints Local and Network URLs
 ```
 
-Demo accounts (password `Laafia-demo-2026` for all), created by `seed:demo`:
+Demo accounts (password `Laafia-demo-2026` for all), created by `seed:all`:
 
 | Login | Role | Sees |
 | --- | --- | --- |
-| admin@laafia.demo | District admin | Everything for Savelugu district |
+| admin@laafia.demo | District admin (Nurudeen Abdul-Majeed) | Everything for Savelugu district |
+| osman@laafia.demo | District admin (Osman Saaratu Deeshini) | Everything for Savelugu district |
 | supervisor@laafia.demo | Supervisor | Overview, referrals and checklists, read only |
 | hospital@laafia.demo | Facility staff | Savelugu Municipal Hospital's inbox and actions |
 | healthcentre@laafia.demo | Facility staff | Pong-Tamale Health Centre's inbox and actions |
@@ -138,15 +132,7 @@ The API and the dashboard go online; the phones keep working offline and sync wh
 - Build command: `npm ci --include=dev && npm run db:migrate -w @laafia/api` (`tsx` and the Prisma CLI are dev dependencies)
 - Start command: `npm start -w @laafia/api`
 - Environment: `NODE_ENV=production`, `TRUST_PROXY=1`, `DATABASE_URL`, `JWT_SECRET` (32+ characters), `ADMIN_TOKEN` and `SMS_WEBHOOK_TOKEN` (24+ characters), and the Frog variables if the server should send SMS. Render sets `PORT`.
-- Seed once from this machine, pointing at the production database (Neon's direct, non-pooled URL works best for migrations); the shell's `DATABASE_URL` wins over the one in `.env`:
-
-  ```bash
-  DATABASE_URL='<neon direct url>' npm run db:migrate -w @laafia/api
-  DATABASE_URL='<neon direct url>' SEED_ADMIN_NAME='...' SEED_ADMIN_EMAIL='...' SEED_ADMIN_PASSWORD='...' \
-    SEED_DISTRICT_CODE='SAV' SEED_DISTRICT_NAME='Savelugu Municipal' npm run seed -w @laafia/api
-  ```
-
-  Then create the facilities and phones from the dashboard.
+- Seed once from this machine: `DATABASE_URL='<neon direct url>' npm run seed:all -w @laafia/api`.
 - Render's free plan sleeps after 15 idle minutes, so the first sync afterwards waits for it to wake.
 
 **Dashboard on Vercel** (root directory `apps/web`): set `API_URL` to the Render URL. The dashboard proxies `/api` to it, so sign-in cookies stay on the dashboard's own domain.

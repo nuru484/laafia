@@ -8,7 +8,7 @@ Express + Prisma + PostgreSQL backend in `apps/api`. This is the contract the mo
 cp apps/api/.env.example apps/api/.env      # set DATABASE_URL (Prisma needs a user: postgresql://<user>@localhost/laafia?host=/var/run/postgresql)
 createdb laafia && createdb laafia_api_test
 npm run db:migrate -w @laafia/api           # prisma migrate deploy (db:migrate:dev runs prisma migrate dev)
-npm run seed -w @laafia/api                 # district, SMS gateway and first admin from SEED_* (seed:demo loads the demo district)
+npm run seed:all -w @laafia/api             # migrations and the demo district (seed:admin: only the district admins)
 npm run dev -w @laafia/api                  # http://localhost:4000
 npm test -w @laafia/api                     # migrates TEST_DATABASE_URL (laafia_api_test) and clears its rows per test
 ```
@@ -184,7 +184,7 @@ The web app should proxy `/api/*` to the API (Next.js rewrite), so the cookies a
 `{ "login": "admin@laafia.demo" | "0240000001", "password": "..." }` → `200 { "user": User, "csrf_token": "..." }` and sets both cookies. `401 invalid_credentials`; `429 rate_limited` after 5 attempts per IP or per login in 15 minutes.
 
 ```json
-User = { "id": "usr-0001", "name": "Alhassan Yakubu", "email": "admin@laafia.demo", "phone": null, "role": "district_admin",
+User = { "id": "usr-0001", "name": "Nurudeen Abdul-Majeed", "email": "admin@laafia.demo", "phone": null, "role": "district_admin",
   "facility_id": null, "district_id": "dist-sav", "active": true, "last_login_at": 1792628325516, "created_at": 1792628325516,
   "facility": { "id": "fac-0003", "code": "SAV-HOSP-01", "name": "Savelugu Municipal Hospital" } | null,
   "district": { "id": "dist-sav", "code": "SAV", "name": "Savelugu Municipal" } | null }
