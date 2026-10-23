@@ -1,7 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { ErrorState, EmptyState, LoadingRows, PageHeader } from '@/components/shared/page'
+import { ErrorState, EmptyState, PageHeader } from '@/components/shared/page'
+import { LogSkeleton } from '@/components/shared/skeletons'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -22,7 +24,7 @@ export default function SmsPage() {
       <Card className="mb-6">
         <CardHeader><CardTitle><h2>Frog balance</h2></CardTitle><CardDescription>Top up before it runs low; without credit the server cannot text CHOs.</CardDescription></CardHeader>
         <CardContent>
-          {balance.isLoading ? <LoadingRows rows={1} /> : balance.error ? <ErrorState message={errorMessage(balance.error)} onRetry={balance.refetch} /> : !balance.data?.configured ? (
+          {balance.isLoading ? <div className="flex items-end gap-6" aria-busy="true"><Skeleton className="h-9 w-40" /><Skeleton className="h-4 w-24" /></div> : balance.error ? <ErrorState message={errorMessage(balance.error)} onRetry={balance.refetch} /> : !balance.data?.configured ? (
             <p className="text-sm text-muted-foreground">Frog is not connected on this server, so texts are logged instead of sent.</p>
           ) : (
             <div className="flex flex-wrap items-end gap-6">
@@ -33,11 +35,11 @@ export default function SmsPage() {
         </CardContent>
       </Card>
       <h2 className="mb-3 text-lg font-semibold">Recent texts</h2>
-      {log.isLoading ? <LoadingRows /> : log.error ? <ErrorState message={errorMessage(log.error)} onRetry={log.refetch} /> : !log.data?.messages.length ? <EmptyState title="No texts sent yet" /> : (
+      {log.isLoading ? <LogSkeleton lines={[['w-44', 'h-5 w-20'], ['w-56']]} /> : log.error ? <ErrorState message={errorMessage(log.error)} onRetry={log.refetch} /> : !log.data?.messages.length ? <EmptyState title="No texts sent yet" /> : (
         <>
-          <ul className="flex flex-col divide-y rounded-lg border">
+          <ul className="-mx-4 flex flex-col divide-y border-y sm:mx-0 sm:border">
             {log.data.messages.map((m) => (
-              <li key={m.id} className="flex flex-col gap-1 p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+              <li key={m.id} className="flex flex-col gap-1 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                   <p className="font-medium">{KIND[m.kind] ?? m.kind} · {m.to_masked}</p>
                   <p className="text-muted-foreground">{new Date(m.at).toLocaleString()}{m.attempts > 1 ? ` · ${m.attempts} attempts` : ''}{m.error ? ` · ${m.error}` : ''}</p>

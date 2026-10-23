@@ -3,7 +3,8 @@
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { FilterSelect } from '@/components/shared/filter-select'
-import { ErrorState, LoadingRows, PageHeader } from '@/components/shared/page'
+import { ErrorState, PageHeader } from '@/components/shared/page'
+import { OverviewSkeleton } from '@/components/shared/skeletons'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { DailyColumns, LabelledBars } from '@/features/overview/charts'
@@ -19,13 +20,11 @@ const mins = (v: number | null) => (v === null ? '-' : v < 60 ? `${Math.round(v)
 
 function Tile({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-1 pt-6">
-        <p className="text-sm text-muted-foreground">{label}</p>
-        <p className="text-3xl font-semibold tabular-nums">{value}</p>
-        {note ? <p className="text-xs text-muted-foreground">{note}</p> : null}
-      </CardContent>
-    </Card>
+    <div className="flex min-w-0 flex-col gap-1 border bg-card p-4">
+      <p className="text-sm text-muted-foreground">{label}</p>
+      <p className="text-2xl font-semibold tabular-nums sm:text-3xl">{value}</p>
+      {note ? <p className="text-xs text-muted-foreground">{note}</p> : null}
+    </div>
   )
 }
 
@@ -41,7 +40,7 @@ export default function Overview() {
     if (staff) router.replace('/referrals')
   }, [staff, router])
 
-  if (staff || isLoading) return <LoadingRows />
+  if (staff || isLoading) return <OverviewSkeleton />
   if (error || !data) return <ErrorState message={errorMessage(error)} onRetry={refetch} />
   const open = STATUS_ORDER.filter((s) => !['closed'].includes(s)).reduce((n, s) => n + (data.by_status[s] ?? 0), 0)
 
@@ -52,7 +51,7 @@ export default function Overview() {
         description={`${data.district.name} district. Referrals made by CHOs and how quickly facilities answered and finished them.`}
         actions={<div className="w-44"><FilterSelect label="Period" value={days} onChange={setDays} options={[{ value: '7', label: 'Last 7 days' }, { value: '30', label: 'Last 30 days' }, { value: '90', label: 'Last 90 days' }]} /></div>}
       />
-      <div className="grid gap-4 sm:grid-cols-2 @4xl/main:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 min-[340px]:grid-cols-2 @4xl/main:grid-cols-4">
         <Tile label="Referrals" value={String(data.total)} note={`${open} still open`} />
         <Tile label="Median time to acknowledge" value={mins(data.time_to_ack_minutes.median)} note={`90% within ${mins(data.time_to_ack_minutes.p90)}`} />
         <Tile label="Completed" value={pct(data.completion_rate)} note="Treated or closed" />
@@ -75,7 +74,7 @@ export default function Overview() {
       <div className="mt-6 grid gap-6 @4xl/main:grid-cols-2">
         <Card>
           <CardHeader><CardTitle><h2>Referrals per day</h2></CardTitle></CardHeader>
-          <CardContent><DailyColumns data={data.daily.map((d) => ({ day: d.day, value: d.referrals }))} label="referrals" /></CardContent>
+          <CardContent><DailyColumns title="Referrals per day" data={data.daily.map((d) => ({ day: d.day, value: d.referrals }))} label="referrals" /></CardContent>
         </Card>
         <Card>
           <CardHeader><CardTitle><h2>Where referrals are now</h2></CardTitle></CardHeader>
@@ -85,9 +84,9 @@ export default function Overview() {
       <Card className="mt-6">
         <CardHeader><CardTitle><h2>By facility</h2></CardTitle></CardHeader>
         <CardContent>
-          <ul className="flex flex-col gap-3 md:hidden">
+          <ul className="flex flex-col md:hidden">
             {data.per_facility.map((f) => (
-              <li key={f.facility.id} className="rounded-md border p-3 text-sm">
+              <li key={f.facility.id} className="border-b py-3 text-sm first:pt-0 last:border-b-0 last:pb-0">
                 <p className="font-medium [overflow-wrap:anywhere]">{f.facility.name}</p>
                 <p className="text-muted-foreground">Sent {f.referred_from} · received {f.received} · open {f.open}</p>
                 <p className="text-muted-foreground">{f.received ? `Acknowledged in ${mins(f.median_ack_minutes)} · completed ${pct(f.completion_rate)}` : 'Receives no referrals'}</p>
@@ -130,16 +129,16 @@ function Attention({ title, empty, items, note }: { title: string; empty: string
   return (
     <Card className={items.length ? 'border-refer/40' : undefined}>
       <CardHeader><CardTitle><h2>{title}{items.length ? ` (${items.length})` : ''}</h2></CardTitle></CardHeader>
-      <CardContent className="flex flex-col gap-2 text-sm">
+      <CardContent className="flex flex-col text-sm">
         {items.length === 0 ? <p className="text-muted-foreground">{empty}</p> : (
           <>
             {items.map((r) => (
-              <Link key={r.id} href={`/referrals/${r.id}`} className="flex min-h-11 items-center justify-between gap-2 rounded-md border px-3 hover:bg-muted">
+              <Link key={r.id} href={`/referrals/${r.id}`} className="-mx-2 flex min-h-11 items-center justify-between gap-2 border-b px-2 last-of-type:border-b-0 hover:bg-muted">
                 <span className="[overflow-wrap:anywhere]">{r.client_code} · urgency {r.urgency}</span>
                 <span className="shrink-0 text-muted-foreground">{ago(r.made_at)}</span>
               </Link>
             ))}
-            <p className="text-xs text-muted-foreground">{note}</p>
+            <p className="mt-2 text-xs text-muted-foreground">{note}</p>
           </>
         )}
       </CardContent>

@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { FilterSelect } from '@/components/shared/filter-select'
-import { EmptyState, ErrorState, LoadingRows, PageHeader } from '@/components/shared/page'
+import { EmptyState, ErrorState, PageHeader } from '@/components/shared/page'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { errorMessage } from '@/redux/api'
 import { useAuditQuery } from '@/redux/endpoints'
@@ -22,7 +23,7 @@ export default function AuditPage() {
     <>
       <PageHeader title="Audit log" description="Every change made on this dashboard: who, what and when." />
       <div className="mb-4 max-w-xs"><FilterSelect label="Show" value={type} onChange={(v) => { setType(v); setCursors([undefined]) }} options={TYPES} /></div>
-      <ul className="flex flex-col divide-y rounded-lg border">
+      <ul className="-mx-4 flex flex-col divide-y border-y sm:mx-0 sm:border">
         {cursors.map((before, i) => <AuditChunk key={`${type}-${i}`} before={before} type={type} last={i === cursors.length - 1} onMore={(next) => setCursors((c) => [...c, next])} />)}
       </ul>
     </>
@@ -31,7 +32,8 @@ export default function AuditPage() {
 
 function AuditChunk({ before, type, last, onMore }: { before?: number; type: string; last: boolean; onMore: (next: number) => void }) {
   const { data, error, isLoading, refetch } = useAuditQuery({ before, target_type: type })
-  if (isLoading) return <li className="p-4"><LoadingRows rows={3} /></li>
+  // Rows of the log's own shape: who and what, the detail line, the time.
+  if (isLoading) return <>{Array.from({ length: 4 }, (_, i) => <li key={i} aria-hidden className="flex flex-col gap-2 px-4 py-3.5"><Skeleton className="h-4 w-3/4" /><Skeleton className="h-3.5 w-1/2" /><Skeleton className="h-3.5 w-36" /></li>)}</>
   if (error) return <li className="p-4"><ErrorState message={errorMessage(error)} onRetry={refetch} /></li>
   if (!data?.events.length && before === undefined) return <li className="p-4"><EmptyState title="Nothing recorded yet" /></li>
   return (
@@ -45,7 +47,7 @@ function AuditChunk({ before, type, last, onMore }: { before?: number; type: str
 function Row({ e }: { e: AuditEvent }) {
   const detail = Object.entries(e.details ?? {}).filter(([, v]) => v !== null && typeof v !== 'object').map(([k, v]) => `${k.replace(/_/g, ' ')}: ${String(v)}`).join(' · ')
   return (
-    <li className="flex flex-col gap-1 p-4 text-sm sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+    <li className="flex flex-col gap-1 px-4 py-3 text-sm sm:flex-row sm:items-start sm:justify-between sm:gap-4">
       <div className="min-w-0">
         <p className="[overflow-wrap:anywhere]"><span className="font-medium">{e.actor_name}</span> {e.action.replace(/[._]/g, ' ')}{e.target_id ? ` · ${e.target_id}` : ''}</p>
         {detail ? <p className="text-muted-foreground [overflow-wrap:anywhere]">{detail}</p> : null}

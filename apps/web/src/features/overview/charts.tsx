@@ -1,10 +1,13 @@
 'use client'
 
 import { useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 /** Columns for one series over time. Hover or focus a column for its value; the table below carries the same data. */
-export function DailyColumns({ data, label }: { data: { day: string; value: number }[]; label: string }) {
+export function DailyColumns({ data, label, title }: { data: { day: string; value: number }[]; label: string; title: string }) {
   const [hover, setHover] = useState<number | null>(null)
+  const [table, setTable] = useState(false)
   const max = Math.max(1, ...data.map((d) => d.value))
   const h = 140
   const fmt = (day: string) => new Date(day).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
@@ -38,13 +41,20 @@ export function DailyColumns({ data, label }: { data: { day: string; value: numb
         <span>{data[0] ? fmt(data[0].day) : ''}</span>
         <span>{data.at(-1) ? fmt(data.at(-1)!.day) : ''}</span>
       </div>
-      <details className="text-sm">
-        <summary className="cursor-pointer text-muted-foreground">Show as table</summary>
-        <table className="mt-2 w-full text-left">
-          <thead><tr><th className="py-1 font-medium">Day</th><th className="py-1 text-right font-medium">{label}</th></tr></thead>
-          <tbody>{data.map((d) => <tr key={d.day} className="border-t"><td className="py-1">{fmt(d.day)}</td><td className="py-1 text-right tabular-nums">{d.value}</td></tr>)}</tbody>
-        </table>
-      </details>
+      {/* The same numbers as a table, in a dialog so the overview keeps its length and its columns stay level. */}
+      <Button variant="link" className="h-auto self-start p-0 text-muted-foreground" onClick={() => setTable(true)}>Show as table</Button>
+      <Dialog open={table} onOpenChange={setTable}>
+        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{title}</DialogTitle>
+            <DialogDescription>{data.reduce((n, d) => n + d.value, 0)} {label} over {data.length} days.</DialogDescription>
+          </DialogHeader>
+          <table className="w-full text-left text-sm">
+            <thead><tr className="text-muted-foreground"><th className="py-2 font-medium">Day</th><th className="py-2 text-right font-medium capitalize">{label}</th></tr></thead>
+            <tbody>{data.map((d) => <tr key={d.day} className="border-t"><td className="py-2">{fmt(d.day)}</td><td className="py-2 text-right tabular-nums">{d.value}</td></tr>)}</tbody>
+          </table>
+        </DialogContent>
+      </Dialog>
     </figure>
   )
 }

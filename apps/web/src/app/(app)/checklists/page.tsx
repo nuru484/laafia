@@ -35,7 +35,10 @@ export default function ChecklistsPage() {
     <>
       <PageHeader title="Checklists" description="The WHO danger-sign checklists exactly as the phones run them. Outcomes come only from these rules; the ranking never decides care." />
       <Tabs defaultValue={list[0]!.id}>
-        <TabsList className="mb-4 flex h-auto flex-wrap">{list.map((p) => <TabsTrigger key={p.id} value={p.id}>{TITLE[p.id] ?? p.id}</TabsTrigger>)}</TabsList>
+        {/* Stacked on phones: three long names cannot share a 280px row. */}
+        <TabsList className="mb-4 grid w-full grid-cols-1 gap-1 group-data-horizontal/tabs:h-auto sm:flex sm:w-fit">
+          {list.map((p) => <TabsTrigger key={p.id} value={p.id} className="h-10 justify-start px-3 sm:justify-center">{TITLE[p.id] ?? p.id}</TabsTrigger>)}
+        </TabsList>
         {list.map((p) => (
           <TabsContent key={p.id} value={p.id} className="flex flex-col gap-6">
             <div className="flex flex-wrap items-center gap-2 text-sm">

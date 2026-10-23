@@ -3,7 +3,8 @@
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import { AppShell } from '@/components/shared/app-shell'
-import { ErrorState, LoadingRows } from '@/components/shared/page'
+import { ErrorState } from '@/components/shared/page'
+import { ShellSkeleton } from '@/components/shared/skeletons'
 import { errorMessage } from '@/redux/api'
 import { useMeQuery } from '@/redux/endpoints'
 
@@ -17,7 +18,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     if (unauthenticated) router.replace('/login')
   }, [unauthenticated, router])
 
-  if (isLoading || unauthenticated) return <div className="p-6"><LoadingRows /></div>
+  if (isLoading || unauthenticated) return <ShellSkeleton />
   if (error || !data) return <div className="p-6"><ErrorState message={errorMessage(error)} onRetry={refetch} /></div>
   return <AppShell user={data.user}>{children}</AppShell>
 }

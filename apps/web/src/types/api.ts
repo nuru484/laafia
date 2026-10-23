@@ -46,3 +46,9 @@ export type Overview = {
   overdue_acknowledgements: Brief[]; did_not_arrive: Brief[]; completion_rate_30d: number | null; median_ack_minutes_30d: number | null
   devices_not_synced_3d: { id: string; role: string; user_name: string; facility_id: string | null; last_sync_at: number | null }[]
 }
+
+export type DuplicateClient = {
+  id: string; code: string; name: string; type: string; phone: string | null; community: string; head_name: string
+  facility_id: string | null; device_id: string | null; updated_at: number; visits: number; referrals: number
+}
+export type DuplicateGroup = { reason: 'same phone' | 'same name'; clients: DuplicateClient[] }

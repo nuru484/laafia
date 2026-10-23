@@ -1,6 +1,5 @@
 import { AlertCircle, Inbox } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
 
 export function PageHeader({ title, description, actions }: { title: string; description?: string; actions?: React.ReactNode }) {
   return (
@@ -31,14 +30,6 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
       <AlertCircle className="size-6 text-destructive" aria-hidden />
       <p className="text-sm">{message}</p>
       {onRetry ? <Button variant="outline" size="sm" onClick={onRetry}>Try again</Button> : null}
-    </div>
-  )
-}
-
-export function LoadingRows({ rows = 4 }: { rows?: number }) {
-  return (
-    <div className="flex flex-col gap-3" aria-busy="true" aria-label="Loading">
-      {Array.from({ length: rows }, (_, i) => <Skeleton key={i} className="h-16 w-full" />)}
     </div>
   )
 }

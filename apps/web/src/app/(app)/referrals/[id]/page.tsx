@@ -7,7 +7,9 @@ import { useParams } from 'next/navigation'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { FilterSelect } from '@/components/shared/filter-select'
-import { ErrorState, LoadingRows } from '@/components/shared/page'
+import { useConfirm } from '@/components/shared/confirm'
+import { ErrorState } from '@/components/shared/page'
+import { ReferralDetailSkeleton } from '@/components/shared/skeletons'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -38,9 +40,10 @@ export default function ReferralDetail() {
   const [onward, onwardState] = useOnwardMutation()
   const [destination, setDestination] = useState('')
   const [confirmClose, setConfirmClose] = useState(false)
+  const [confirm, confirmDialog] = useConfirm()
   useLiveReferrals(staff ? (user.facility?.code ?? null) : null)
 
-  if (isLoading) return <LoadingRows />
+  if (isLoading) return <ReferralDetailSkeleton />
   if (error || !data) return <ErrorState message={errorMessage(error)} onRetry={refetch} />
   const r = data.referral
   const names = new Map((facs?.facilities ?? []).map((f) => [f.id, f]))
@@ -80,14 +83,17 @@ export default function ReferralDetail() {
           <StatusBadge status={r.status} />
         </div>
         <h1 className="text-2xl font-semibold tracking-tight [overflow-wrap:anywhere]">{TYPE_LABEL[r.client_type ?? ''] ?? 'Client'} {r.client_code}</h1>
-        <p className="text-sm text-muted-foreground">Referral {r.short_id} · context {r.context ?? '-'} · from phone {r.origin_device_id} · to {names.get(r.destination_facility_id ?? '')?.name ?? 'unknown facility'}</p>
+        <p className="text-sm text-muted-foreground [overflow-wrap:anywhere]">Referral {r.short_id} · context {r.context ?? '-'} · from phone {r.origin_device_id} · to {names.get(r.destination_facility_id ?? '')?.name ?? 'unknown facility'}</p>
       </div>
 
       {atMyFacility && next ? (
         <Card className="border-primary/40">
           <CardContent className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm">Next step at {user.facility?.name}.</p>
-            <Button className="h-11" disabled={statusState.isLoading} onClick={() => (next.status === 'closed' ? setConfirmClose(true) : advance(next.status))}>{next.label}</Button>
+            <Button className="h-11" disabled={statusState.isLoading} onClick={async () => {
+              if (next.status === 'closed') return setConfirmClose(true)
+              if (await confirm({ title: `${next.label}?`, body: 'The CHO is texted this step. A step cannot be taken back.', confirm: next.label })) void advance(next.status)
+            }}>{next.label}</Button>
           </CardContent>
         </Card>
       ) : null}
@@ -146,13 +152,16 @@ export default function ReferralDetail() {
             <CardContent className="flex flex-col gap-3">
               <FilterSelect label="Destination" value={destination} onChange={setDestination}
                 options={[{ value: '', label: 'Choose a facility' }, ...onwardOptions.map((f) => ({ value: f.code, label: f.name }))]} />
-              <Button className="h-11" variant="destructive" disabled={!destination || onwardState.isLoading} onClick={sendOnward}>Refer onward</Button>
+              <Button className="h-11" variant="destructive" disabled={!destination || onwardState.isLoading} onClick={async () => {
+                if (await confirm({ title: `Refer onward to ${names.get(onwardOptions.find((f) => f.code === destination)?.id ?? '')?.name ?? 'that facility'}?`, body: 'A new referral with the same danger signs, signed by this facility, goes there by SMS. The CHO keeps seeing the progress.', confirm: 'Refer onward', destructive: true })) void sendOnward()
+              }}>Refer onward</Button>
               <p className="text-xs text-muted-foreground">Sends the same assessment to the next facility; the CHO keeps seeing the progress.</p>
             </CardContent>
           </Card>
         ) : null}
       </div>
 
+      {confirmDialog}
       <AlertDialog open={confirmClose} onOpenChange={setConfirmClose}>
         <AlertDialogContent>
           <AlertDialogHeader>

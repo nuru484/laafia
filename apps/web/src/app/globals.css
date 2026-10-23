@@ -5,6 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+    --color-brand: var(--brand);
     --color-refer: var(--refer);
     --color-refer-tint: var(--refer-tint);
     --color-followup: var(--followup);
@@ -13,6 +14,7 @@
     --color-routine-tint: var(--routine-tint);
     --font-heading: var(--font-sans);
     --font-sans: var(--font-sans);
+    --font-mono: var(--font-mono);
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -54,44 +56,48 @@
 }
 
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.511 0.086 186.4);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.6 0.09 186);
-    --chart-1: #0d9488;
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.511 0.086 186.4);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
-    --refer: oklch(0.5 0.19 27);
-    --refer-tint: oklch(0.95 0.03 27);
-    --followup: oklch(0.55 0.14 60);
-    --followup-tint: oklch(0.96 0.05 85);
-    --routine: oklch(0.5 0.11 155);
-    --routine-tint: oklch(0.96 0.04 155);
+    /* Cool greys, deep sea blue for anything you can press, UNICEF cyan as the brand accent; red, amber and
+       green are kept for triage. The same values as the phone app (apps/mobile/src/ui/theme.ts). */
+    --background: #FFFFFF;
+    --foreground: #0E1B22;
+    --card: #FFFFFF;
+    --card-foreground: #0E1B22;
+    --popover: #FFFFFF;
+    --popover-foreground: #0E1B22;
+    --primary: #0077A8;
+    --primary-foreground: #FFFFFF;
+    --secondary: #F3F6F8;
+    --secondary-foreground: #0E1B22;
+    --muted: #F3F6F8;
+    --muted-foreground: #566770;
+    --accent: #E2F3FA;
+    --accent-foreground: #0E1B22;
+    --destructive: #B42318;
+    --border: #DCE3E7;
+    --input: #DCE3E7;
+    --ring: #1CABE2;
+    --brand: #1CABE2;
+    --chart-1: #0077A8;
+    --chart-2: #1CABE2;
+    --chart-3: #566770;
+    --chart-4: #9AA9B1;
+    --chart-5: #DCE3E7;
+    /* Square corners throughout, the clinical look; only status dots stay round. */
+    --radius: 0;
+    --sidebar: #F3F6F8;
+    --sidebar-foreground: #0E1B22;
+    --sidebar-primary: #0077A8;
+    --sidebar-primary-foreground: #FFFFFF;
+    --sidebar-accent: #E2F3FA;
+    --sidebar-accent-foreground: #0E1B22;
+    --sidebar-border: #DCE3E7;
+    --sidebar-ring: #1CABE2;
+    --refer: #B42318;
+    --refer-tint: #FEE4E2;
+    --followup: #B54708;
+    --followup-tint: #FEF0C7;
+    --routine: #067647;
+    --routine-tint: #DCFAE6;
 }
 
 .dark {
@@ -129,6 +135,10 @@
 }
 
 @layer base {
+  /* Keep the scrollbar's space when a menu or select locks scrolling, so the page does not jump sideways. */
+  html {
+    scrollbar-gutter: stable;
+  }
   * {
     @apply border-border outline-ring/50;
     }

@@ -1,4 +1,4 @@
-import type { AuditEvent, Device, Facility, Overview, Referral, SmsBalance, SmsMessage, Summary, User } from '@/types/api'
+import type { AuditEvent, Device, Facility, Overview, Referral, SmsBalance, SmsMessage, Summary, User, DuplicateGroup } from '@/types/api'
 import { api } from './api'
 
 export const endpoints = api.injectEndpoints({
@@ -6,6 +6,12 @@ export const endpoints = api.injectEndpoints({
     me: b.query<{ user: User }, void>({ query: () => '/web/me', providesTags: ['Me'] }),
     login: b.mutation<{ user: User; csrf_token: string }, { login: string; password: string }>({ query: (body) => ({ url: '/web/login', method: 'POST', body }), invalidatesTags: ['Me'] }),
     logout: b.mutation<{ ok: true }, void>({ query: () => ({ url: '/web/logout', method: 'POST' }) }),
+    updateMe: b.mutation<{ user: User }, { name?: string; email?: string | null; phone?: string | null }>({ query: (body) => ({ url: '/web/me', method: 'PATCH', body }), invalidatesTags: ['Me', 'User'] }),
+    duplicates: b.query<{ groups: DuplicateGroup[] }, void>({ query: () => '/admin/clients/duplicates', providesTags: ['Duplicate'] }),
+    mergeClient: b.mutation<{ kept: string; moved: { visits: number; referrals: number } }, { id: string; into: string }>({
+      query: ({ id, into }) => ({ url: `/admin/clients/${id}/merge`, method: 'POST', body: { into } }), invalidatesTags: ['Duplicate', 'Referral', 'Audit'],
+    }),
+    changeMyPassword: b.mutation<{ ok: true }, { current_password: string; new_password: string }>({ query: (body) => ({ url: '/web/me/password', method: 'POST', body }) }),
 
     overview: b.query<Overview, void>({ query: () => '/dashboard/overview', providesTags: ['Summary'] }),
     summary: b.query<Summary, number>({ query: (days) => `/dashboard/summary?days=${days}`, providesTags: ['Summary'] }),
@@ -54,7 +60,7 @@ export const endpoints = api.injectEndpoints({
 })
 
 export const {
-  useMeQuery, useLoginMutation, useLogoutMutation, useOverviewQuery, useSummaryQuery, useReferralsQuery, useReferralQuery, useReferralClientQuery,
+  useMeQuery, useLoginMutation, useLogoutMutation, useDuplicatesQuery, useMergeClientMutation, useUpdateMeMutation, useChangeMyPasswordMutation, useOverviewQuery, useSummaryQuery, useReferralsQuery, useReferralQuery, useReferralClientQuery,
   useSetStatusMutation, useOnwardMutation, useFacilitiesQuery, useCreateFacilityMutation, useUpdateFacilityMutation,
   useUsersQuery, useCreateUserMutation, useUpdateUserMutation, useSetUserPasswordMutation, useSetUserActiveMutation, useDevicesQuery, useCreateDeviceMutation,
   useReissueCodeMutation, useDeactivateDeviceMutation, useUpdateDeviceMutation, useAuditQuery, useSmsBalanceQuery, useSmsLogQuery,
