@@ -1,7 +1,7 @@
 {
   "id": "child",
-  "version": 1,
-  "clinical_review": "pending: WHO IMCI / iCCM 2-59 months with MUAC, to be reviewed by the team clinician",
+  "version": 2,
+  "clinical_review": "pending: WHO IMCI 2014 and iCCM 2-59 months with MUAC; to be reviewed by the team clinician",
   "questions": [
     { "id": "ch_drink", "type": "yesno", "text_en": "Is the child able to drink or breastfeed?" },
     { "id": "ch_vomit_all", "type": "yesno", "text_en": "Does the child vomit everything?" },
@@ -10,12 +10,20 @@
     { "id": "ch_cough", "type": "yesno", "text_en": "Does the child have a cough or difficult breathing?" },
     { "id": "ch_breaths", "type": "number", "unit": "breaths/min", "text_en": "Count the child's breaths for one full minute.", "ask_if": { "ch_cough": true } },
     { "id": "ch_chest_indrawing", "type": "yesno", "text_en": "Does the lower chest pull in when the child breathes in?", "ask_if": { "ch_cough": true } },
+    { "id": "ch_stridor", "type": "yesno", "text_en": "When the child is calm, is there a harsh noise on breathing in (stridor)?", "ask_if": { "ch_cough": true } },
     { "id": "ch_diarrhoea", "type": "yesno", "text_en": "Does the child have diarrhoea?" },
     { "id": "ch_blood_stool", "type": "yesno", "text_en": "Is there blood in the stool?", "ask_if": { "ch_diarrhoea": true } },
     { "id": "ch_diarrhoea_days", "type": "number", "unit": "days", "text_en": "For how many days?", "ask_if": { "ch_diarrhoea": true } },
+    { "id": "ch_sunken_eyes", "type": "yesno", "text_en": "Are the child's eyes sunken?", "ask_if": { "ch_diarrhoea": true } },
+    { "id": "ch_skin_pinch", "type": "yesno", "text_en": "Pinch the skin of the belly. Does it go back slowly (2 seconds or more)?", "ask_if": { "ch_diarrhoea": true } },
     { "id": "ch_fever", "type": "yesno", "text_en": "Does the child have fever?" },
     { "id": "ch_fever_days", "type": "number", "unit": "days", "text_en": "For how many days?", "ask_if": { "ch_fever": true } },
+    { "id": "ch_stiff_neck", "type": "yesno", "text_en": "Is the neck stiff (the chin cannot bend to the chest)?", "ask_if": { "ch_fever": true } },
+    { "id": "ch_rdt", "type": "select", "options": ["Positive", "Negative", "Not done"], "text_en": "Malaria rapid test (RDT) result", "ask_if": { "ch_fever": true } },
     { "id": "ch_oedema", "type": "yesno", "text_en": "Press both feet for 3 seconds. Does a dent stay on both?" },
+    { "id": "ch_pallor", "type": "yesno", "text_en": "Look at the palms. Are they very pale, almost white?" },
+    { "id": "ch_ear", "type": "yesno", "text_en": "Does the child have ear pain, or pus coming from the ear?" },
+    { "id": "ch_ear_swelling", "type": "yesno", "text_en": "Is there a tender swelling behind the ear?", "ask_if": { "ch_ear": true } },
     { "id": "ch_muac", "type": "number", "unit": "mm", "text_en": "Measure the arm with the MUAC tape.", "ask_if": { "age_months": { "gte": 6 } } }
   ],
   "rules": [
@@ -29,11 +37,20 @@
     { "id": "CH-R8", "when": { "ch_blood_stool": true }, "outcome": "refer", "urgency": 2, "danger_sign": "blood_stool", "actions": ["ors", "go_today"] },
     { "id": "CH-R9", "when": { "ch_diarrhoea_days": { "gte": 14 } }, "outcome": "refer", "urgency": 2, "danger_sign": "long_diarrhoea", "actions": ["ors", "go_today"] },
     { "id": "CH-R10", "when": { "ch_fever_days": { "gte": 7 } }, "outcome": "refer", "urgency": 2, "danger_sign": "long_fever", "actions": ["go_today"] },
+    { "id": "CH-R11", "when": { "ch_stridor": true }, "outcome": "refer", "urgency": 3, "danger_sign": "stridor", "actions": ["go_now"] },
+    { "id": "CH-R12", "when": { "all": [{ "ch_sunken_eyes": true }, { "ch_skin_pinch": true }] }, "outcome": "refer", "urgency": 3, "danger_sign": "severe_dehydration", "actions": ["ors", "go_now"] },
+    { "id": "CH-R13", "when": { "ch_stiff_neck": true }, "outcome": "refer", "urgency": 3, "danger_sign": "stiff_neck", "actions": ["go_now"] },
+    { "id": "CH-R14", "when": { "ch_pallor": true }, "outcome": "refer", "urgency": 2, "danger_sign": "severe_pallor", "actions": ["go_today", "keep_feeding"] },
+    { "id": "CH-R15", "when": { "ch_ear_swelling": true }, "outcome": "refer", "urgency": 3, "danger_sign": "mastoiditis", "actions": ["go_now"] },
     { "id": "CH-F1", "when": { "ch_breaths": { "gte": 50 }, "age_months": { "lte": 11 } }, "outcome": "followup", "followup_days": 2, "actions": ["treat_pneumonia"] },
     { "id": "CH-F2", "when": { "ch_breaths": { "gte": 40 }, "age_months": { "gte": 12 } }, "outcome": "followup", "followup_days": 2, "actions": ["treat_pneumonia"] },
     { "id": "CH-F3", "when": { "ch_diarrhoea": true }, "outcome": "followup", "followup_days": 2, "actions": ["ors", "zinc", "keep_feeding"] },
-    { "id": "CH-F4", "when": { "ch_fever": true }, "outcome": "followup", "followup_days": 2, "actions": ["malaria_test"] },
+    { "id": "CH-F4", "when": { "ch_fever": true, "ch_rdt": "Not done" }, "outcome": "followup", "followup_days": 2, "actions": ["malaria_test"] },
     { "id": "CH-F5", "when": { "ch_muac": { "gte": 115, "lte": 124 } }, "outcome": "followup", "followup_days": 14, "actions": ["nutrition_counsel"] },
+    { "id": "CH-F6", "when": { "any": [{ "ch_sunken_eyes": true }, { "ch_skin_pinch": true }] }, "outcome": "followup", "followup_days": 1, "actions": ["ors", "zinc", "keep_feeding"] },
+    { "id": "CH-F7", "when": { "ch_rdt": "Positive" }, "outcome": "followup", "followup_days": 2, "actions": ["treat_malaria"] },
+    { "id": "CH-F8", "when": { "ch_rdt": "Negative" }, "outcome": "followup", "followup_days": 2, "actions": ["fever_other"] },
+    { "id": "CH-F9", "when": { "ch_ear": true }, "outcome": "followup", "followup_days": 2, "actions": ["ear_care"] },
     { "id": "CH-DEFAULT", "when": {}, "outcome": "routine", "actions": ["counsel_danger_signs"] }
   ],
   "signs": {
@@ -46,7 +63,12 @@
     "muac_red": { "code": "mr", "text_en": "MUAC red (below 115 mm)" },
     "blood_stool": { "code": "bs", "text_en": "Blood in stool" },
     "long_diarrhoea": { "code": "pd", "text_en": "Diarrhoea 14 days or more" },
-    "long_fever": { "code": "pf", "text_en": "Fever 7 days or more" }
+    "long_fever": { "code": "pf", "text_en": "Fever 7 days or more" },
+    "stridor": { "code": "sr", "text_en": "Stridor in a calm child" },
+    "severe_dehydration": { "code": "sd", "text_en": "Severe dehydration" },
+    "stiff_neck": { "code": "sn", "text_en": "Stiff neck" },
+    "severe_pallor": { "code": "pa", "text_en": "Severe palmar pallor" },
+    "mastoiditis": { "code": "ms", "text_en": "Tender swelling behind the ear" }
   },
   "actions": {
     "go_now": { "text_en": "Go to the facility now. Do not wait." },
@@ -57,10 +79,21 @@
     "treat_pneumonia": { "text_en": "Fast breathing: treat for pneumonia as per your iCCM protocol and check again in 2 days." },
     "malaria_test": { "text_en": "Do a malaria rapid test and treat as per your protocol." },
     "nutrition_counsel": { "text_en": "Counsel on feeding and enrol in the nutrition programme; measure again in 2 weeks." },
-    "counsel_danger_signs": { "text_en": "Explain the danger signs and to come at once if any appear." }
+    "counsel_danger_signs": { "text_en": "Explain the danger signs and to come at once if any appear." },
+    "treat_malaria": { "text_en": "Malaria test positive: give the first ACT dose now, as the national guideline says, and show the mother how to give the rest." },
+    "fever_other": { "text_en": "Malaria test negative: look for another cause. Come back at once if the fever goes on 2 more days or a danger sign appears." },
+    "ear_care": { "text_en": "Dry the ear with a clean cloth wick 3 times a day, and treat as the guideline allows." }
   },
   "destination": {
     "default": "nearest:health_centre",
-    "by_danger_sign": { "convulsions": "nearest:hospital", "lethargic": "nearest:hospital", "oedema": "nearest:hospital", "cannot_drink": "nearest:hospital" }
+    "by_danger_sign": {
+      "convulsions": "nearest:hospital",
+      "lethargic": "nearest:hospital",
+      "oedema": "nearest:hospital",
+      "cannot_drink": "nearest:hospital",
+      "stridor": "nearest:hospital",
+      "stiff_neck": "nearest:hospital",
+      "mastoiditis": "nearest:hospital"
+    }
   }
 }

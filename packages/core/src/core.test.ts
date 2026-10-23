@@ -9,6 +9,7 @@ import {
   deriveStatus,
   encode,
   evaluate,
+  fromSlip,
   next,
   normalizePhone,
   parse,
@@ -19,6 +20,7 @@ import {
   shortIdFromBytes,
   signCodes,
   signNames,
+  slipCode,
   type Client,
   type Facility,
   type ReferralMessage,
@@ -89,11 +91,91 @@ describe('codec', () => {
     expect(d.ok && d.message.kind === 'LFS' && d.message.status).toBe('A')
   })
 
+  it('rebuilds the exact signed SMS from the slip code the client carries', () => {
+    const sms = encode(referral, KEY)
+    const code = slipCode(sms)
+    expect(code).toBe(`D017 ${referral.short_id} CL0417 3NB PP3 NFCV 0241234567 ${sms.slice(-8)}`)
+    expect(fromSlip(code, ['SAV-HOSP-01', 'TAM-CHPS-04'], () => KEY)).toBe(sms)
+    // Copied by hand: lower case, dashes, and 8 for B in the random groups (they hold no digits 0, 1 or 8).
+    const handwritten = code.replace(referral.short_id, referral.short_id.replace(/B/g, '8')).toLowerCase().replace(/ /g, '-')
+    expect(fromSlip(handwritten, ['TAM-CHPS-04'], () => KEY)).toBe(sms)
+    const bare = encode({ ...referral, context: '', sign_codes: [], next_of_kin: null }, KEY)
+    expect(fromSlip(slipCode(bare), ['TAM-CHPS-04'], () => KEY)).toBe(bare)
+  })
+
+  it('reads a slip code typed with no spaces at all, given the signers this phone knows', () => {
+    const sms = encode(referral, KEY)
+    const run = slipCode(sms).replace(/ /g, '')
+    expect(fromSlip(run, ['TAM-CHPS-04'], () => KEY, ['D017', 'D001'])).toBe(sms)
+    expect(fromSlip(run.toLowerCase(), ['TAM-CHPS-04'], () => KEY, ['D017'])).toBe(sms)
+    const bare = encode({ ...referral, context: '', sign_codes: [], next_of_kin: null }, KEY)
+    expect(fromSlip(slipCode(bare).replace(/ /g, ''), ['TAM-CHPS-04'], () => KEY, ['D017'])).toBe(bare)
+    // Some spaces, some not: still read.
+    const half = slipCode(sms).split(' ')
+    expect(fromSlip(`${half.slice(0, 3).join('')} ${half.slice(3).join(' ')}`, ['TAM-CHPS-04'], () => KEY, ['D017'])).toBe(sms)
+    expect(fromSlip(run.replace('CL0417', 'CL0471'), ['TAM-CHPS-04'], () => KEY, ['D017'])).toBeNull()
+  })
+
+  it('refuses a slip code with a typo or for an unknown destination', () => {
+    const code = slipCode(encode(referral, KEY))
+    expect(fromSlip(code.replace('CL0417', 'CL0471'), ['TAM-CHPS-04'], () => KEY)).toBeNull()
+    expect(fromSlip(code, ['SAV-HOSP-01'], () => KEY)).toBeNull()
+    expect(fromSlip(code.split(' ').slice(1).join(' '), ['TAM-CHPS-04'], () => KEY)).toBeNull()
+  })
+
   it('normalizes Ghana numbers', () => {
     expect(normalizePhone('+233 24 123 4567')).toBe('0241234567')
     expect(normalizePhone('0241234567')).toBe('0241234567')
   })
 
+})
+
+describe('checklists, version 2', () => {
+  const { maternal, young_infant: yi, child } = PROTOCOLS
+
+  it('asks a follow-up question only when the answer before it calls for it', () => {
+    expect(next(maternal, { client_type: 'pregnant', m_bleeding: false, m_convulsions: false, m_headache_vision: false, m_fever_weak: false, m_abdominal_pain: false, m_breathing: false })?.id).toBe('m_contractions')
+    const throughSwelling = { client_type: 'postpartum', m_bleeding: false, m_convulsions: false, m_headache_vision: false, m_fever_weak: false, m_abdominal_pain: false, m_breathing: false, m_swelling: false }
+    expect(next(maternal, { ...throughSwelling, m_bp_taken: false })?.id).toBe('m_pallor')
+    expect(next(maternal, { ...throughSwelling, m_bp_taken: true })?.id).toBe('m_bp_sys')
+    expect(next(yi, { yi_feeding: true })?.id).toBe('yi_feeding_problem')
+    const yiToYellow = { yi_feeding: false, yi_convulsions: false, yi_movement: false, yi_breaths: 40, yi_chest_indrawing: false, yi_temp: 36.8 }
+    expect(next(yi, { ...yiToYellow, yi_yellow: false })?.id).toBe('yi_cord')
+    expect(next(yi, { ...yiToYellow, yi_yellow: true })?.id).toBe('yi_jaundice')
+    expect(next(child, { age_months: 30, ch_drink: true, ch_vomit_all: false, ch_convulsions: false, ch_lethargic: false, ch_cough: false })?.id).toBe('ch_diarrhoea')
+  })
+
+  it.each([
+    [maternal, { m_bp_taken: true, m_bp_sys: 165, m_bp_dia: 100 }, 'refer', ['severe_hypertension'], 3],
+    [maternal, { m_bp_taken: true, m_bp_sys: 145, m_bp_dia: 85 }, 'refer', ['high_bp'], 2],
+    [maternal, { m_bp_taken: true, m_bp_sys: 120, m_bp_dia: 80 }, 'routine', [], 0],
+    [maternal, { client_type: 'postpartum', m_mood: true }, 'refer', ['mental_distress'], 2],
+    [maternal, { client_type: 'pregnant', m_contractions: true }, 'refer', ['preterm_labour'], 3],
+    [yi, { yi_yellow: true, age_days: 1 }, 'refer', ['early_jaundice'], 3],
+    [yi, { yi_yellow: true, age_days: 5 }, 'followup', [], 0],
+    [yi, { yi_diarrhoea: true, yi_dehydration: true }, 'refer', ['dehydration'], 3],
+    [child, { ch_cough: true, ch_stridor: true }, 'refer', ['stridor'], 3],
+    [child, { ch_diarrhoea: true, ch_sunken_eyes: true, ch_skin_pinch: true }, 'refer', ['severe_dehydration'], 3],
+    [child, { ch_diarrhoea: true, ch_sunken_eyes: true, ch_skin_pinch: false }, 'followup', [], 0],
+    [child, { ch_fever: true, ch_rdt: 'Positive' }, 'followup', [], 0],
+    [child, { ch_ear: true, ch_ear_swelling: true }, 'refer', ['mastoiditis'], 3],
+  ] as const)('%#: the new rules', (protocol, answers, outcome, signs, urgency) => {
+    const e = evaluate(protocol, answers)
+    expect([e.outcome, e.danger_signs, e.urgency]).toEqual([outcome, signs, urgency])
+  })
+
+  it('advises a malaria test only when none was done, and treatment when it was positive', () => {
+    expect(evaluate(child, { ch_fever: true, ch_rdt: 'Not done' }).actions).toContain('malaria_test')
+    expect(evaluate(child, { ch_fever: true, ch_rdt: 'Positive' }).actions).toEqual(['treat_malaria'])
+  })
+
+  it('every new danger sign fits the SMS wire as a unique two-letter code', () => {
+    for (const p of [maternal, yi, child]) {
+      const codes = Object.values(p.signs).map((s) => s.code)
+      expect(new Set(codes).size).toBe(codes.length)
+      expect(codes.every((c) => /^[a-z]{2}$/.test(c))).toBe(true)
+    }
+  })
 })
 
 describe('rules', () => {

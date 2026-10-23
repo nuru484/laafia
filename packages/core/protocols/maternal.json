@@ -1,7 +1,7 @@
 {
   "id": "maternal",
-  "version": 1,
-  "clinical_review": "pending: WHO/GHS maternal danger signs, to be reviewed by the team clinician",
+  "version": 2,
+  "clinical_review": "pending: WHO PCPNC 2015 and GHS maternal danger signs, blood pressure thresholds from WHO; to be reviewed by the team clinician",
   "questions": [
     { "id": "m_bleeding", "type": "yesno", "text_en": "Is she bleeding from the vagina? (In pregnancy any bleeding; after delivery, heavy bleeding)" },
     { "id": "m_convulsions", "type": "yesno", "text_en": "Has she had fits or convulsions?" },
@@ -9,11 +9,19 @@
     { "id": "m_fever_weak", "type": "yesno", "text_en": "Does she have fever and is too weak to get out of bed?" },
     { "id": "m_abdominal_pain", "type": "yesno", "text_en": "Does she have severe pain in the belly?" },
     { "id": "m_breathing", "type": "yesno", "text_en": "Is her breathing fast or difficult?" },
+    { "id": "m_contractions", "type": "yesno", "text_en": "Is she having regular, painful tightening of the belly before her due date (labour starting too early)?", "ask_if": { "client_type": "pregnant" } },
     { "id": "m_fetal_movement", "type": "yesno", "text_en": "Has the baby in the womb stopped moving or moved less than usual?", "ask_if": { "client_type": "pregnant" } },
     { "id": "m_waters", "type": "yesno", "text_en": "Has her water broken without labour pains?", "ask_if": { "client_type": "pregnant" } },
     { "id": "m_swelling", "type": "yesno", "text_en": "Are her face and hands swollen?" },
+    { "id": "m_bp_taken", "type": "yesno", "text_en": "Did you measure her blood pressure at this visit?" },
+    { "id": "m_bp_sys", "type": "number", "unit": "mmHg", "text_en": "Blood pressure: the top number (systolic).", "ask_if": { "m_bp_taken": true } },
+    { "id": "m_bp_dia", "type": "number", "unit": "mmHg", "text_en": "Blood pressure: the bottom number (diastolic).", "ask_if": { "m_bp_taken": true } },
+    { "id": "m_pallor", "type": "yesno", "text_en": "Are her palms, inner eyelids or lips very pale?" },
     { "id": "m_discharge", "type": "yesno", "text_en": "Is there a bad-smelling discharge from the vagina?", "ask_if": { "client_type": "postpartum" } },
-    { "id": "m_breast", "type": "yesno", "text_en": "Is a breast painful, red or swollen?", "ask_if": { "client_type": "postpartum" } }
+    { "id": "m_breast", "type": "yesno", "text_en": "Is a breast painful, red or swollen?", "ask_if": { "client_type": "postpartum" } },
+    { "id": "m_calf", "type": "yesno", "text_en": "Is one leg painful, swollen or red, especially the calf?", "ask_if": { "client_type": "postpartum" } },
+    { "id": "m_mood", "type": "yesno", "text_en": "Since the birth, has she been very sad or anxious most days, lost interest in the baby, or spoken of harming herself or the baby?", "ask_if": { "client_type": "postpartum" } },
+    { "id": "m_urine", "type": "yesno", "text_en": "Can she not pass urine, or is urine or stool leaking all the time?", "ask_if": { "client_type": "postpartum" } }
   ],
   "rules": [
     { "id": "M-R1", "when": { "m_bleeding": true }, "outcome": "refer", "urgency": 3, "danger_sign": "bleeding", "actions": ["go_now", "companion", "bring_card"], "stop": true },
@@ -26,6 +34,13 @@
     { "id": "M-R8", "when": { "m_waters": true }, "outcome": "refer", "urgency": 2, "danger_sign": "waters", "actions": ["go_today", "bring_card"] },
     { "id": "M-R9", "when": { "m_swelling": true }, "outcome": "refer", "urgency": 2, "danger_sign": "swelling", "actions": ["go_today", "bring_card"] },
     { "id": "M-R10", "when": { "m_discharge": true }, "outcome": "refer", "urgency": 2, "danger_sign": "discharge", "actions": ["go_today", "bring_card"] },
+    { "id": "M-R11", "when": { "m_contractions": true }, "outcome": "refer", "urgency": 3, "danger_sign": "preterm_labour", "actions": ["go_now", "companion", "bring_card"] },
+    { "id": "M-R12", "when": { "any": [{ "m_bp_sys": { "gte": 160 } }, { "m_bp_dia": { "gte": 110 } }] }, "outcome": "refer", "urgency": 3, "danger_sign": "severe_hypertension", "actions": ["go_now", "companion", "bring_card"] },
+    { "id": "M-R13", "when": { "all": [{ "any": [{ "m_bp_sys": { "gte": 140 } }, { "m_bp_dia": { "gte": 90 } }] }, { "m_bp_sys": { "lte": 159 } }, { "m_bp_dia": { "lte": 109 } }] }, "outcome": "refer", "urgency": 2, "danger_sign": "high_bp", "actions": ["go_today", "bring_card"] },
+    { "id": "M-R14", "when": { "m_pallor": true }, "outcome": "refer", "urgency": 2, "danger_sign": "severe_anaemia", "actions": ["go_today", "bring_card"] },
+    { "id": "M-R15", "when": { "m_calf": true }, "outcome": "refer", "urgency": 2, "danger_sign": "leg_clot", "actions": ["go_today"] },
+    { "id": "M-R16", "when": { "m_mood": true }, "outcome": "refer", "urgency": 2, "danger_sign": "mental_distress", "actions": ["stay_with_her", "go_today"] },
+    { "id": "M-R17", "when": { "m_urine": true }, "outcome": "refer", "urgency": 2, "danger_sign": "urine_problem", "actions": ["go_today"] },
     { "id": "M-F1", "when": { "m_breast": true }, "outcome": "followup", "followup_days": 2, "actions": ["breastfeed_often"] },
     { "id": "M-DEFAULT", "when": {}, "outcome": "routine", "actions": ["counsel_danger_signs"] }
   ],
@@ -39,7 +54,14 @@
     "fetal_movement": { "code": "fm", "text_en": "Reduced or no fetal movement" },
     "waters": { "code": "wb", "text_en": "Waters broken without labour" },
     "swelling": { "code": "sw", "text_en": "Swollen face and hands" },
-    "discharge": { "code": "ds", "text_en": "Foul-smelling vaginal discharge" }
+    "discharge": { "code": "ds", "text_en": "Foul-smelling vaginal discharge" },
+    "preterm_labour": { "code": "pl", "text_en": "Labour before the due date" },
+    "severe_hypertension": { "code": "sh", "text_en": "Blood pressure 160/110 or higher" },
+    "high_bp": { "code": "hb", "text_en": "Blood pressure 140/90 or higher" },
+    "severe_anaemia": { "code": "an", "text_en": "Very pale (severe anaemia)" },
+    "leg_clot": { "code": "lc", "text_en": "Painful, swollen leg" },
+    "mental_distress": { "code": "md", "text_en": "Low mood or thoughts of harm" },
+    "urine_problem": { "code": "up", "text_en": "Cannot pass urine, or leaking" }
   },
   "actions": {
     "go_now": { "text_en": "Go to the facility now. Do not wait." },
@@ -48,10 +70,17 @@
     "bring_card": { "text_en": "Bring her maternal health record book." },
     "lie_left": { "text_en": "Lay her on her left side and stay with her." },
     "breastfeed_often": { "text_en": "Keep breastfeeding often from both breasts; use a warm cloth on the breast." },
-    "counsel_danger_signs": { "text_en": "Explain the danger signs and to come at once if any appear." }
+    "counsel_danger_signs": { "text_en": "Explain the danger signs and to come at once if any appear." },
+    "stay_with_her": { "text_en": "Do not leave her alone. A family member goes with her, and someone stays with the baby." }
   },
   "destination": {
     "default": "nearest:health_centre",
-    "by_danger_sign": { "bleeding": "nearest:capability:cemonc", "convulsions": "nearest:capability:cemonc", "headache_vision": "nearest:capability:cemonc" }
+    "by_danger_sign": {
+      "bleeding": "nearest:capability:cemonc",
+      "convulsions": "nearest:capability:cemonc",
+      "headache_vision": "nearest:capability:cemonc",
+      "preterm_labour": "nearest:hospital",
+      "severe_hypertension": "nearest:capability:cemonc"
+    }
   }
 }
