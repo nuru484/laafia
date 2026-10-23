@@ -11,6 +11,9 @@ export default () => ({
   slug: 'laafia',
   owner: 'manuru',
   version: '1.0.0',
+  // Over-the-air JS updates (npm run update) reach only builds of the same version: bump it with any native change.
+  runtimeVersion: { policy: 'appVersion' },
+  updates: { url: 'https://u.expo.dev/26f46790-c99e-425f-b8ab-cb6fbf098a52' },
   orientation: 'portrait',
   icon: './assets/images/icon.png',
   scheme: 'laafia',

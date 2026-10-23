@@ -22,7 +22,7 @@ async function pullToRefresh() {
 const RevealContext = createContext<() => void>(() => undefined)
 
 /** `onBack` puts a back arrow before the title. The body leaves room for the tab bar and the phone's gesture bar. */
-export function Screen({ title, subtitle, right, onBack, children, scroll = true }: { title: string; subtitle?: string; right?: ReactNode; onBack?: () => void; children: ReactNode; scroll?: boolean }) {
+export function Screen({ title, subtitle, right, onBack, children, scroll = true, center }: { title: string; subtitle?: string; right?: ReactNode; onBack?: () => void; children: ReactNode; scroll?: boolean; center?: boolean }) {
   const [refreshing, setRefreshing] = useState(false)
   const insets = useSafeAreaInsets()
   const bottom = { paddingBottom: 112 + insets.bottom }
@@ -48,7 +48,7 @@ export function Screen({ title, subtitle, right, onBack, children, scroll = true
     void pullToRefresh().finally(() => setRefreshing(false))
   }
   const body = scroll ? (
-    <ScrollView ref={scrollRef as never} contentContainerStyle={[s.body, bottom]} keyboardShouldPersistTaps="handled"
+    <ScrollView ref={scrollRef as never} contentContainerStyle={[s.body, bottom, center && s.centered]} keyboardShouldPersistTaps="handled"
       onScroll={(e) => { offset.current = e.nativeEvent.contentOffset.y }} scrollEventThrottle={32}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[color.primary]} tintColor={color.primary} />}>
       {children}
@@ -363,6 +363,8 @@ export const s = StyleSheet.create({
   title: { flex: 1, minWidth: 0, fontSize: font.big - 2, lineHeight: TITLE_LINE, fontWeight: '700', color: color.text, letterSpacing: -0.3 },
   subtitle: { fontSize: font.small, color: color.muted, marginTop: 2 },
   body: { padding: space.lg, gap: space.md },
+  // A short form sits in the middle of the screen instead of leaving the lower half empty.
+  centered: { flexGrow: 1, justifyContent: 'center' },
   back: { width: BACK, height: BACK, marginTop: (TITLE_LINE - BACK) / 2, marginLeft: -4, alignItems: 'center', justifyContent: 'center' },
   button: { minHeight: touch, borderRadius: radius, borderWidth: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.lg },
   buttonRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },

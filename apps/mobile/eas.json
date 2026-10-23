@@ -26,6 +26,7 @@
       "extends": "base",
       "distribution": "internal",
       "autoIncrement": true,
+      "channel": "production",
       "env": {
         "EXPO_PUBLIC_API_URL": "https://laafia.onrender.com"
       },

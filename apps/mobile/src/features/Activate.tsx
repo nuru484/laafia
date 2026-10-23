@@ -36,7 +36,7 @@ export function Activate({ onDone }: { onDone: () => void }) {
   }
 
   return (
-    <Screen title="Activate this phone" subtitle="Once, at the facility, with internet.">
+    <Screen title="Activate this phone" subtitle="Once, at the facility, with internet." center>
       <View style={{ paddingVertical: 8 }}><Brand size={72} caption="Community health referrals" /></View>
       <Body muted>Enter the 8-digit activation code from your district admin and this phone's number. Your register then downloads to the phone and works without internet.</Body>
       <Field required label="Activation code" value={code} onChangeText={setCode} keyboardType="number-pad" maxLength={8} placeholder="8 digits, e.g. 26100001" />
