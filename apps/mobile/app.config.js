@@ -12,7 +12,7 @@ export default () => ({
   android: {
     package: 'org.laafia.app',
     adaptiveIcon: {
-      backgroundColor: '#0F766E',
+      backgroundColor: '#FFFFFF',
       foregroundImage: './assets/images/android-icon-foreground.png',
       backgroundImage: './assets/images/android-icon-background.png',
       monochromeImage: './assets/images/android-icon-monochrome.png',
@@ -36,7 +36,7 @@ export default () => ({
   },
   plugins: [
     'expo-router',
-    ['expo-splash-screen', { backgroundColor: '#0F766E', image: './assets/images/splash-icon.png', imageWidth: 96 }],
+    ['expo-splash-screen', { backgroundColor: '#FFFFFF', image: './assets/images/splash-icon.png', imageWidth: 96 }],
     ['expo-sqlite', { useSQLCipher: true }],
     ['expo-location', { locationWhenInUsePermission: 'Laafia records where each house is so the visit route can be planned.' }],
     'expo-notifications',

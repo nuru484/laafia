@@ -1,7 +1,7 @@
 /// <reference types="node" />
 import { randomBytes, randomUUID } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { PROTOCOLS, SMS_SEGMENT, evaluate, generateSeed, parse } from '@laafia/core'
+import { PROTOCOLS, SMS_SEGMENT, evaluate, generateSeed, parse, slipCode } from '@laafia/core'
 import { testDb } from '../../test/node-db'
 import {
   applySendResult,
@@ -10,6 +10,7 @@ import {
   loadSeed,
   markSending,
   processIncoming,
+  receiveSlip,
   referralStatus,
   type Env,
 } from './relay'
@@ -75,6 +76,24 @@ describe('referral relay over SMS', () => {
 
     expect(await processIncoming(cho, { sender: hospital.self.phone, body: ack.body, received_at: cho.now(), via: 'sms' })).toMatchObject({ kind: 'status' })
     expect(await referralStatus(cho, referral.id)).toBe('received')
+  })
+
+  it('a facility the SMS never reached receives the referral from the slip code the client carries', async () => {
+    const cho = await phone('D001')
+    const hospital = await phone('F003')
+    const { referral, wire } = await referNewborn(cho)
+
+    expect(await receiveSlip(hospital, slipCode(wire).replace('NB', 'PW'))).toEqual({ kind: 'rejected', error: 'bad_code' })
+    expect(await receiveSlip(hospital, slipCode(wire).replace('D001', 'D009'))).toEqual({ kind: 'rejected', error: 'unknown_signer' })
+    expect(await receiveSlip(hospital, slipCode(wire).replace(/ /g, '').toLowerCase())).toMatchObject({ kind: 'referral', isNew: true })
+    const atHospital = await hospital.db.get<{ id: string; wire: string; short_id: string }>('SELECT * FROM referrals')
+    expect(atHospital).toMatchObject({ wire, short_id: referral.short_id })
+    expect(await referralStatus(hospital, atHospital!.id)).toBe('received')
+    expect((await radioSends(hospital)).recipient).toBe(cho.self.phone)
+
+    // The SMS turning up later is the same referral, not a second one.
+    expect(await processIncoming(hospital, { sender: cho.self.phone, body: wire, received_at: hospital.now(), via: 'sms' })).toMatchObject({ kind: 'referral', isNew: false })
+    expect(await hospital.db.all('SELECT id FROM referrals')).toHaveLength(1)
   })
 
   it('rejects a tampered referral and an unknown signer without creating anything', async () => {
@@ -230,6 +249,12 @@ describe('outbox', () => {
     expect(await dueMessages(cho)).toHaveLength(0)
     cho.tick(60_000)
     expect(await dueMessages(cho)).toHaveLength(1)
+
+    // No SMS permission yet is not the message's fault either: it goes once the nurse allows SMS.
+    await markSending(cho, msg!.id, 1)
+    await applySendResult(cho, { id: msg!.id, status: 'failed', error: 'no_sms_permission', at: cho.now() })
+    expect(await cho.db.get('SELECT * FROM outbox')).toMatchObject({ status: 'pending', attempts: 0 })
+    cho.tick(60_000)
 
     await markSending(cho, msg!.id, 1)
     await applySendResult(cho, { id: msg!.id, status: 'failed', error: 'generic_failure', at: cho.now() })

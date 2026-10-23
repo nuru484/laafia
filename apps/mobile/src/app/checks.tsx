@@ -1,5 +1,5 @@
 import { router } from 'expo-router'
-import { View } from 'react-native'
+import { Linking, View } from 'react-native'
 import { LaafiaSms } from 'laafia-sms'
 import { readChecks, requestLocation, requestNotifications, requestSms } from '../lib/permissions'
 import { currentSession, pushNativeState } from '../lib/runtime'
@@ -9,7 +9,7 @@ import { color, space } from '../ui/theme'
 
 function Row({ ok, title, why, action, onChange }: { ok: boolean; title: string; why: string; action?: { label: string; run: () => unknown }; onChange?: () => void }) {
   return (
-    <Card accent={ok ? color.routine : color.refer}>
+    <Card>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: space.sm }}>
         <Body style={{ fontWeight: '700', flex: 1 }}>{title}</Body>
         <Chip label={ok ? 'Ready' : 'Needs action'} fg={ok ? color.routine : color.refer} bg={ok ? color.routineBg : color.referBg} />
@@ -27,8 +27,9 @@ export default function Checks() {
   if (!c) return <Loading />
   const maker = c.power.manufacturer
   return (
-    <Screen title="Phone setup" subtitle={`${maker} ${c.power.model} · Android API ${c.power.sdk}`} right={<Button tone="quiet" label="Done" onPress={() => router.back()} />}>
-      <Row onChange={q.reload} ok={c.sms} title="Send and read SMS" why="Referrals, acknowledgements and clients' booking texts travel by SMS." action={{ label: 'Allow SMS', run: async () => { await requestSms(); await pushNativeState() } }} />
+    <Screen title="Phone setup" subtitle={`${maker} ${c.power.model} · Android API ${c.power.sdk}`} onBack={() => router.back()}>
+      <Row onChange={q.reload} ok={c.sms} title="Send and read SMS" why={`Referrals, acknowledgements and clients' booking texts travel by SMS.${c.sms ? '' : ' If Android does not ask, or calls it a restricted setting: in App info tap the ⋮ menu, choose Allow restricted settings, then allow SMS under Permissions.'}`}
+        action={{ label: 'Allow SMS', run: async () => { if (!(await requestSms())) await Linking.openSettings(); await pushNativeState() } }} />
       <Row onChange={q.reload} ok={c.notifications} title="Notifications" why={facility ? 'An incoming referral rings like an alarm, even when the app is closed.' : 'Shows when the facility acknowledges a referral.'} action={{ label: 'Allow notifications', run: requestNotifications }} />
       {facility ? <Row onChange={q.reload} ok={c.power.canUseFullScreenIntent} title="Alarm over the lock screen" why="Lets an emergency referral wake the screen." action={{ label: 'Open setting', run: () => LaafiaSms.openFullScreenIntentSettings() }} /> : null}
       <Row onChange={q.reload} ok={c.power.ignoringBatteryOptimizations} title="Battery: never restrict Laafia" why="Battery savers stop apps in the background, and a stopped app misses SMS." action={{ label: 'Allow', run: () => LaafiaSms.requestIgnoreBatteryOptimizations() }} />

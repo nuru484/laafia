@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react'
 import { updateClient, type ClientEdit } from '../../../lib/register'
 import { changed, env, pushNativeState } from '../../../lib/runtime'
 import { useQuery } from '../../../lib/useQuery'
-import { Banner, Button, Card, Field, Label, Loading, Screen } from '../../../ui/kit'
+import { Banner, Button, Card, Field, Label, Loading, RequiredNote, Screen } from '../../../ui/kit'
+import { toast } from '../../../ui/toast'
 
 /** Corrects a client's name, phone and house details; the change syncs like any other record. */
 export default function EditClient() {
@@ -27,30 +28,33 @@ export default function EditClient() {
       // A new phone number changes which texts count as her bookings.
       await pushNativeState()
       changed()
+      toast('Details saved')
       router.back()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
+      toast('Not saved. See the message on the screen.', 'error')
     } finally {
       setBusy(false)
     }
   }
 
   return (
-    <Screen title="Edit details" subtitle={data?.name} right={<Button tone="quiet" label="Cancel" onPress={() => router.back()} />}>
+    <Screen title="Edit client details" subtitle={data?.name} onBack={() => router.back()}>
+      <RequiredNote />
       <Card>
         <Label>Person</Label>
-        <Field label="Name" value={v.name} onChangeText={set('name')} />
-        <Field label="Her phone, for visit texts and reminders" value={v.phone} onChangeText={set('phone')} keyboardType="phone-pad" />
-        <Field label="Next of kin phone" value={v.next_of_kin} onChangeText={set('next_of_kin')} keyboardType="phone-pad" />
+        <Field required label="Name" value={v.name} onChangeText={set('name')} placeholder="e.g. Abena Mensah" />
+        <Field label="Her phone, for visit texts and reminders" value={v.phone} onChangeText={set('phone')} keyboardType="phone-pad" placeholder="e.g. 024 123 4567" />
+        <Field label="Next of kin phone" value={v.next_of_kin} onChangeText={set('next_of_kin')} keyboardType="phone-pad" placeholder="e.g. 020 987 6543" />
       </Card>
       <Card>
         <Label>House</Label>
-        <Field label="Community" value={v.community} onChangeText={set('community')} />
-        <Field label="Head of household" value={v.head_name} onChangeText={set('head_name')} />
-        <Field label="Landmark (how to find the house)" value={v.landmark} onChangeText={set('landmark')} />
+        <Field required label="Community" value={v.community} onChangeText={set('community')} placeholder="e.g. Kanshegu" />
+        <Field required label="Head of household" value={v.head_name} onChangeText={set('head_name')} placeholder="e.g. Iddrisu Alhassan" />
+        <Field label="Landmark (how to find the house)" value={v.landmark} onChangeText={set('landmark')} placeholder="e.g. behind the mosque, blue gate" />
       </Card>
       {error ? <Banner tone="refer" text={error} /> : null}
-      <Button label="Save" busy={busy} onPress={save} />
+      <Button label="Save changes" busy={busy} onPress={save} />
     </Screen>
   )
 }

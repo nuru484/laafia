@@ -83,7 +83,7 @@ Each phone is activated once with internet, with the code from the dashboard's N
 
 Enter the phone's real number at activation; acknowledgements and status SMS go to it. A facility phone becomes the number CHO phones text referrals to.
 
-Then on every phone: More, Phone setup checks, and resolve every item. On Samsung also remove Laafia from Sleeping apps and Deep sleeping apps (Settings, Battery, Background usage limits).
+Then on every phone: More, Phone setup checks, and resolve every item. An APK installed outside the Play Store cannot get SMS permission until it is unlocked once: App info, the ⋮ menu, Allow restricted settings, then Permissions, SMS, Allow. On Samsung also remove Laafia from Sleeping apps and Deep sleeping apps (Settings, Battery, Background usage limits).
 
 ## 6. End-to-end check
 
@@ -100,6 +100,18 @@ Booking: register a client's phone at enrolment (or on her client screen via a b
 Monthly report: More, Monthly report, Print or save as PDF.
 
 The instant booking alert with the app closed and printing are native changes: rebuild the development build (section 4) once. An older build still picks up booking texts every minute while the app runs.
+
+Signing out and unlocking: More, Sign out of this phone removes the register and returns the phone to activation (a new code from the Nurses page brings it back); it refuses while anything is still waiting to upload or send. Fingerprint or face unlock appears on the PIN screen once the development build includes `expo-local-authentication` (rebuild, section 4); More has the switch to turn it off.
+
+Facility alarm: it rings only on a phone activated as a facility phone. On the dashboard, Phones, Facility phones, give the hospital's phone a code and activate it with the SIM that the facility's referral number belongs to; then in Laafia, More, Phone setup checks, allow notifications and the alarm over the lock screen. A referral sent to that number rings it, even with the app closed; an emergency rings until it is opened.
+
+Delivery: on a pregnant client, Record the delivery. She becomes after delivery and each baby is enrolled as a newborn at the top of Today (visit within 48 hours); a stillbirth enrols no baby.
+
+Duplicates: the phone warns before enrolling someone already on its register; across phones, the dashboard's Possible duplicates lists matches by phone number or by name, type and community, and Keep this one merges the rest into it (visits and referrals move across; phones update on their next sync).
+
+Guides: More, How to use Laafia on each phone (CHO and facility versions); Guide in the dashboard menu, a tab per role.
+
+Slip code (the SMS never arrived): the CHO's referral screen shows an eight-group slip code to write on the referral note. On the hospital phone, Incoming referrals, Slip code, type it in: the same referral opens as if the SMS had come, and the CHO is texted that it was received.
 
 Offline variants: put the CHO phone in airplane mode with mobile signal only (no data), or with no signal at all; the SMS queues and sends when signal returns.
 

@@ -25,7 +25,16 @@ async function databaseKey(): Promise<string> {
   return key
 }
 
-export async function openDb(): Promise<Db> {
+// expo-sqlite hands every open of this file the same native connection, and keeps it through a Fast Refresh. A second
+// wrapper would bring a second transaction queue onto it: "cannot start a transaction within a transaction".
+const g = globalThis as { laafiaDb?: Promise<{ raw: SQLite.SQLiteDatabase; db: Db }> }
+
+export function openDb(): Promise<Db> {
+  g.laafiaDb ??= open().catch((e: unknown) => { g.laafiaDb = undefined; throw e })
+  return g.laafiaDb.then((o) => o.db)
+}
+
+async function open(): Promise<{ raw: SQLite.SQLiteDatabase; db: Db }> {
   const raw = await SQLite.openDatabaseAsync(DB_NAME)
   // Raw-key form skips SQLCipher's passphrase KDF; the key is already random.
   await raw.execAsync(`PRAGMA key = "x'${await databaseKey()}'"`)
@@ -58,11 +67,15 @@ export async function openDb(): Promise<Db> {
     },
   }
   await migrate(db)
-  return db
+  return { raw, db }
 }
 
 /** PIN lockout (10 wrong attempts) and remote deactivation. Synced records are already on the server. */
 export async function wipeDb(): Promise<void> {
+  const opened = await g.laafiaDb?.catch(() => undefined)
+  g.laafiaDb = undefined
+  // expo-sqlite refuses to delete an open database.
+  await opened?.raw.closeAsync().catch(() => undefined)
   await SQLite.deleteDatabaseAsync(DB_NAME).catch(() => undefined)
   await SecureStore.deleteItemAsync(KEY_ITEM)
 }

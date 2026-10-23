@@ -15,6 +15,7 @@ import androidx.core.app.NotificationManagerCompat
 object Alerts {
   const val REFERRALS = "laafia_referrals"
   const val UPDATES = "laafia_updates"
+  const val ATTENTION = "laafia_attention"
   const val SERVICE = "laafia_service"
   const val SERVICE_ID = 7001
 
@@ -33,6 +34,16 @@ object Alerts {
       lockscreenVisibility = Notification.VISIBILITY_PUBLIC
     })
     nm.createNotificationChannel(NotificationChannel(UPDATES, "Referral and transport updates", NotificationManager.IMPORTANCE_HIGH))
+    // Something for the nurse to act on (a client asking for a visit): rings once with the ringtone, not the
+    // continuous alarm an emergency referral gets.
+    val ring = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()
+    nm.createNotificationChannel(NotificationChannel(ATTENTION, "Needs your attention", NotificationManager.IMPORTANCE_HIGH).apply {
+      description = "Rings when a client texts to ask for a visit"
+      setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE), ring)
+      enableVibration(true)
+      vibrationPattern = longArrayOf(0, 600, 300, 600)
+      lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+    })
     nm.createNotificationChannel(NotificationChannel(SERVICE, "Listening for referrals", NotificationManager.IMPORTANCE_MIN))
   }
 
@@ -87,9 +98,11 @@ object Alerts {
   fun clientMessage(ctx: Context, from: String, body: String) {
     ensureChannels(ctx)
     val id = from.hashCode()
-    post(ctx, id, NotificationCompat.Builder(ctx, UPDATES)
+    post(ctx, id, NotificationCompat.Builder(ctx, ATTENTION)
       .setSmallIcon(android.R.drawable.ic_dialog_info)
       .setContentTitle("Visit request by text")
+      .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+      .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
       .setContentText("$from: ${body.take(80)}")
       .setPriority(NotificationCompat.PRIORITY_HIGH)
       .setContentIntent(openApp(ctx, id))

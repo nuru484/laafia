@@ -1,19 +1,20 @@
 import { router } from 'expo-router'
 import { useState } from 'react'
-import { Alert } from 'react-native'
 import { Choice } from '../features/Choice'
 import { DayPicker } from '../features/DayPicker'
 import { ago } from '../features/format'
-import { bookingRequests, confirmBooking, declineBooking, type BookingRequest } from '../lib/bookings'
+import { bookingRequests, confirmBooking, dayLabel, declineBooking, type BookingRequest } from '../lib/bookings'
 import { changed, env, sendDue } from '../lib/runtime'
 import { useQuery } from '../lib/useQuery'
 import { Body, Button, Card, Empty, Field, Label, Loading, Screen } from '../ui/kit'
+import { confirm } from '../ui/confirm'
+import { toast } from '../ui/toast'
 
 /** Visit requests texted by clients: pick the day, and the client is texted the date and a reminder. */
 export default function Bookings() {
   const { data } = useQuery(() => bookingRequests(env()))
   return (
-    <Screen title="Booking requests" subtitle="Texts from clients asking for a visit." right={<Button tone="quiet" label="Done" onPress={() => router.back()} />}>
+    <Screen title="Booking requests" subtitle="Texts from clients asking for a visit." onBack={() => router.back()}>
       {!data ? <Loading /> : data.length === 0 ? <Empty title="No requests" body="A client books by texting this phone. From an unknown number the text starts with BOOK." /> : data.map((r) => <Request key={r.id} r={r} />)}
     </Screen>
   )
@@ -28,14 +29,16 @@ function Request({ r }: { r: BookingRequest }) {
   const { data: matches } = useQuery(() => r.client_id || term.length < 2 ? Promise.resolve([]) : env().db.all<{ id: string; name: string; code: string }>(
     'SELECT id, name, code FROM clients WHERE deleted = 0 AND (name LIKE ? OR code LIKE ?) ORDER BY name LIMIT 6', [`%${term}%`, `%${term.toUpperCase()}%`]), [term])
 
-  async function act(fn: () => Promise<void>) {
+  async function act(fn: () => Promise<void>, done: string, ask: { title: string; body: string; confirm: string }) {
+    if (!(await confirm(ask))) return
     setBusy(true)
     try {
       await fn()
       changed()
       void sendDue()
+      toast(done)
     } catch (e) {
-      Alert.alert('Could not do that', e instanceof Error ? e.message : String(e))
+      toast(`Could not do that: ${e instanceof Error ? e.message : String(e)}`, 'error')
     } finally {
       setBusy(false)
     }
@@ -48,7 +51,7 @@ function Request({ r }: { r: BookingRequest }) {
       {r.message ? <Body>"{r.message}"</Body> : null}
       {!r.client_id ? (
         <>
-          <Field label="Who is it? Search by name or code" value={search} onChangeText={setSearch} />
+          <Field label="Who is it? Search by name or code" value={search} onChangeText={setSearch} placeholder="e.g. Amina or CL-0050" />
           {matches?.map((c) => <Choice key={c.id} role="radio" label={`${c.name} · ${c.code}`} on={clientId === c.id} onPress={() => setClientId(c.id)} />)}
           {term.length >= 2 && matches?.length === 0 ? <Body muted>No match. Enrol her first, then come back to this request.</Body> : null}
         </>
@@ -56,8 +59,8 @@ function Request({ r }: { r: BookingRequest }) {
       <Label>Visit day</Label>
       <DayPicker value={day} onChange={setDay} />
       <Button label={day === null ? 'Choose a day' : 'Confirm and text her'} disabled={day === null || !clientId} busy={busy}
-        onPress={() => act(() => confirmBooking(env(), r.id, { day: day!, client_id: clientId ?? undefined }))} />
-      <Button tone="quiet" label="Cannot book by text: ask her to call" disabled={busy} onPress={() => act(() => declineBooking(env(), r.id))} />
+        onPress={() => act(() => confirmBooking(env(), r.id, { day: day!, client_id: clientId ?? undefined }), 'Visit booked. She is texted the date and a reminder.', { title: `Book the visit for ${dayLabel(day!)}?`, body: 'She is texted the date now and a reminder the day before.', confirm: 'Book and text her' })} />
+      <Button tone="quiet" label="Cannot book by text: ask her to call" disabled={busy} onPress={() => act(() => declineBooking(env(), r.id), 'She is texted to call you instead.', { title: 'Answer by asking her to call?', body: 'She is texted that the visit could not be fixed by text and is given your number.', confirm: 'Text her to call' })} />
     </Card>
   )
 }

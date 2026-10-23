@@ -1,14 +1,16 @@
 import NetInfo from '@react-native-community/netinfo'
+import * as Notifications from 'expo-notifications'
 import * as Crypto from 'expo-crypto'
-import { AppState } from 'react-native'
+import { AppState, DevSettings, PermissionsAndroid } from 'react-native'
 import { LaafiaSms } from 'laafia-sms'
 import { cancelAckAlarm } from './alarms'
 import { ApiError, deviceApi, publicCall } from './api'
 import type { Db } from './db/db'
 import { openDb, wipeDb } from './db/expo'
-import { applySendResult, dueMessages, markSending, processIncoming, referralStatus, type Env, type Role } from './relay'
+import { toast } from '../ui/toast'
+import { applySendResult, dueMessages, markSending, processIncoming, referralStatus, smsProblem, type Env, type Role, type SendResult } from './relay'
 import { clearSession, loadSession, saveSession, type Session } from './session'
-import { pull, push } from './sync'
+import { collectUnsynced, pull, push } from './sync'
 
 /*
  * One running app: the open database, the session, and the workers that move
@@ -100,6 +102,8 @@ export async function activate(code: string, phone: string, onProgress: (p: Acti
       return page
     },
   })
+  // Whatever is already open when the phone is activated is not news: only later referrals ring.
+  await ringForPulledReferrals(current, true)
   await pushNativeState()
   startWorkers()
   changed()
@@ -127,7 +131,11 @@ export async function sendDue(): Promise<void> {
     try {
       LaafiaSms.send(msg.recipient, msg.body, msg.id, sim)
     } catch (e) {
-      await applySendResult(current, { id: msg.id, status: 'failed', error: 'send_threw', at: Date.now() })
+      // Android refuses the send outright without the SMS permission; anything else keeps its message for the screen.
+      const error = (await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.SEND_SMS)) ? `send_threw: ${e instanceof Error ? e.message : String(e)}` : 'no_sms_permission'
+      const result = { id: msg.id, status: 'failed', error, at: Date.now() } as const
+      await applySendResult(current, result)
+      await tell(current, result)
     }
   }
   changed()
@@ -136,8 +144,35 @@ export async function sendDue(): Promise<void> {
 export async function drainResults(): Promise<void> {
   if (!current) return
   const results = LaafiaSms.drainResults()
-  for (const r of results) await applySendResult(current, r)
+  for (const r of results) {
+    await applySendResult(current, r)
+    await tell(current, r)
+  }
   if (results.length) changed()
+}
+
+// A message's first failure is shown once; its quiet retries are not.
+const toldFailed = new Set<string>()
+
+/** Says what happened to an SMS the moment the radio reports it, instead of leaving the nurse to find out. */
+async function tell(e: Env, r: SendResult) {
+  if (r.status === 'failed') {
+    if (toldFailed.has(r.id)) return
+    toldFailed.add(r.id)
+    toast(smsProblem(r.error), 'error')
+    return
+  }
+  const row = await e.db.get<{ ref_table: string | null }>('SELECT ref_table FROM outbox WHERE id = ?', [r.id])
+  if (row?.ref_table === 'referrals') toast(r.status === 'sent' ? 'Referral SMS sent' : 'The referral SMS reached the facility phone')
+}
+
+/** Pull-to-refresh: what the workers do on their timers, now. Null before activation. */
+export async function refreshNow(): Promise<SyncState | null> {
+  if (!current) return null
+  await drainResults()
+  await drainInbox()
+  await sendDue()
+  return syncNow()
 }
 
 const INBOX_SCAN_KEY = 'inbox_scan_at'
@@ -169,6 +204,33 @@ export async function drainInbox(): Promise<void> {
   }
 }
 
+const RING_WINDOW_MS = 6 * 3_600_000
+const TYPE: Record<string, string> = { PW: 'Pregnant woman', PP: 'Mother after delivery', NB: 'Newborn', CH: 'Child' }
+
+/**
+ * A facility phone rings for a referral that reached it by internet (the CHO's SMS failed but her sync did not),
+ * as it does for one that came by SMS. Once per referral, only while it is new and not yet received here.
+ */
+async function ringForPulledReferrals(e: Env, quiet = false) {
+  if (e.self.role !== 'facility') return
+  const me = await e.db.get<{ facility_code: string | null }>('SELECT facility_code FROM devices WHERE id = ?', [e.self.device_id])
+  const fresh = await e.db.all<{ id: string; short_id: string; urgency: number; client_type: string; client_code: string }>(
+    `SELECT r.id, r.short_id, r.urgency, r.client_type, r.client_code FROM referrals r
+      WHERE r.destination_code = ? AND r.created_at >= ?
+        AND NOT EXISTS (SELECT 1 FROM meta m WHERE m.key = 'rang_' || r.id)
+        AND NOT EXISTS (SELECT 1 FROM referral_events ev WHERE ev.referral_id = r.id AND ev.status IN ('received', 'arrived', 'treated', 'closed', 'cancelled'))`,
+    [me?.facility_code ?? '', quiet ? 0 : e.now() - RING_WINDOW_MS])
+  for (const r of fresh) {
+    if (!quiet) {
+      await Notifications.scheduleNotificationAsync({
+        content: { title: r.urgency === 3 ? 'EMERGENCY referral coming' : `Referral coming (urgency ${r.urgency})`, body: `${TYPE[r.client_type] ?? 'Client'} ${r.client_code}. Open Laafia to see the assessment and acknowledge.`, data: { referralId: r.id } },
+        trigger: { channelId: 'laafia_referrals' },
+      }).catch(() => undefined)
+    }
+    await e.db.run("INSERT INTO meta (key, value) VALUES (?, '1') ON CONFLICT(key) DO NOTHING", [`rang_${r.id}`])
+  }
+}
+
 /** An acknowledgement that arrived by internet instead of SMS also silences the alarm. */
 async function clearAnsweredAlarms(e: Env) {
   const armed = await e.db.all<{ key: string }>("SELECT key FROM meta WHERE key LIKE 'ack_alarm_%'")
@@ -187,6 +249,7 @@ export async function syncNow(): Promise<SyncState> {
   try {
     await push(current, api)
     await pull(current, api)
+    await ringForPulledReferrals(current)
     await clearAnsweredAlarms(current)
     await pushNativeState()
     syncState = { last_ok: Date.now(), last_error: null, running: false }
@@ -217,6 +280,12 @@ export async function deactivateLocally(): Promise<void> {
   changed()
 }
 
+/** Anything recorded on this phone reaches the server within a worker tick when there is internet. */
+async function syncIfUnsent() {
+  if (!current || !(await collectUnsynced(current, 1)).length) return
+  if ((await NetInfo.fetch()).isInternetReachable) await syncNow()
+}
+
 function startWorkers() {
   if (stopWorkers) return
   const subs = [
@@ -232,6 +301,7 @@ function startWorkers() {
   const timers = [
     setInterval(() => void drainResults().then(sendDue), 15_000),
     setInterval(() => void drainInbox(), 60_000),
+    setInterval(() => void syncIfUnsent(), 15_000),
     setInterval(() => void NetInfo.fetch().then((s) => { if (s.isInternetReachable) void syncNow() }), 5 * 60_000),
   ]
   void drainResults().then(drainInbox).then(sendDue)
@@ -242,3 +312,7 @@ function startWorkers() {
     timers.forEach(clearInterval)
   }
 }
+
+// A Fast Refresh would re-run this module beside the running one: an empty copy that screens read as "app not
+// activated", while the old timers keep going. Reload the whole app instead.
+if (__DEV__) (module as { hot?: { dispose(fn: () => void): void } }).hot?.dispose(() => DevSettings.reload())

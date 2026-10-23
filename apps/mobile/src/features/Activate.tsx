@@ -3,6 +3,7 @@ import { View } from 'react-native'
 import { ApiError } from '../lib/api'
 import { activate, type ActivationProgress } from '../lib/runtime'
 import { Banner, Body, Button, Field, Screen } from '../ui/kit'
+import { Brand } from './Brand'
 
 const MESSAGES: Record<string, string> = {
   invalid_code: 'That code is not valid, already used, or expired. Ask the district admin for a new one.',
@@ -35,10 +36,11 @@ export function Activate({ onDone }: { onDone: () => void }) {
   }
 
   return (
-    <Screen title="Welcome to Laafia" subtitle="Activate this phone once, at the facility, with internet.">
+    <Screen title="Activate this phone" subtitle="Once, at the facility, with internet.">
+      <View style={{ paddingVertical: 8 }}><Brand size={72} caption="Community health referrals" /></View>
       <Body muted>Enter the 8-digit activation code from your district admin and this phone's number. Your register then downloads to the phone and works without internet.</Body>
-      <Field label="Activation code" value={code} onChangeText={setCode} keyboardType="number-pad" maxLength={8} autoFocus />
-      <Field label="This phone's number" value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="024 000 0000" autoComplete="tel" />
+      <Field required label="Activation code" value={code} onChangeText={setCode} keyboardType="number-pad" maxLength={8} placeholder="8 digits, e.g. 26100001" />
+      <Field required label="This phone's number" value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="e.g. 024 123 4567" autoComplete="tel" />
       {error ? <Banner tone="refer" text={error} /> : null}
       {progress ? <Banner text={progress.phase === 'activating' ? 'Activating this phone' : `Downloading your register: ${progress.records} records`} /> : null}
       <View style={{ marginTop: 8 }}>

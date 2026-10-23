@@ -1,5 +1,5 @@
 import { View } from 'react-native'
-import { ReferralRow } from '../features/ReferralRow'
+import { ReferralList } from '../features/ReferralRow'
 import { TabBar } from '../features/TabBar'
 import { referralList } from '../lib/register'
 import { env } from '../lib/runtime'
@@ -12,7 +12,7 @@ export default function Referrals() {
     <View style={{ flex: 1 }}>
       <Screen title="Referrals" subtitle="Open referrals first. Each stays here until the facility closes it.">
         {error ? <Banner tone="refer" text={error.message} /> : null}
-        {!data ? <Loading /> : data.length === 0 ? <Empty title="No referrals" body="A referral appears here when a checklist ends in refer now." /> : data.map((r) => <ReferralRow key={r.id} r={r} />)}
+        {!data ? <Loading /> : data.length === 0 ? <Empty title="No referrals" body="A referral appears here when a checklist ends in refer now." /> : <ReferralList rows={data} />}
       </Screen>
       <TabBar />
     </View>

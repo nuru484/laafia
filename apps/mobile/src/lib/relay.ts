@@ -6,6 +6,7 @@ import {
   decode,
   deriveStatus,
   encode,
+  fromSlip,
   normalizePhone,
   parse,
   shortIdFromBytes,
@@ -28,7 +29,7 @@ export type Role = 'cho' | 'facility'
 export type Self = { device_id: string; role: Role; key_hex: string; phone: string }
 export type Env = { db: Db; self: Self; now: () => number; uuid: () => string; random: (n: number) => Uint8Array }
 
-export type Incoming = { sender: string; body: string; received_at: number; via: 'sms' }
+export type Incoming = { sender: string; body: string; received_at: number; via: 'sms' | 'local' }
 export type IncomingResult =
   | { kind: 'referral'; referral_id: string; isNew: boolean }
   | { kind: 'status'; referral_id: string | null; status: ReferralStatus }
@@ -51,10 +52,10 @@ export type ReferralRow = {
 }
 
 const MIN = 60_000
-/** Generic failures back off; waiting for signal does not use up attempts. */
+/** Generic failures back off; waiting for signal or for the SMS permission does not use up attempts. */
 const BACKOFF_MS = [30_000, 2 * MIN, 10 * MIN, 60 * MIN]
 const MAX_ATTEMPTS = 8
-const NO_SIGNAL = new Set(['no_service', 'radio_off'])
+const NO_SIGNAL = new Set(['no_service', 'radio_off', 'no_sms_permission'])
 const RETRY_NO_SIGNAL_MS = MIN
 const STUCK_SENDING_MS = 15 * MIN
 const REACK_AFTER_MS = 2 * MIN
@@ -305,6 +306,19 @@ async function handle(env: Env, raw: Incoming): Promise<IncomingResult> {
   return { kind: 'referral', referral_id: referral.id, isNew: true }
 }
 
+/** The client came with the slip code because the SMS did not: rebuilt into that SMS and received the same way. */
+export async function receiveSlip(env: Env, code: string): Promise<IncomingResult> {
+  const keys = await keyDirectory(env.db)
+  // The code starts with the CHO's phone id (in its own group, or run on with no spaces); without that phone's key
+  // no code can check out, typo or not.
+  const first = code.trim().toUpperCase().split(/[^A-Z0-9]+/)[0] ?? ''
+  if (![...keys.keys()].some((id) => first.startsWith(id.toUpperCase()))) return { kind: 'rejected', error: 'unknown_signer' }
+  const facilities = await env.db.all<{ code: string }>('SELECT code FROM facilities')
+  const sms = fromSlip(code, facilities.map((f) => f.code), (id) => keys.get(id), [...keys.keys()])
+  if (!sms) return { kind: 'rejected', error: 'bad_code' }
+  return processIncoming(env, { sender: '', body: sms, received_at: env.now(), via: 'local' })
+}
+
 /** No acknowledgement: send the identical signed text again, to the facility or a backup number. */
 export async function resendReferral(env: Env, referralId: string, recipient?: string): Promise<void> {
   const r = await env.db.get<{ wire: string; destination_code: string }>('SELECT wire, destination_code FROM referrals WHERE id = ?', [referralId])
@@ -334,6 +348,13 @@ export async function facilityUpdate(env: Env, referralId: string, status: 'arri
       await acknowledge(env, referral, CODE_FROM_STATUS[status] as 'A' | 'T' | 'C', null)
     }
   })
+}
+
+/** What the nurse reads for an outbox error, on the referral and in the toast. */
+export function smsProblem(error: string | null): string {
+  if (error && NO_SIGNAL.has(error) && error !== 'no_sms_permission') return 'No signal. The SMS will send by itself when signal returns.'
+  if (error === 'no_sms_permission') return 'Laafia is not allowed to send SMS. Open More, Phone setup, and allow SMS; it sends within a minute after that.'
+  return `SMS not sent (${error ?? 'unknown error'}); retrying.`
 }
 
 export async function dueMessages(env: Env): Promise<OutboxRow[]> {

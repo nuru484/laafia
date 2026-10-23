@@ -12,7 +12,8 @@ const key = (referralId: string) => `ack_alarm_${referralId}`
 export async function armAckAlarm(db: Db, referralId: string, shortId: string, urgency: 1 | 2 | 3): Promise<void> {
   const id = await Notifications.scheduleNotificationAsync({
     content: { title: 'No acknowledgement from the facility', body: `Referral ${shortId}: call the facility, resend, or send to a backup number.`, data: { referralId } },
-    trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(ACK_TIMEOUT_MS[urgency] / 1000) },
+    // The alarm channel the SMS module creates: a missed acknowledgement has to be heard, not just shown.
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(ACK_TIMEOUT_MS[urgency] / 1000), channelId: 'laafia_referrals' },
   })
   await db.run('INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', [key(referralId), id])
 }

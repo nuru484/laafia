@@ -1,12 +1,12 @@
+import { requireOptionalNativeModule } from 'expo'
 import { router } from 'expo-router'
 import { useState } from 'react'
-import { Alert, View } from 'react-native'
-import { Choice } from '../features/Choice'
 import { monthlyReport, reportHtml } from '../lib/report'
 import { env } from '../lib/runtime'
 import { useQuery } from '../lib/useQuery'
-import { Body, Button, Card, Label, Loading, Screen } from '../ui/kit'
-import { space } from '../ui/theme'
+import { Body, Button, Card, Loading, MonthStepper, Screen, SectionHead, Stats } from '../ui/kit'
+import { color } from '../ui/theme'
+import { toast } from '../ui/toast'
 
 const monthStart = (back: number) => { const d = new Date(); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - back, 1) }
 
@@ -18,13 +18,18 @@ export default function Report() {
 
   async function print() {
     if (!data) return
+    // A build made before expo-print was added has no native side, and importing it would throw.
+    if (!requireOptionalNativeModule('ExpoPrint')) {
+      toast('Printing needs the newer Laafia build on this phone. Install it, then print again.', 'error')
+      return
+    }
     setPrinting(true)
     try {
       // Loaded on use: a build without the print module still opens every other screen.
       const Print = await import('expo-print')
       await Print.printAsync({ html: reportHtml(data) })
     } catch (e) {
-      Alert.alert('Could not open printing', e instanceof Error ? e.message : String(e))
+      toast(`Could not open printing: ${e instanceof Error ? e.message : String(e)}`, 'error')
     } finally {
       setPrinting(false)
     }
@@ -32,22 +37,24 @@ export default function Report() {
 
   const t = data?.totals
   return (
-    <Screen title="Monthly report" subtitle="Print it, or save it as a PDF to share." right={<Button tone="quiet" label="Done" onPress={() => router.back()} />}>
-      <View style={{ flexDirection: 'row', gap: space.sm }} accessibilityRole="radiogroup">
-        <Choice role="radio" label="This month" on={back === 0} onPress={() => setBack(0)} />
-        <Choice role="radio" label="Last month" on={back === 1} onPress={() => setBack(1)} />
-      </View>
+    <Screen title="Monthly report" subtitle="Any month: print it, or save it as a PDF to share." onBack={() => router.back()}>
+      <MonthStepper back={back} onChange={setBack} />
       {!data || !t ? <Loading /> : (
         <>
           <Card>
-            <Label>{data.month}</Label>
+            <SectionHead title={data.month} note={data.facilityMode ? 'This facility' : 'Your catchment'} />
             {data.facilityMode ? (
-              <Body>{t.referrals} referrals received · {t.referrals_closed} discharged</Body>
+              <Stats items={[{ value: t.referrals, label: 'Referrals received' }, { value: t.referrals_closed, label: 'Discharged' }]} />
             ) : (
               <>
-                <Body>{t.visits} visits: {t.routine} routine, {t.followup} follow up, {t.refer} referred</Body>
-                <Body>{t.referrals} referrals made · {t.referrals_closed} discharged</Body>
-                <Body>{t.households} households enrolled</Body>
+                <Stats columns={3} items={[{ value: t.visits, label: 'Visits' }, { value: t.referrals, label: 'Referrals made' }, { value: t.households, label: 'Households enrolled' }]} />
+                <SectionHead title="How the visits ended" />
+                <Stats columns={3} items={[
+                  { value: t.routine, label: 'Routine', tone: color.routine },
+                  { value: t.followup, label: 'Follow-up', tone: color.followup },
+                  { value: t.refer, label: 'Referred', tone: color.refer },
+                ]} />
+                <Body muted>{t.referrals_closed} of the {t.referrals} referrals were discharged.</Body>
               </>
             )}
           </Card>
